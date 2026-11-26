@@ -1,0 +1,9 @@
+{
+  "agentType": "general-purpose",
+  "model": "claude-fable-5-2",
+  "toolUseId": "toolu_01SYNTH3VdthM0gqQsPhRo4I",
+  "spawnDepth": 1,
+  "description": "Synthetic task: repaint the teacups",
+  "isBuiltIn": true,
+  "finished": true
+}

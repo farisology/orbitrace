@@ -1,0 +1,9 @@
+{
+  "agentType": "lantern-foreman",
+  "model": "claude-sonnet-5-5",
+  "toolUseId": "toolu_01SYNTHWbb7gI1SKEH6Pr17V",
+  "spawnDepth": 1,
+  "description": "Synthetic task: recount the tidepools",
+  "isBuiltIn": false,
+  "finished": true
+}

@@ -1,0 +1,9 @@
+{
+  "agentType": "test-writer",
+  "model": "claude-sonnet-5-5",
+  "toolUseId": "toolu_01SYNTHQl5SbngFkx42uzHDk",
+  "spawnDepth": 1,
+  "description": "Synthetic task: catalogue the junipers",
+  "isBuiltIn": false,
+  "finished": true
+}

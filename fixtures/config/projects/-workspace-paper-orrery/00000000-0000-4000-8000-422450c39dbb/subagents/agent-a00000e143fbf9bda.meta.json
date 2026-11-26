@@ -1,0 +1,9 @@
+{
+  "agentType": "schema-cartographer",
+  "model": "claude-sonnet-5-5",
+  "toolUseId": "toolu_01SYNTHG2riYl8JxXYbhhvsN",
+  "spawnDepth": 1,
+  "description": "Synthetic task: sort the teacups",
+  "isBuiltIn": false,
+  "finished": true
+}

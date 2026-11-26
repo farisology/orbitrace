@@ -1,0 +1,36 @@
+{
+  "name": "@orbitrace/fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Orbitrace test fixtures: a seeded generator of synthetic Claude Code transcripts and the paths of the generated files. Invented data only.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./generator": {
+      "types": "./dist/generator.d.ts",
+      "default": "./dist/generator.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "generate": "npm run build && node dist/cli.js",
+    "check": "npm run build && node dist/cli.js --check"
+  },
+  "dependencies": {
+    "@orbitrace/core": "0.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43"
+  }
+}

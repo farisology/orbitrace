@@ -1,0 +1,8 @@
+{
+  "agentType": "schema-cartographer",
+  "toolUseId": "toolu_01SYNTHdQ5cBSbJoeczHxg8z",
+  "spawnDepth": 1,
+  "description": "Synthetic task: tally the sundials",
+  "isBuiltIn": false,
+  "finished": true
+}

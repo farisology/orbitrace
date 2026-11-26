@@ -1,0 +1,9 @@
+{
+  "agentType": "Explore",
+  "model": "claude-haiku-5-5",
+  "toolUseId": "toolu_01SYNTHEo7VmbAYSFUt7XMZm",
+  "spawnDepth": 1,
+  "description": "Synthetic task: catalogue the marbles",
+  "isBuiltIn": true,
+  "finished": true
+}

@@ -1,0 +1,9 @@
+{
+  "agentType": "Explore",
+  "model": "claude-haiku-5-5",
+  "toolUseId": "toolu_01SYNTHSIriGUD2ZANrrrapq",
+  "spawnDepth": 1,
+  "description": "Synthetic task: sort the kazoos",
+  "isBuiltIn": true,
+  "finished": true
+}

@@ -1,0 +1,9 @@
+{
+  "agentType": "Explore",
+  "model": "claude-haiku-5-5",
+  "toolUseId": "toolu_01SYNTHAqvKpvQJWi4FSFPdc",
+  "spawnDepth": 1,
+  "description": "Synthetic task: polish the lanterns",
+  "isBuiltIn": true,
+  "finished": true
+}

@@ -1,0 +1,9 @@
+{
+  "agentType": "code-reviewer",
+  "model": "claude-opus-5-5",
+  "toolUseId": "toolu_01SYNTHO7pZ2gWobefAStcJn",
+  "spawnDepth": 1,
+  "description": "Synthetic task: sort the thimbles",
+  "isBuiltIn": false,
+  "finished": true
+}

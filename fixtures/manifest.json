@@ -1,0 +1,1455 @@
+{
+  "generator": "@orbitrace/fixtures",
+  "manifestVersion": 1,
+  "seed": "orbitrace-fixtures-1",
+  "goldenReplays": "pending",
+  "sessions": [
+    {
+      "name": "single-agent",
+      "description": "One agent, two turns, no subagents. Every reply is a single line, so nothing needs merging.",
+      "sessionId": "00000000-0000-4000-8000-4aba577ef353",
+      "project": "lantern-ledger",
+      "cwd": "/workspace/lantern-ledger",
+      "transcript": "config/projects/-workspace-lantern-ledger/00000000-0000-4000-8000-4aba577ef353.jsonl",
+      "subagents": [],
+      "expected": {
+        "agents": [
+          {
+            "id": "main",
+            "parent": null,
+            "agentType": null,
+            "spawnDepth": 0,
+            "model": "claude-opus-5-5",
+            "effort": "high",
+            "finished": true,
+            "lines": 24,
+            "lineTypes": {
+              "ai-title": 1,
+              "assistant": 8,
+              "attachment": 1,
+              "file-history-snapshot": 1,
+              "last-prompt": 1,
+              "mode": 1,
+              "system": 2,
+              "tools-used": 1,
+              "user": 8
+            },
+            "replies": 8,
+            "toolCalls": 6,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 192,
+              "output_tokens": 1084,
+              "cache_read_input_tokens": 148492,
+              "cache_creation_input_tokens": 7076
+            },
+            "firstTimestamp": "2026-02-02T09:00:01.068Z",
+            "lastTimestamp": "2026-02-02T09:00:46.395Z"
+          }
+        ],
+        "totals": {
+          "lines": 24,
+          "replies": 8,
+          "toolCalls": 6,
+          "failedToolCalls": 0,
+          "unfinishedToolCalls": 0,
+          "mcpToolCalls": 0,
+          "usage": {
+            "input_tokens": 192,
+            "output_tokens": 1084,
+            "cache_read_input_tokens": 148492,
+            "cache_creation_input_tokens": 7076
+          }
+        },
+        "scriptedWaves": 0,
+        "scriptedIdleGaps": [],
+        "inventedLineTypes": {}
+      }
+    },
+    {
+      "name": "two-waves",
+      "description": "Three subagents started together, then two more over a minute later. Two share an agent type.",
+      "sessionId": "00000000-0000-4000-8000-dc471cdc3b8c",
+      "project": "kite-workshop",
+      "cwd": "/workspace/kite-workshop",
+      "transcript": "config/projects/-workspace-kite-workshop/00000000-0000-4000-8000-dc471cdc3b8c.jsonl",
+      "subagents": [
+        {
+          "agentId": "a000009a7dbce2265",
+          "agentType": "Explore",
+          "transcript": "config/projects/-workspace-kite-workshop/00000000-0000-4000-8000-dc471cdc3b8c/subagents/agent-a000009a7dbce2265.jsonl",
+          "meta": "config/projects/-workspace-kite-workshop/00000000-0000-4000-8000-dc471cdc3b8c/subagents/agent-a000009a7dbce2265.meta.json"
+        },
+        {
+          "agentId": "a00000de2ea4621fb",
+          "agentType": "Explore",
+          "transcript": "config/projects/-workspace-kite-workshop/00000000-0000-4000-8000-dc471cdc3b8c/subagents/agent-a00000de2ea4621fb.jsonl",
+          "meta": "config/projects/-workspace-kite-workshop/00000000-0000-4000-8000-dc471cdc3b8c/subagents/agent-a00000de2ea4621fb.meta.json"
+        },
+        {
+          "agentId": "a00000b7b3a791650",
+          "agentType": "Plan",
+          "transcript": "config/projects/-workspace-kite-workshop/00000000-0000-4000-8000-dc471cdc3b8c/subagents/agent-a00000b7b3a791650.jsonl",
+          "meta": "config/projects/-workspace-kite-workshop/00000000-0000-4000-8000-dc471cdc3b8c/subagents/agent-a00000b7b3a791650.meta.json"
+        },
+        {
+          "agentId": "a0000039683a0a1d3",
+          "agentType": "code-reviewer",
+          "transcript": "config/projects/-workspace-kite-workshop/00000000-0000-4000-8000-dc471cdc3b8c/subagents/agent-a0000039683a0a1d3.jsonl",
+          "meta": "config/projects/-workspace-kite-workshop/00000000-0000-4000-8000-dc471cdc3b8c/subagents/agent-a0000039683a0a1d3.meta.json"
+        },
+        {
+          "agentId": "a000004bdd2c23cbd",
+          "agentType": "test-writer",
+          "transcript": "config/projects/-workspace-kite-workshop/00000000-0000-4000-8000-dc471cdc3b8c/subagents/agent-a000004bdd2c23cbd.jsonl",
+          "meta": "config/projects/-workspace-kite-workshop/00000000-0000-4000-8000-dc471cdc3b8c/subagents/agent-a000004bdd2c23cbd.meta.json"
+        }
+      ],
+      "expected": {
+        "agents": [
+          {
+            "id": "main",
+            "parent": null,
+            "agentType": null,
+            "spawnDepth": 0,
+            "model": "claude-sonnet-5-5",
+            "effort": "medium",
+            "finished": true,
+            "lines": 32,
+            "lineTypes": {
+              "ai-title": 1,
+              "assistant": 17,
+              "file-history-snapshot": 1,
+              "last-prompt": 1,
+              "mode": 1,
+              "tools-used": 1,
+              "user": 10
+            },
+            "replies": 6,
+            "toolCalls": 9,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 190,
+              "output_tokens": 2219,
+              "cache_read_input_tokens": 153608,
+              "cache_creation_input_tokens": 11741
+            },
+            "firstTimestamp": "2026-02-03T10:30:03.976Z",
+            "lastTimestamp": "2026-02-03T10:33:39.303Z"
+          },
+          {
+            "id": "a000009a7dbce2265",
+            "parent": "main",
+            "agentType": "Explore",
+            "spawnDepth": 1,
+            "model": "claude-haiku-5-5",
+            "effort": "low",
+            "finished": true,
+            "lines": 18,
+            "lineTypes": {
+              "assistant": 11,
+              "user": 7
+            },
+            "replies": 5,
+            "toolCalls": 6,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 84,
+              "output_tokens": 1277,
+              "cache_read_input_tokens": 55917,
+              "cache_creation_input_tokens": 8834
+            },
+            "firstTimestamp": "2026-02-03T10:30:28.981Z",
+            "lastTimestamp": "2026-02-03T10:30:55.454Z"
+          },
+          {
+            "id": "a00000de2ea4621fb",
+            "parent": "main",
+            "agentType": "Explore",
+            "spawnDepth": 1,
+            "model": "claude-haiku-5-5",
+            "effort": "low",
+            "finished": true,
+            "lines": 19,
+            "lineTypes": {
+              "assistant": 11,
+              "user": 8
+            },
+            "replies": 6,
+            "toolCalls": 7,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 183,
+              "output_tokens": 1162,
+              "cache_read_input_tokens": 60713,
+              "cache_creation_input_tokens": 8419
+            },
+            "firstTimestamp": "2026-02-03T10:30:31.793Z",
+            "lastTimestamp": "2026-02-03T10:30:59.445Z"
+          },
+          {
+            "id": "a00000b7b3a791650",
+            "parent": "main",
+            "agentType": "Plan",
+            "spawnDepth": 1,
+            "model": "claude-opus-5-5",
+            "effort": "high",
+            "finished": true,
+            "lines": 13,
+            "lineTypes": {
+              "assistant": 7,
+              "user": 6
+            },
+            "replies": 4,
+            "toolCalls": 5,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 179,
+              "output_tokens": 868,
+              "cache_read_input_tokens": 42532,
+              "cache_creation_input_tokens": 7306
+            },
+            "firstTimestamp": "2026-02-03T10:30:31.994Z",
+            "lastTimestamp": "2026-02-03T10:30:49.075Z"
+          },
+          {
+            "id": "a0000039683a0a1d3",
+            "parent": "main",
+            "agentType": "code-reviewer",
+            "spawnDepth": 1,
+            "model": "claude-opus-5-5",
+            "effort": "high",
+            "finished": true,
+            "lines": 20,
+            "lineTypes": {
+              "assistant": 12,
+              "user": 8
+            },
+            "replies": 5,
+            "toolCalls": 7,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 238,
+              "output_tokens": 1997,
+              "cache_read_input_tokens": 53873,
+              "cache_creation_input_tokens": 8331
+            },
+            "firstTimestamp": "2026-02-03T10:32:44.423Z",
+            "lastTimestamp": "2026-02-03T10:33:14.424Z"
+          },
+          {
+            "id": "a000004bdd2c23cbd",
+            "parent": "main",
+            "agentType": "test-writer",
+            "spawnDepth": 1,
+            "model": "claude-sonnet-5-5",
+            "effort": "medium",
+            "finished": true,
+            "lines": 27,
+            "lineTypes": {
+              "assistant": 16,
+              "user": 11
+            },
+            "replies": 6,
+            "toolCalls": 10,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 142,
+              "output_tokens": 2317,
+              "cache_read_input_tokens": 86532,
+              "cache_creation_input_tokens": 16155
+            },
+            "firstTimestamp": "2026-02-03T10:32:44.630Z",
+            "lastTimestamp": "2026-02-03T10:33:33.743Z"
+          }
+        ],
+        "totals": {
+          "lines": 129,
+          "replies": 32,
+          "toolCalls": 44,
+          "failedToolCalls": 0,
+          "unfinishedToolCalls": 0,
+          "mcpToolCalls": 0,
+          "usage": {
+            "input_tokens": 1016,
+            "output_tokens": 9840,
+            "cache_read_input_tokens": 453175,
+            "cache_creation_input_tokens": 60786
+          }
+        },
+        "scriptedWaves": 2,
+        "scriptedIdleGaps": [],
+        "inventedLineTypes": {}
+      }
+    },
+    {
+      "name": "tool-failures",
+      "description": "Failed tool calls in the main agent and a subagent, calls with no result, and a subagent that never finishes.",
+      "sessionId": "00000000-0000-4000-8000-f31302ec3c15",
+      "project": "marble-run",
+      "cwd": "/workspace/marble-run",
+      "transcript": "config/projects/-workspace-marble-run/00000000-0000-4000-8000-f31302ec3c15.jsonl",
+      "subagents": [
+        {
+          "agentId": "a000001fdd182f6b4",
+          "agentType": "test-runner",
+          "transcript": "config/projects/-workspace-marble-run/00000000-0000-4000-8000-f31302ec3c15/subagents/agent-a000001fdd182f6b4.jsonl",
+          "meta": "config/projects/-workspace-marble-run/00000000-0000-4000-8000-f31302ec3c15/subagents/agent-a000001fdd182f6b4.meta.json"
+        },
+        {
+          "agentId": "a000005a55a4e2022",
+          "agentType": "general-purpose",
+          "transcript": "config/projects/-workspace-marble-run/00000000-0000-4000-8000-f31302ec3c15/subagents/agent-a000005a55a4e2022.jsonl",
+          "meta": "config/projects/-workspace-marble-run/00000000-0000-4000-8000-f31302ec3c15/subagents/agent-a000005a55a4e2022.meta.json"
+        }
+      ],
+      "expected": {
+        "agents": [
+          {
+            "id": "main",
+            "parent": null,
+            "agentType": null,
+            "spawnDepth": 0,
+            "model": "claude-sonnet-5-5",
+            "effort": "low",
+            "finished": true,
+            "lines": 24,
+            "lineTypes": {
+              "ai-title": 1,
+              "assistant": 11,
+              "file-history-snapshot": 1,
+              "last-prompt": 1,
+              "mode": 1,
+              "tools-used": 1,
+              "user": 8
+            },
+            "replies": 7,
+            "toolCalls": 9,
+            "failedToolCalls": 4,
+            "unfinishedToolCalls": 2,
+            "mcpToolCalls": 1,
+            "usage": {
+              "input_tokens": 135,
+              "output_tokens": 1380,
+              "cache_read_input_tokens": 166128,
+              "cache_creation_input_tokens": 10916
+            },
+            "firstTimestamp": "2026-02-04T14:15:05.506Z",
+            "lastTimestamp": "2026-02-04T14:15:57.329Z"
+          },
+          {
+            "id": "a000001fdd182f6b4",
+            "parent": "main",
+            "agentType": "test-runner",
+            "spawnDepth": 1,
+            "model": "claude-sonnet-5-5",
+            "effort": "medium",
+            "finished": true,
+            "lines": 9,
+            "lineTypes": {
+              "assistant": 5,
+              "user": 4
+            },
+            "replies": 4,
+            "toolCalls": 3,
+            "failedToolCalls": 2,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 121,
+              "output_tokens": 353,
+              "cache_read_input_tokens": 42150,
+              "cache_creation_input_tokens": 5667
+            },
+            "firstTimestamp": "2026-02-04T14:15:35.468Z",
+            "lastTimestamp": "2026-02-04T14:15:55.882Z"
+          },
+          {
+            "id": "a000005a55a4e2022",
+            "parent": "main",
+            "agentType": "general-purpose",
+            "spawnDepth": 1,
+            "model": "claude-haiku-5-5",
+            "effort": "low",
+            "finished": false,
+            "lines": 4,
+            "lineTypes": {
+              "assistant": 2,
+              "user": 2
+            },
+            "replies": 2,
+            "toolCalls": 2,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 1,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 82,
+              "output_tokens": 304,
+              "cache_read_input_tokens": 17275,
+              "cache_creation_input_tokens": 3173
+            },
+            "firstTimestamp": "2026-02-04T14:15:35.776Z",
+            "lastTimestamp": "2026-02-04T14:15:39.630Z"
+          }
+        ],
+        "totals": {
+          "lines": 37,
+          "replies": 13,
+          "toolCalls": 14,
+          "failedToolCalls": 6,
+          "unfinishedToolCalls": 3,
+          "mcpToolCalls": 1,
+          "usage": {
+            "input_tokens": 338,
+            "output_tokens": 2037,
+            "cache_read_input_tokens": 225553,
+            "cache_creation_input_tokens": 19756
+          }
+        },
+        "scriptedWaves": 1,
+        "scriptedIdleGaps": [],
+        "inventedLineTypes": {}
+      }
+    },
+    {
+      "name": "idle-gap",
+      "description": "A 47 minute gap and a 95 second gap between turns, a 40 second pause that is not a gap, and a 4 minute command that is busy time.",
+      "sessionId": "00000000-0000-4000-8000-d797bf493e0e",
+      "project": "quill-archive",
+      "cwd": "/workspace/quill-archive",
+      "transcript": "config/projects/-workspace-quill-archive/00000000-0000-4000-8000-d797bf493e0e.jsonl",
+      "subagents": [],
+      "expected": {
+        "agents": [
+          {
+            "id": "main",
+            "parent": null,
+            "agentType": null,
+            "spawnDepth": 0,
+            "model": "claude-opus-5-5",
+            "effort": "medium",
+            "finished": true,
+            "lines": 21,
+            "lineTypes": {
+              "ai-title": 1,
+              "assistant": 8,
+              "file-history-snapshot": 1,
+              "last-prompt": 1,
+              "mode": 1,
+              "tools-used": 1,
+              "user": 8
+            },
+            "replies": 8,
+            "toolCalls": 4,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 321,
+              "output_tokens": 1207,
+              "cache_read_input_tokens": 192340,
+              "cache_creation_input_tokens": 7505
+            },
+            "firstTimestamp": "2026-02-05T08:05:02.776Z",
+            "lastTimestamp": "2026-02-05T08:58:35.003Z"
+          }
+        ],
+        "totals": {
+          "lines": 21,
+          "replies": 8,
+          "toolCalls": 4,
+          "failedToolCalls": 0,
+          "unfinishedToolCalls": 0,
+          "mcpToolCalls": 0,
+          "usage": {
+            "input_tokens": 321,
+            "output_tokens": 1207,
+            "cache_read_input_tokens": 192340,
+            "cache_creation_input_tokens": 7505
+          }
+        },
+        "scriptedWaves": 0,
+        "scriptedIdleGaps": [
+          {
+            "seconds": 2820
+          },
+          {
+            "seconds": 95
+          }
+        ],
+        "inventedLineTypes": {}
+      }
+    },
+    {
+      "name": "unknown-lines",
+      "description": "Line types, a content block type, a tool name and a model family that do not exist, and replies without effort keys, in the main and a subagent transcript.",
+      "sessionId": "00000000-0000-4000-8000-785a23fc31ad",
+      "project": "juniper-almanac",
+      "cwd": "/workspace/juniper-almanac",
+      "transcript": "config/projects/-workspace-juniper-almanac/00000000-0000-4000-8000-785a23fc31ad.jsonl",
+      "subagents": [
+        {
+          "agentId": "a000001329b7a5e15",
+          "agentType": "schema-cartographer",
+          "transcript": "config/projects/-workspace-juniper-almanac/00000000-0000-4000-8000-785a23fc31ad/subagents/agent-a000001329b7a5e15.jsonl",
+          "meta": "config/projects/-workspace-juniper-almanac/00000000-0000-4000-8000-785a23fc31ad/subagents/agent-a000001329b7a5e15.meta.json"
+        }
+      ],
+      "expected": {
+        "agents": [
+          {
+            "id": "main",
+            "parent": null,
+            "agentType": null,
+            "spawnDepth": 0,
+            "model": "claude-haiku-5-5",
+            "effort": "high",
+            "finished": true,
+            "lines": 23,
+            "lineTypes": {
+              "ai-title": 1,
+              "assistant": 9,
+              "file-history-snapshot": 1,
+              "last-prompt": 1,
+              "mode": 1,
+              "queue-operation": 1,
+              "synthetic-future-event": 1,
+              "synthetic-ledger-note": 1,
+              "synthetic-trace-span": 2,
+              "tools-used": 1,
+              "user": 4
+            },
+            "replies": 7,
+            "toolCalls": 3,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 247,
+              "output_tokens": 1958,
+              "cache_read_input_tokens": 144243,
+              "cache_creation_input_tokens": 5654
+            },
+            "firstTimestamp": "2026-02-06T16:40:00.000Z",
+            "lastTimestamp": "2026-02-06T16:40:27.796Z"
+          },
+          {
+            "id": "a000001329b7a5e15",
+            "parent": "main",
+            "agentType": "schema-cartographer",
+            "spawnDepth": 1,
+            "model": "claude-quartz-1-0",
+            "effort": "medium",
+            "finished": true,
+            "lines": 6,
+            "lineTypes": {
+              "assistant": 2,
+              "synthetic-future-event": 1,
+              "synthetic-ledger-note": 1,
+              "user": 2
+            },
+            "replies": 2,
+            "toolCalls": 1,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 13,
+              "output_tokens": 276,
+              "cache_read_input_tokens": 14684,
+              "cache_creation_input_tokens": 1317
+            },
+            "firstTimestamp": "2026-02-06T16:40:22.262Z",
+            "lastTimestamp": "2026-02-06T16:40:25.331Z"
+          }
+        ],
+        "totals": {
+          "lines": 29,
+          "replies": 9,
+          "toolCalls": 4,
+          "failedToolCalls": 0,
+          "unfinishedToolCalls": 0,
+          "mcpToolCalls": 0,
+          "usage": {
+            "input_tokens": 260,
+            "output_tokens": 2234,
+            "cache_read_input_tokens": 158927,
+            "cache_creation_input_tokens": 6971
+          }
+        },
+        "scriptedWaves": 1,
+        "scriptedIdleGaps": [],
+        "inventedLineTypes": {
+          "synthetic-future-event": 2,
+          "synthetic-ledger-note": 2,
+          "synthetic-trace-span": 2
+        }
+      }
+    },
+    {
+      "name": "split-reply",
+      "description": "Replies written over several lines that share a message id: usage that only merges by maximum, a tool call written twice, and results between the lines.",
+      "sessionId": "00000000-0000-4000-8000-d60dd3aa61cf",
+      "project": "lantern-ledger",
+      "cwd": "/workspace/lantern-ledger",
+      "transcript": "config/projects/-workspace-lantern-ledger/00000000-0000-4000-8000-d60dd3aa61cf.jsonl",
+      "subagents": [],
+      "expected": {
+        "agents": [
+          {
+            "id": "main",
+            "parent": null,
+            "agentType": null,
+            "spawnDepth": 0,
+            "model": "claude-opus-5-5",
+            "effort": "xhigh",
+            "finished": true,
+            "lines": 22,
+            "lineTypes": {
+              "ai-title": 1,
+              "assistant": 11,
+              "file-history-snapshot": 1,
+              "last-prompt": 1,
+              "mode": 1,
+              "tools-used": 1,
+              "user": 6
+            },
+            "replies": 4,
+            "toolCalls": 4,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 202,
+              "output_tokens": 1596,
+              "cache_read_input_tokens": 87297,
+              "cache_creation_input_tokens": 6976
+            },
+            "firstTimestamp": "2026-02-09T11:20:03.016Z",
+            "lastTimestamp": "2026-02-09T11:20:28.852Z"
+          }
+        ],
+        "totals": {
+          "lines": 22,
+          "replies": 4,
+          "toolCalls": 4,
+          "failedToolCalls": 0,
+          "unfinishedToolCalls": 0,
+          "mcpToolCalls": 0,
+          "usage": {
+            "input_tokens": 202,
+            "output_tokens": 1596,
+            "cache_read_input_tokens": 87297,
+            "cache_creation_input_tokens": 6976
+          }
+        },
+        "scriptedWaves": 0,
+        "scriptedIdleGaps": [],
+        "inventedLineTypes": {}
+      }
+    },
+    {
+      "name": "mcp-tools",
+      "description": "MCP tool calls on three invented servers, one with an underscore in its name, one call failing, one made by a subagent.",
+      "sessionId": "00000000-0000-4000-8000-92220258ad2e",
+      "project": "tidepool-atlas",
+      "cwd": "/workspace/tidepool-atlas",
+      "transcript": "config/projects/-workspace-tidepool-atlas/00000000-0000-4000-8000-92220258ad2e.jsonl",
+      "subagents": [
+        {
+          "agentId": "a00000d2272d82f72",
+          "agentType": "general-purpose",
+          "transcript": "config/projects/-workspace-tidepool-atlas/00000000-0000-4000-8000-92220258ad2e/subagents/agent-a00000d2272d82f72.jsonl",
+          "meta": "config/projects/-workspace-tidepool-atlas/00000000-0000-4000-8000-92220258ad2e/subagents/agent-a00000d2272d82f72.meta.json"
+        }
+      ],
+      "expected": {
+        "agents": [
+          {
+            "id": "main",
+            "parent": null,
+            "agentType": null,
+            "spawnDepth": 0,
+            "model": "claude-sonnet-5-5",
+            "effort": "high",
+            "finished": true,
+            "lines": 22,
+            "lineTypes": {
+              "ai-title": 1,
+              "assistant": 9,
+              "file-history-snapshot": 1,
+              "last-prompt": 1,
+              "mode": 1,
+              "tools-used": 1,
+              "user": 8
+            },
+            "replies": 6,
+            "toolCalls": 7,
+            "failedToolCalls": 1,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 4,
+            "usage": {
+              "input_tokens": 146,
+              "output_tokens": 1167,
+              "cache_read_input_tokens": 146337,
+              "cache_creation_input_tokens": 9233
+            },
+            "firstTimestamp": "2026-02-10T13:00:06.167Z",
+            "lastTimestamp": "2026-02-10T13:00:28.565Z"
+          },
+          {
+            "id": "a00000d2272d82f72",
+            "parent": "main",
+            "agentType": "general-purpose",
+            "spawnDepth": 1,
+            "model": "claude-haiku-5-5-20260115",
+            "effort": "medium",
+            "finished": true,
+            "lines": 4,
+            "lineTypes": {
+              "assistant": 2,
+              "user": 2
+            },
+            "replies": 2,
+            "toolCalls": 1,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 1,
+            "usage": {
+              "input_tokens": 67,
+              "output_tokens": 376,
+              "cache_read_input_tokens": 20291,
+              "cache_creation_input_tokens": 2157
+            },
+            "firstTimestamp": "2026-02-10T13:00:22.416Z",
+            "lastTimestamp": "2026-02-10T13:00:26.446Z"
+          }
+        ],
+        "totals": {
+          "lines": 26,
+          "replies": 8,
+          "toolCalls": 8,
+          "failedToolCalls": 1,
+          "unfinishedToolCalls": 0,
+          "mcpToolCalls": 5,
+          "usage": {
+            "input_tokens": 213,
+            "output_tokens": 1543,
+            "cache_read_input_tokens": 166628,
+            "cache_creation_input_tokens": 11390
+          }
+        },
+        "scriptedWaves": 1,
+        "scriptedIdleGaps": [],
+        "inventedLineTypes": {}
+      }
+    },
+    {
+      "name": "nested-subagents",
+      "description": "A subagent that spawns two subagents of its own: spawn depth 2, with the middle agent as their parent. One meta file has no status keys.",
+      "sessionId": "00000000-0000-4000-8000-5c9d7a3e3675",
+      "project": "compass-foundry",
+      "cwd": "/workspace/compass-foundry",
+      "transcript": "config/projects/-workspace-compass-foundry/00000000-0000-4000-8000-5c9d7a3e3675.jsonl",
+      "subagents": [
+        {
+          "agentId": "a00000190e32eaef7",
+          "agentType": "lantern-foreman",
+          "transcript": "config/projects/-workspace-compass-foundry/00000000-0000-4000-8000-5c9d7a3e3675/subagents/agent-a00000190e32eaef7.jsonl",
+          "meta": "config/projects/-workspace-compass-foundry/00000000-0000-4000-8000-5c9d7a3e3675/subagents/agent-a00000190e32eaef7.meta.json"
+        },
+        {
+          "agentId": "a00000b40f741f53b",
+          "agentType": "Explore",
+          "transcript": "config/projects/-workspace-compass-foundry/00000000-0000-4000-8000-5c9d7a3e3675/subagents/agent-a00000b40f741f53b.jsonl",
+          "meta": "config/projects/-workspace-compass-foundry/00000000-0000-4000-8000-5c9d7a3e3675/subagents/agent-a00000b40f741f53b.meta.json"
+        },
+        {
+          "agentId": "a00000d86f6ce658b",
+          "agentType": "Explore",
+          "transcript": "config/projects/-workspace-compass-foundry/00000000-0000-4000-8000-5c9d7a3e3675/subagents/agent-a00000d86f6ce658b.jsonl",
+          "meta": "config/projects/-workspace-compass-foundry/00000000-0000-4000-8000-5c9d7a3e3675/subagents/agent-a00000d86f6ce658b.meta.json"
+        }
+      ],
+      "expected": {
+        "agents": [
+          {
+            "id": "main",
+            "parent": null,
+            "agentType": null,
+            "spawnDepth": 0,
+            "model": "claude-opus-5-5",
+            "effort": "high",
+            "finished": true,
+            "lines": 11,
+            "lineTypes": {
+              "ai-title": 1,
+              "assistant": 3,
+              "file-history-snapshot": 1,
+              "last-prompt": 1,
+              "mode": 1,
+              "tools-used": 1,
+              "user": 3
+            },
+            "replies": 3,
+            "toolCalls": 2,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 124,
+              "output_tokens": 260,
+              "cache_read_input_tokens": 51681,
+              "cache_creation_input_tokens": 3761
+            },
+            "firstTimestamp": "2026-02-11T15:45:03.987Z",
+            "lastTimestamp": "2026-02-11T15:45:39.838Z"
+          },
+          {
+            "id": "a00000190e32eaef7",
+            "parent": "main",
+            "agentType": "lantern-foreman",
+            "spawnDepth": 1,
+            "model": "claude-sonnet-5-5",
+            "effort": "high",
+            "finished": true,
+            "lines": 10,
+            "lineTypes": {
+              "assistant": 5,
+              "user": 5
+            },
+            "replies": 4,
+            "toolCalls": 4,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 98,
+              "output_tokens": 627,
+              "cache_read_input_tokens": 52256,
+              "cache_creation_input_tokens": 7666
+            },
+            "firstTimestamp": "2026-02-11T15:45:08.519Z",
+            "lastTimestamp": "2026-02-11T15:45:35.625Z"
+          },
+          {
+            "id": "a00000b40f741f53b",
+            "parent": "a00000190e32eaef7",
+            "agentType": "Explore",
+            "spawnDepth": 2,
+            "model": "claude-haiku-5-5",
+            "effort": "low",
+            "finished": true,
+            "lines": 12,
+            "lineTypes": {
+              "assistant": 7,
+              "user": 5
+            },
+            "replies": 4,
+            "toolCalls": 4,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 73,
+              "output_tokens": 685,
+              "cache_read_input_tokens": 49725,
+              "cache_creation_input_tokens": 5739
+            },
+            "firstTimestamp": "2026-02-11T15:45:11.150Z",
+            "lastTimestamp": "2026-02-11T15:45:29.506Z"
+          },
+          {
+            "id": "a00000d86f6ce658b",
+            "parent": "a00000190e32eaef7",
+            "agentType": "Explore",
+            "spawnDepth": 2,
+            "model": "claude-haiku-5-5",
+            "effort": "low",
+            "finished": true,
+            "lines": 10,
+            "lineTypes": {
+              "assistant": 6,
+              "user": 4
+            },
+            "replies": 3,
+            "toolCalls": 3,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 76,
+              "output_tokens": 712,
+              "cache_read_input_tokens": 38858,
+              "cache_creation_input_tokens": 5274
+            },
+            "firstTimestamp": "2026-02-11T15:45:12.645Z",
+            "lastTimestamp": "2026-02-11T15:45:31.401Z"
+          }
+        ],
+        "totals": {
+          "lines": 43,
+          "replies": 14,
+          "toolCalls": 13,
+          "failedToolCalls": 0,
+          "unfinishedToolCalls": 0,
+          "mcpToolCalls": 0,
+          "usage": {
+            "input_tokens": 371,
+            "output_tokens": 2284,
+            "cache_read_input_tokens": 192520,
+            "cache_creation_input_tokens": 22440
+          }
+        },
+        "scriptedWaves": 1,
+        "scriptedIdleGaps": [],
+        "inventedLineTypes": {}
+      }
+    },
+    {
+      "name": "demo",
+      "description": "The bundled demo: four waves, fourteen subagents, all four model families, all five effort levels, MCP calls, failures and one idle gap.",
+      "sessionId": "00000000-0000-4000-8000-422450c39dbb",
+      "project": "paper-orrery",
+      "cwd": "/workspace/paper-orrery",
+      "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb.jsonl",
+      "subagents": [
+        {
+          "agentId": "a000005c16157ef0b",
+          "agentType": "Explore",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a000005c16157ef0b.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a000005c16157ef0b.meta.json"
+        },
+        {
+          "agentId": "a00000b8c7b230241",
+          "agentType": "Explore",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000b8c7b230241.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000b8c7b230241.meta.json"
+        },
+        {
+          "agentId": "a00000662690a3274",
+          "agentType": "Explore",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000662690a3274.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000662690a3274.meta.json"
+        },
+        {
+          "agentId": "a000004fe27086c46",
+          "agentType": "Plan",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a000004fe27086c46.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a000004fe27086c46.meta.json"
+        },
+        {
+          "agentId": "a000009326b3d3638",
+          "agentType": "lantern-builder",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a000009326b3d3638.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a000009326b3d3638.meta.json"
+        },
+        {
+          "agentId": "a00000fdcdcbe5185",
+          "agentType": "lantern-builder",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000fdcdcbe5185.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000fdcdcbe5185.meta.json"
+        },
+        {
+          "agentId": "a00000e143fbf9bda",
+          "agentType": "schema-cartographer",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000e143fbf9bda.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000e143fbf9bda.meta.json"
+        },
+        {
+          "agentId": "a00000673262994c5",
+          "agentType": "kite-rigger",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000673262994c5.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000673262994c5.meta.json"
+        },
+        {
+          "agentId": "a00000019e8239046",
+          "agentType": "docs-scribe",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000019e8239046.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000019e8239046.meta.json"
+        },
+        {
+          "agentId": "a00000a7b6affee8e",
+          "agentType": "code-reviewer",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000a7b6affee8e.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000a7b6affee8e.meta.json"
+        },
+        {
+          "agentId": "a0000095af70ce46c",
+          "agentType": "test-writer",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a0000095af70ce46c.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a0000095af70ce46c.meta.json"
+        },
+        {
+          "agentId": "a00000cc4aa24a4be",
+          "agentType": "general-purpose",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000cc4aa24a4be.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000cc4aa24a4be.meta.json"
+        },
+        {
+          "agentId": "a00000f30eb7fb86d",
+          "agentType": "code-reviewer",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000f30eb7fb86d.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000f30eb7fb86d.meta.json"
+        },
+        {
+          "agentId": "a00000ad555648fff",
+          "agentType": "Explore",
+          "transcript": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000ad555648fff.jsonl",
+          "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000ad555648fff.meta.json"
+        }
+      ],
+      "expected": {
+        "agents": [
+          {
+            "id": "main",
+            "parent": null,
+            "agentType": null,
+            "spawnDepth": 0,
+            "model": "claude-fable-5-2",
+            "effort": "xhigh",
+            "finished": true,
+            "lines": 93,
+            "lineTypes": {
+              "ai-title": 1,
+              "assistant": 51,
+              "attachment": 1,
+              "file-history-snapshot": 1,
+              "last-prompt": 1,
+              "mode": 1,
+              "system": 2,
+              "tools-used": 1,
+              "user": 34
+            },
+            "replies": 19,
+            "toolCalls": 32,
+            "failedToolCalls": 1,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 2,
+            "usage": {
+              "input_tokens": 618,
+              "output_tokens": 8795,
+              "cache_read_input_tokens": 642335,
+              "cache_creation_input_tokens": 35855
+            },
+            "firstTimestamp": "2026-03-14T09:26:02.292Z",
+            "lastTimestamp": "2026-03-14T09:43:49.971Z"
+          },
+          {
+            "id": "a000005c16157ef0b",
+            "parent": "main",
+            "agentType": "Explore",
+            "spawnDepth": 1,
+            "model": "claude-haiku-5-5",
+            "effort": "low",
+            "finished": true,
+            "lines": 29,
+            "lineTypes": {
+              "assistant": 17,
+              "user": 12
+            },
+            "replies": 8,
+            "toolCalls": 11,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 210,
+              "output_tokens": 2170,
+              "cache_read_input_tokens": 103999,
+              "cache_creation_input_tokens": 11930
+            },
+            "firstTimestamp": "2026-03-14T09:26:29.997Z",
+            "lastTimestamp": "2026-03-14T09:27:13.235Z"
+          },
+          {
+            "id": "a00000b8c7b230241",
+            "parent": "main",
+            "agentType": "Explore",
+            "spawnDepth": 1,
+            "model": "claude-haiku-5-5",
+            "effort": "low",
+            "finished": true,
+            "lines": 34,
+            "lineTypes": {
+              "assistant": 20,
+              "user": 14
+            },
+            "replies": 10,
+            "toolCalls": 13,
+            "failedToolCalls": 2,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 284,
+              "output_tokens": 2632,
+              "cache_read_input_tokens": 162601,
+              "cache_creation_input_tokens": 16333
+            },
+            "firstTimestamp": "2026-03-14T09:26:31.227Z",
+            "lastTimestamp": "2026-03-14T09:27:26.197Z"
+          },
+          {
+            "id": "a00000662690a3274",
+            "parent": "main",
+            "agentType": "Explore",
+            "spawnDepth": 1,
+            "model": "claude-haiku-5-5",
+            "effort": "medium",
+            "finished": true,
+            "lines": 27,
+            "lineTypes": {
+              "assistant": 17,
+              "user": 10
+            },
+            "replies": 7,
+            "toolCalls": 9,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 1,
+            "usage": {
+              "input_tokens": 267,
+              "output_tokens": 2889,
+              "cache_read_input_tokens": 114865,
+              "cache_creation_input_tokens": 11277
+            },
+            "firstTimestamp": "2026-03-14T09:26:33.666Z",
+            "lastTimestamp": "2026-03-14T09:27:13.266Z"
+          },
+          {
+            "id": "a000004fe27086c46",
+            "parent": "main",
+            "agentType": "Plan",
+            "spawnDepth": 1,
+            "model": "claude-opus-5-5",
+            "effort": "high",
+            "finished": true,
+            "lines": 23,
+            "lineTypes": {
+              "assistant": 14,
+              "user": 9
+            },
+            "replies": 7,
+            "toolCalls": 8,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 190,
+              "output_tokens": 2579,
+              "cache_read_input_tokens": 101965,
+              "cache_creation_input_tokens": 10270
+            },
+            "firstTimestamp": "2026-03-14T09:26:34.188Z",
+            "lastTimestamp": "2026-03-14T09:27:06.722Z"
+          },
+          {
+            "id": "a000009326b3d3638",
+            "parent": "main",
+            "agentType": "lantern-builder",
+            "spawnDepth": 1,
+            "model": "claude-sonnet-5-5",
+            "effort": "medium",
+            "finished": true,
+            "lines": 44,
+            "lineTypes": {
+              "assistant": 24,
+              "user": 20
+            },
+            "replies": 12,
+            "toolCalls": 19,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 387,
+              "output_tokens": 3006,
+              "cache_read_input_tokens": 243957,
+              "cache_creation_input_tokens": 23947
+            },
+            "firstTimestamp": "2026-03-14T09:28:56.876Z",
+            "lastTimestamp": "2026-03-14T09:29:52.261Z"
+          },
+          {
+            "id": "a00000fdcdcbe5185",
+            "parent": "main",
+            "agentType": "lantern-builder",
+            "spawnDepth": 1,
+            "model": "claude-sonnet-5-5",
+            "effort": "medium",
+            "finished": true,
+            "lines": 44,
+            "lineTypes": {
+              "assistant": 25,
+              "user": 19
+            },
+            "replies": 10,
+            "toolCalls": 18,
+            "failedToolCalls": 1,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 251,
+              "output_tokens": 3235,
+              "cache_read_input_tokens": 187027,
+              "cache_creation_input_tokens": 26065
+            },
+            "firstTimestamp": "2026-03-14T09:28:57.754Z",
+            "lastTimestamp": "2026-03-14T09:30:00.252Z"
+          },
+          {
+            "id": "a00000e143fbf9bda",
+            "parent": "main",
+            "agentType": "schema-cartographer",
+            "spawnDepth": 1,
+            "model": "claude-sonnet-5-5",
+            "effort": "high",
+            "finished": true,
+            "lines": 30,
+            "lineTypes": {
+              "assistant": 17,
+              "user": 13
+            },
+            "replies": 8,
+            "toolCalls": 12,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 242,
+              "output_tokens": 2085,
+              "cache_read_input_tokens": 105105,
+              "cache_creation_input_tokens": 13016
+            },
+            "firstTimestamp": "2026-03-14T09:29:00.243Z",
+            "lastTimestamp": "2026-03-14T09:29:30.066Z"
+          },
+          {
+            "id": "a00000673262994c5",
+            "parent": "main",
+            "agentType": "kite-rigger",
+            "spawnDepth": 1,
+            "model": "claude-opus-5-5",
+            "effort": "xhigh",
+            "finished": true,
+            "lines": 36,
+            "lineTypes": {
+              "assistant": 20,
+              "user": 16
+            },
+            "replies": 9,
+            "toolCalls": 15,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 194,
+              "output_tokens": 2958,
+              "cache_read_input_tokens": 170482,
+              "cache_creation_input_tokens": 20141
+            },
+            "firstTimestamp": "2026-03-14T09:29:01.087Z",
+            "lastTimestamp": "2026-03-14T09:29:47.686Z"
+          },
+          {
+            "id": "a00000019e8239046",
+            "parent": "main",
+            "agentType": "docs-scribe",
+            "spawnDepth": 1,
+            "model": "claude-haiku-5-5",
+            "effort": "medium",
+            "finished": true,
+            "lines": 26,
+            "lineTypes": {
+              "assistant": 15,
+              "user": 11
+            },
+            "replies": 7,
+            "toolCalls": 10,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 305,
+              "output_tokens": 2375,
+              "cache_read_input_tokens": 111667,
+              "cache_creation_input_tokens": 13302
+            },
+            "firstTimestamp": "2026-03-14T09:29:02.490Z",
+            "lastTimestamp": "2026-03-14T09:29:43.792Z"
+          },
+          {
+            "id": "a00000a7b6affee8e",
+            "parent": "main",
+            "agentType": "code-reviewer",
+            "spawnDepth": 1,
+            "model": "claude-opus-5-5",
+            "effort": "max",
+            "finished": true,
+            "lines": 38,
+            "lineTypes": {
+              "assistant": 22,
+              "user": 16
+            },
+            "replies": 9,
+            "toolCalls": 15,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 246,
+              "output_tokens": 4258,
+              "cache_read_input_tokens": 136727,
+              "cache_creation_input_tokens": 21446
+            },
+            "firstTimestamp": "2026-03-14T09:39:43.564Z",
+            "lastTimestamp": "2026-03-14T09:40:38.817Z"
+          },
+          {
+            "id": "a0000095af70ce46c",
+            "parent": "main",
+            "agentType": "test-writer",
+            "spawnDepth": 1,
+            "model": "claude-sonnet-5-5",
+            "effort": "medium",
+            "finished": true,
+            "lines": 49,
+            "lineTypes": {
+              "assistant": 29,
+              "user": 20
+            },
+            "replies": 11,
+            "toolCalls": 19,
+            "failedToolCalls": 1,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 415,
+              "output_tokens": 3536,
+              "cache_read_input_tokens": 195258,
+              "cache_creation_input_tokens": 20608
+            },
+            "firstTimestamp": "2026-03-14T09:39:44.497Z",
+            "lastTimestamp": "2026-03-14T09:41:21.849Z"
+          },
+          {
+            "id": "a00000cc4aa24a4be",
+            "parent": "main",
+            "agentType": "general-purpose",
+            "spawnDepth": 1,
+            "model": "claude-fable-5-2",
+            "effort": "high",
+            "finished": true,
+            "lines": 35,
+            "lineTypes": {
+              "assistant": 22,
+              "user": 13
+            },
+            "replies": 8,
+            "toolCalls": 12,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 4,
+            "usage": {
+              "input_tokens": 271,
+              "output_tokens": 4240,
+              "cache_read_input_tokens": 115360,
+              "cache_creation_input_tokens": 15481
+            },
+            "firstTimestamp": "2026-03-14T09:39:45.625Z",
+            "lastTimestamp": "2026-03-14T09:40:49.842Z"
+          },
+          {
+            "id": "a00000f30eb7fb86d",
+            "parent": "main",
+            "agentType": "code-reviewer",
+            "spawnDepth": 1,
+            "model": "claude-opus-5-5",
+            "effort": "max",
+            "finished": true,
+            "lines": 21,
+            "lineTypes": {
+              "assistant": 13,
+              "user": 8
+            },
+            "replies": 6,
+            "toolCalls": 7,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 144,
+              "output_tokens": 2449,
+              "cache_read_input_tokens": 62931,
+              "cache_creation_input_tokens": 8209
+            },
+            "firstTimestamp": "2026-03-14T09:42:56.444Z",
+            "lastTimestamp": "2026-03-14T09:43:39.309Z"
+          },
+          {
+            "id": "a00000ad555648fff",
+            "parent": "main",
+            "agentType": "Explore",
+            "spawnDepth": 1,
+            "model": "claude-haiku-5-5",
+            "effort": "low",
+            "finished": true,
+            "lines": 20,
+            "lineTypes": {
+              "assistant": 11,
+              "user": 9
+            },
+            "replies": 5,
+            "toolCalls": 8,
+            "failedToolCalls": 0,
+            "unfinishedToolCalls": 0,
+            "mcpToolCalls": 0,
+            "usage": {
+              "input_tokens": 217,
+              "output_tokens": 1329,
+              "cache_read_input_tokens": 62913,
+              "cache_creation_input_tokens": 9375
+            },
+            "firstTimestamp": "2026-03-14T09:42:58.151Z",
+            "lastTimestamp": "2026-03-14T09:43:18.787Z"
+          }
+        ],
+        "totals": {
+          "lines": 549,
+          "replies": 136,
+          "toolCalls": 208,
+          "failedToolCalls": 5,
+          "unfinishedToolCalls": 0,
+          "mcpToolCalls": 7,
+          "usage": {
+            "input_tokens": 4241,
+            "output_tokens": 48536,
+            "cache_read_input_tokens": 2517192,
+            "cache_creation_input_tokens": 257255
+          }
+        },
+        "scriptedWaves": 4,
+        "scriptedIdleGaps": [
+          {
+            "seconds": 540
+          }
+        ],
+        "inventedLineTypes": {}
+      }
+    }
+  ]
+}

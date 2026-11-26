@@ -1,0 +1,9 @@
+{
+  "agentType": "lantern-builder",
+  "model": "claude-sonnet-5-5",
+  "toolUseId": "toolu_01SYNTH82EOCPajuZMdLunQG",
+  "spawnDepth": 1,
+  "description": "Synthetic task: polish the abacuss",
+  "isBuiltIn": false,
+  "finished": true
+}
