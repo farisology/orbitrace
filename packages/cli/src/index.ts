@@ -1,21 +1,43 @@
 #!/usr/bin/env node
+/**
+ * Entry of the `orbitrace` command. Importing this module runs nothing; the command runs only
+ * when Node was started with this file (directly or through the npm bin link).
+ */
 import { realpathSync } from "node:fs";
-import { createRequire } from "node:module";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { CORE_STATUS } from "@orbitrace/core";
+import { run, type CliIo } from "./cli.js";
+import { CLI_EXIT_CODES } from "./errors.js";
+import type { HostContext } from "./sessions.js";
 
-const requireFromHere = createRequire(import.meta.url);
-const manifest = requireFromHere("../package.json") as { version: string };
+export { CLI_NAME, cliVersion, statusLine, versionJson, versionLine } from "./version.js";
+export { run, type CliIo } from "./cli.js";
+export { appBundleDir, APP_BUNDLE_FOLDER, APP_INDEX_FILE } from "./app-bundle.js";
+export { CLI_ERROR_CODES, CLI_EXIT_CODES, CliError, type CliErrorCode } from "./errors.js";
+export type { HostContext } from "./sessions.js";
 
-export const CLI_NAME = "orbitrace";
-
-export function versionLine(): string {
-  return `${CLI_NAME} ${manifest.version}`;
+/** The host context of this process. */
+export function processHost(): HostContext {
+  return { platform: process.platform, homeDir: homedir(), env: process.env, cwd: process.cwd() };
 }
 
-/** The line the entry prints. It shows the core status, which comes from @orbitrace/core. */
-export function statusLine(): string {
-  return `${versionLine()} (core: ${CORE_STATUS})`;
+/**
+ * Writes to the process's streams. A closed stdout (for example `| head`) ends the run quietly;
+ * any other stdout failure ends it with the `internal` exit code and no stack trace, because a
+ * stack trace names files on this machine.
+ */
+export function processIo(): CliIo {
+  process.stdout.on("error", (error: NodeJS.ErrnoException) => {
+    process.exit(error.code === "EPIPE" ? Number(process.exitCode ?? 0) : CLI_EXIT_CODES.internal);
+  });
+  return {
+    stdout: (text) => {
+      process.stdout.write(text);
+    },
+    stderr: (text) => {
+      process.stderr.write(text);
+    },
+  };
 }
 
 /** True when this module is the file Node was started with, following npm bin symlinks. */
@@ -30,5 +52,7 @@ function isEntryPoint(): boolean {
 }
 
 if (isEntryPoint()) {
-  console.log(statusLine());
+  void run(process.argv.slice(2), processIo(), processHost()).then((code) => {
+    process.exitCode = code;
+  });
 }

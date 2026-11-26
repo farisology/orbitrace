@@ -112,6 +112,27 @@ Notes for implementers:
 - #18: Ajv is a dev dependency of core today (used only by the schema test). Export will need a
   validator at run time.
 
+## How the CLI ships the web app (#76)
+
+Decision by the lead on #76: option (a). Implemented by #16.
+
+- `npm run build` in `packages/cli` runs `tsc`, then `scripts/copy-app.mjs`, which copies the
+  built web app (`packages/app/dist`, without its `types/` folder of declarations) into
+  `packages/cli/dist/app`. An older copy is removed first. The script fails when
+  `packages/app/dist/index.html` is missing, so a CLI build never ships without the app.
+- `@orbitrace/app` stays a devDependency of the CLI. That is enough for
+  `scripts/run-workspaces.mjs` to build the app before the CLI. The app does not need to be
+  published or to export its build output.
+- `files` in `packages/cli/package.json` is `dist`, so the one published package carries the app.
+- At run time `appBundleDir()` (`packages/cli/src/app-bundle.ts`, compiled to
+  `dist/app-bundle.js`) returns the `app/` folder beside it, or `null` when it holds no
+  `index.html`. The loopback server (#17) serves from that folder. A test imports the built
+  module and checks that it finds `index.html`.
+
+Option (b), publishing `@orbitrace/app` with its assets as a runtime dependency and resolving
+them with `import.meta.resolve`, was not chosen: it adds a second published package and an
+export for static files.
+
 ## Adding another agent runtime
 
 Claude Code is the only runtime. To add one:

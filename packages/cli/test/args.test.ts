@@ -1,0 +1,180 @@
+import { describe, expect, it } from "vitest";
+import {
+  COMMAND_NAMES,
+  COMMANDS,
+  isCommandName,
+  parseCommandLine,
+  parseLimit,
+  wantsJson,
+} from "../src/args.js";
+import { CliError } from "../src/errors.js";
+
+/** The error `parseCommandLine` throws for `argv`, or undefined when it does not throw. */
+function thrownBy(argv: string[]): unknown {
+  try {
+    parseCommandLine(argv);
+  } catch (error) {
+    return error;
+  }
+  return undefined;
+}
+
+/** The message of the usage error `parseCommandLine` throws for `argv`. */
+function usageMessage(argv: string[]): string {
+  const error = thrownBy(argv);
+  expect(error).toBeInstanceOf(CliError);
+  expect((error as CliError).code).toBe("usage");
+  expect((error as CliError).hint).toMatch(/--help/);
+  return (error as CliError).message;
+}
+
+describe("parseCommandLine", () => {
+  it("shows the main help with no arguments or --help, and the version with --version", () => {
+    expect(parseCommandLine([])).toEqual({ kind: "help", json: false });
+    expect(parseCommandLine(["--help"])).toEqual({ kind: "help", json: false });
+    expect(parseCommandLine(["-h", "--json"])).toEqual({ kind: "help", json: true });
+    expect(parseCommandLine(["--version"])).toEqual({ kind: "version", json: false });
+    expect(parseCommandLine(["--json", "-V"])).toEqual({ kind: "version", json: true });
+    expect(parseCommandLine(["--help", "--version"])).toEqual({ kind: "help", json: false });
+  });
+
+  it("parses list with its options, before or after --json", () => {
+    expect(parseCommandLine(["list"])).toEqual({
+      kind: "list",
+      json: false,
+      sources: { configDirs: [], extraRoots: false },
+    });
+    expect(
+      parseCommandLine([
+        "--json",
+        "list",
+        "--config-dir",
+        "one",
+        "--config-dir=two",
+        "--extra-roots",
+        "--limit",
+        "5",
+      ]),
+    ).toEqual({
+      kind: "list",
+      json: true,
+      sources: { configDirs: ["one", "two"], extraRoots: true },
+      limit: 5,
+    });
+    expect(parseCommandLine(["list", "--json"])).toMatchObject({ kind: "list", json: true });
+  });
+
+  it("parses export with a key or --latest", () => {
+    expect(parseCommandLine(["export", "claude-code:abcd"])).toEqual({
+      kind: "export",
+      json: false,
+      sources: { configDirs: [], extraRoots: false },
+      key: "claude-code:abcd",
+      latest: false,
+      force: false,
+      pretty: false,
+    });
+    expect(
+      parseCommandLine(["export", "--latest", "-o", "out.json", "--force", "--pretty", "--json"]),
+    ).toEqual({
+      kind: "export",
+      json: true,
+      sources: { configDirs: [], extraRoots: false },
+      latest: true,
+      output: "out.json",
+      force: true,
+      pretty: true,
+    });
+    expect(parseCommandLine(["export", "--latest", "--output=-"])).toMatchObject({ output: "-" });
+    expect(parseCommandLine(["export", "--latest", "-o", "-"])).toMatchObject({ output: "-" });
+  });
+
+  it("turns --help after a command, and help <command>, into that command's help", () => {
+    for (const name of COMMAND_NAMES) {
+      expect(parseCommandLine([name, "--help"])).toEqual({
+        kind: "help",
+        json: false,
+        command: name,
+      });
+      expect(parseCommandLine([name, "-h", "--json"])).toEqual({
+        kind: "help",
+        json: true,
+        command: name,
+      });
+      expect(parseCommandLine(["help", name])).toEqual({
+        kind: "help",
+        json: false,
+        command: name,
+      });
+    }
+    expect(parseCommandLine(["help"])).toEqual({ kind: "help", json: false });
+    expect(parseCommandLine(["--help", "export"])).toEqual({
+      kind: "help",
+      json: false,
+      command: "export",
+    });
+  });
+
+  it("accepts '--' before the command", () => {
+    expect(parseCommandLine(["--", "list"])).toMatchObject({ kind: "list" });
+  });
+
+  it("rejects what it does not understand with a usage error", () => {
+    expect(usageMessage(["bogus"])).toContain("Unknown command 'bogus'");
+    expect(usageMessage(["--bogus"])).toContain("Unknown option '--bogus'");
+    expect(usageMessage(["list", "--bogus"])).toContain("--bogus");
+    expect(usageMessage(["list", "x"])).toContain("takes no arguments");
+    expect(usageMessage(["list", "--config-dir", ""])).toContain("--config-dir");
+    expect(usageMessage(["list", "--limit", "-1"])).toMatch(/limit|-1/);
+    expect(usageMessage(["export"])).toContain("session key or --latest");
+    expect(usageMessage(["export", "k", "--latest"])).toContain("not both");
+    expect(usageMessage(["export", "k1", "k2"])).toContain("one session key");
+    expect(usageMessage(["export", " "])).toContain("empty");
+    expect(usageMessage(["export", "--latest", "-o", " "])).toContain("-o");
+    expect(usageMessage(["export", "--latest", "--pretty=yes"])).toContain("--pretty");
+    expect(usageMessage(["help", "a", "b"])).toContain("at most one");
+    expect(usageMessage(["help", "bogus"])).toContain("Unknown command 'bogus'");
+    expect(usageMessage(["-V", "list"])).toContain("--version");
+  });
+
+  it("points a command's usage error at that command's help", () => {
+    expect((thrownBy(["export"]) as CliError).hint).toContain("orbitrace export --help");
+    expect((thrownBy(["bogus"]) as CliError).hint).toContain("orbitrace --help");
+  });
+});
+
+describe("parseLimit", () => {
+  it("accepts whole numbers of at least 1", () => {
+    expect(parseLimit("1")).toBe(1);
+    expect(parseLimit(" 25 ")).toBe(25);
+  });
+
+  it("rejects anything else", () => {
+    for (const value of ["0", "-3", "1.5", "ten", "", "99999999999999999999"]) {
+      expect(() => parseLimit(value)).toThrow(CliError);
+    }
+  });
+});
+
+describe("wantsJson", () => {
+  it("is true when --json comes before any '--'", () => {
+    expect(wantsJson(["list", "--json"])).toBe(true);
+    expect(wantsJson(["--json"])).toBe(true);
+    expect(wantsJson(["list"])).toBe(false);
+    expect(wantsJson(["export", "--", "--json"])).toBe(false);
+  });
+});
+
+describe("isCommandName and COMMANDS", () => {
+  it("knows exactly the commands it has specs for", () => {
+    expect(COMMAND_NAMES).toEqual(["list", "export", "help"]);
+    for (const name of COMMAND_NAMES) {
+      expect(isCommandName(name)).toBe(true);
+      expect(COMMANDS[name].name).toBe(name);
+      expect(COMMANDS[name].options.some((option) => option.name === "json")).toBe(true);
+      expect(COMMANDS[name].options.some((option) => option.name === "help")).toBe(true);
+    }
+    expect(isCommandName("open")).toBe(false);
+    expect(isCommandName("bogus")).toBe(false);
+  });
+});
