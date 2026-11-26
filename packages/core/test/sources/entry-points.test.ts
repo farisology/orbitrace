@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import * as core from "../../src/index.js";
 import * as nodeEntry from "../../src/sources/node.js";
 
@@ -67,5 +67,22 @@ describe("entry points", () => {
     expect(typeof core.toRealSeconds).toBe("function");
     expect(core.SessionReplayError).toBe(nodeEntry.SessionReplayError);
     expect(core.TRANSPORT_ERROR_CODES).toContain("not-found");
+  });
+
+  it("re-exports the replayer's update types from the main entry, as types only (#84)", () => {
+    expectTypeOf<core.SessionReplayUpdate>().toEqualTypeOf<nodeEntry.SessionReplayUpdate>();
+    expectTypeOf<core.SessionReplayListener>().toEqualTypeOf<nodeEntry.SessionReplayListener>();
+    // The re-export is `export type`, so the replayer's code stays off the main entry.
+    const source = readFileSync(join(packageDir, "src", "index.ts"), "utf8");
+    expect(source).toMatch(
+      /export type \{ SessionReplayUpdate, SessionReplayListener \} from "\.\/host\/session-replayer\.js";/,
+    );
+    expect("createSessionReplayer" in core).toBe(false);
+  });
+
+  it("exports the session file watcher from ./node only (#74)", () => {
+    expect(typeof nodeEntry.watchSessionFiles).toBe("function");
+    expect(typeof nodeEntry.openNodeDirectoryWatcher).toBe("function");
+    expect("watchSessionFiles" in core).toBe(false);
   });
 });

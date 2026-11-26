@@ -12,7 +12,8 @@
  *
  * Exported from `@orbitrace/core/node` instead: the Claude Code source adapter (#7) and the
  * host-side session-to-replay helper (`createSessionReplayer`, `createNodeSessionReplayer`, #75).
- * See docs/architecture.md.
+ * The helper's update types (`SessionReplayUpdate`, `SessionReplayListener`) are re-exported here
+ * as types only (#84). See docs/architecture.md.
  */
 
 /**
@@ -35,3 +36,5 @@ export * from "./replay/index.js";
 export * from "./export/index.js";
 export * from "./sources/index.js";
 export * from "./host/errors.js";
+// Types only (#84): erased at build time, so no code of the Node-entry replayer reaches this entry.
+export type { SessionReplayUpdate, SessionReplayListener } from "./host/session-replayer.js";
