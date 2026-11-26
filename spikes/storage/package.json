@@ -1,0 +1,16 @@
+{
+  "name": "orbitrace-storage-spike",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Spike for ticket 24. Not part of the workspaces.",
+  "type": "module",
+  "scripts": {
+    "probe": "node probe.mjs",
+    "bench": "node bench.mjs"
+  },
+  "dependencies": {
+    "@sqlite.org/sqlite-wasm": "3.54.1-build1",
+    "node-sqlite3-wasm": "0.8.61",
+    "sql.js": "1.17.0"
+  }
+}
