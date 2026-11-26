@@ -11,6 +11,13 @@
 //
 // Rule patterns are written as regex literals whose text does not contain the literal
 // strings they detect, so this file does not flag itself.
+//
+// History mode: node scripts/privacy-check.mjs --range <base>..<head>
+// (or npm run privacy -- --range <base>..<head>). Scans what the commits in the range add:
+// every added line of every non-merge commit, and every commit message. A value that one
+// commit adds and a later commit removes is not in the tree any more, but it is still in the
+// history that a merge publishes, so the tree scan alone cannot see it. Findings print as
+// <short sha>:<file>:<line>: <rule>, again without the matched text. CI runs both modes.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -185,28 +192,200 @@ export function checkRepository(root) {
   return scanFiles(root, files, rules);
 }
 
-function main() {
+/** Label used in place of a file name for findings in a commit message. */
+export const COMMIT_MESSAGE_LABEL = "(commit message)";
+
+export const USAGE = "usage: node scripts/privacy-check.mjs [--range <base>..<head>]";
+
+/**
+ * Parse the command-line arguments (without node and the script path).
+ * @param {string[]} args
+ * @returns {{ mode: "tree" } | { mode: "range", range: string }}
+ */
+export function parseArgs(args) {
+  if (args.length === 0) return { mode: "tree" };
+  let range;
+  if (args.length === 1 && args[0].startsWith("--range=")) {
+    range = args[0].slice("--range=".length);
+  } else if (args.length === 2 && args[0] === "--range") {
+    range = args[1];
+  } else {
+    throw new Error(USAGE);
+  }
+  // A leading "-" would reach git as an option, and the range must name two ends.
+  if (range === "" || range.startsWith("-") || !range.includes("..") || /\s/.test(range)) {
+    throw new Error(`not a commit range of the form <base>..<head>\n${USAGE}`);
+  }
+  return { mode: "range", range };
+}
+
+/**
+ * Turn the path on a "+++ " diff header line into a repository-relative path.
+ * Returns null for "/dev/null" (the file was deleted).
+ * @param {string} header the text after "+++ "
+ */
+export function headerPath(header) {
+  // git appends a tab after names that contain a space.
+  let path = header.replace(/\t$/, "");
+  if (path === "/dev/null") return null;
+  if (path.startsWith('"') && path.endsWith('"')) path = path.slice(1, -1);
+  return path.startsWith("b/") ? path.slice(2) : path;
+}
+
+const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+
+/**
+ * Scan the added lines of a unified diff. Line numbers are the line in the new file.
+ * Removed lines, context lines and file headers are not scanned.
+ * @param {string} patch output of `git show` / `git diff` with a/ and b/ prefixes
+ * @param {typeof RULES} rules
+ * @returns {{ file: string, line: number, rule: string }[]}
+ */
+export function scanPatch(patch, rules) {
+  const findings = [];
+  let file = null;
+  let inHunk = false;
+  let newLine = 0;
+  for (const raw of patch.split("\n")) {
+    const text = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+    if (text.startsWith("diff --git ")) {
+      file = null;
+      inHunk = false;
+      continue;
+    }
+    const hunk = HUNK_HEADER.exec(text);
+    if (hunk) {
+      inHunk = true;
+      newLine = Number(hunk[1]);
+      continue;
+    }
+    if (!inHunk) {
+      // File header: only the "+++ " line names the new path.
+      if (text.startsWith("+++ ")) file = headerPath(text.slice(4));
+      continue;
+    }
+    if (text.startsWith("+")) {
+      if (file !== null) {
+        for (const hit of scanText(text.slice(1), rules)) {
+          findings.push({ file, line: newLine, rule: hit.rule });
+        }
+      }
+      newLine += 1;
+    } else if (text.startsWith(" ")) {
+      newLine += 1;
+    }
+    // "-" lines and "\ No newline at end of file" do not move the new-file counter.
+  }
+  return findings;
+}
+
+/**
+ * @param {string} root
+ * @param {string[]} args
+ */
+function git(root, args) {
+  return execFileSync("git", args, {
+    cwd: root,
+    encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+/**
+ * List the commits in a range, oldest first, and whether each one is a merge.
+ * @param {string} root
+ * @param {string} range
+ * @returns {{ sha: string, merge: boolean }[]}
+ */
+export function listRangeCommits(root, range) {
+  const output = git(root, ["rev-list", "--reverse", "--parents", range, "--"]);
+  return output
+    .split("\n")
+    .filter((line) => line !== "")
+    .map((line) => {
+      const [sha, ...parents] = line.split(" ");
+      return { sha, merge: parents.length > 1 };
+    });
+}
+
+/**
+ * Scan what the commits in a range add: the message of every commit and the added lines of
+ * every non-merge commit. The commits a merge brings in are either in the range themselves
+ * or already on the base, so merge diffs are not scanned.
+ * @param {string} root
+ * @param {string} range
+ */
+export function checkRange(root, range) {
+  const rules = [...RULES, ...loadDenylist(root)];
+  const commits = listRangeCommits(root, range);
+  const findings = [];
+  for (const { sha, merge } of commits) {
+    const commit = sha.slice(0, 12);
+    const message = git(root, ["log", "-1", "--format=%B", sha, "--"]);
+    for (const hit of scanText(message, rules)) {
+      findings.push({ commit, file: COMMIT_MESSAGE_LABEL, line: hit.line, rule: hit.rule });
+    }
+    if (merge) continue;
+    const patch = git(root, [
+      "-c",
+      "core.quotePath=false",
+      "show",
+      "--format=",
+      "--no-color",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--unified=0",
+      "-M",
+      "--src-prefix=a/",
+      "--dst-prefix=b/",
+      sha,
+      "--",
+    ]);
+    for (const hit of scanPatch(patch, rules)) {
+      findings.push({ commit, ...hit });
+    }
+  }
+  return { commits: commits.length, findings };
+}
+
+/** @param {string[]} args */
+function main(args) {
   const root = process.cwd();
+  let options;
+  try {
+    options = parseArgs(args);
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 2;
+    return;
+  }
   let result;
   try {
-    result = checkRepository(root);
+    result = options.mode === "range" ? checkRange(root, options.range) : checkRepository(root);
   } catch (error) {
     console.error(`privacy check could not run: ${error.message}`);
     process.exitCode = 2;
     return;
   }
   for (const finding of result.findings) {
-    console.error(`${finding.file}:${finding.line}: ${finding.rule}`);
+    const prefix = "commit" in finding ? `${finding.commit}:` : "";
+    console.error(`${prefix}${finding.file}:${finding.line}: ${finding.rule}`);
   }
+  const label = options.mode === "range" ? "privacy history check" : "privacy check";
   if (result.findings.length > 0) {
-    console.error(`privacy check failed: ${result.findings.length} finding(s)`);
+    console.error(`${label} failed: ${result.findings.length} finding(s)`);
     process.exitCode = 1;
     return;
   }
-  console.log(`privacy check passed: ${result.scanned} file(s) scanned, 0 findings`);
+  const count =
+    options.mode === "range"
+      ? `${result.commits} commit(s) scanned`
+      : `${result.scanned} file(s) scanned`;
+  console.log(`${label} passed: ${count}, 0 findings`);
 }
 
 const isMain =
   process.argv[1] !== undefined && pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
 
-if (isMain) main();
+if (isMain) main(process.argv.slice(2));
