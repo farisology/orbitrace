@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   COMMAND_NAMES,
   COMMANDS,
+  defaultOpenCommand,
   isCommandName,
   parseCommandLine,
   parseLimit,
+  parsePort,
   wantsJson,
 } from "../src/args.js";
 import { CliError } from "../src/errors.js";
@@ -29,8 +31,7 @@ function usageMessage(argv: string[]): string {
 }
 
 describe("parseCommandLine", () => {
-  it("shows the main help with no arguments or --help, and the version with --version", () => {
-    expect(parseCommandLine([])).toEqual({ kind: "help", json: false });
+  it("shows the main help with --help, and the version with --version", () => {
     expect(parseCommandLine(["--help"])).toEqual({ kind: "help", json: false });
     expect(parseCommandLine(["-h", "--json"])).toEqual({ kind: "help", json: true });
     expect(parseCommandLine(["--version"])).toEqual({ kind: "version", json: false });
@@ -167,14 +168,81 @@ describe("wantsJson", () => {
 
 describe("isCommandName and COMMANDS", () => {
   it("knows exactly the commands it has specs for", () => {
-    expect(COMMAND_NAMES).toEqual(["list", "export", "help"]);
+    expect(COMMAND_NAMES).toEqual(["open", "list", "export", "help"]);
     for (const name of COMMAND_NAMES) {
       expect(isCommandName(name)).toBe(true);
       expect(COMMANDS[name].name).toBe(name);
       expect(COMMANDS[name].options.some((option) => option.name === "json")).toBe(true);
       expect(COMMANDS[name].options.some((option) => option.name === "help")).toBe(true);
     }
-    expect(isCommandName("open")).toBe(false);
     expect(isCommandName("bogus")).toBe(false);
+  });
+});
+
+describe("open on the command line", () => {
+  const noSources = { configDirs: [], extraRoots: false };
+
+  it("runs open with its defaults when no command is given", () => {
+    expect(parseCommandLine([])).toEqual(defaultOpenCommand(false));
+    expect(parseCommandLine(["--json"])).toEqual(defaultOpenCommand(true));
+    expect(defaultOpenCommand(false)).toEqual({
+      kind: "open",
+      json: false,
+      sources: noSources,
+      latest: false,
+      browser: true,
+    });
+  });
+
+  it("parses a key, --latest, --no-browser, --port and the source flags", () => {
+    expect(parseCommandLine(["open"])).toEqual(defaultOpenCommand(false));
+    expect(parseCommandLine(["open", "claude-code:abcd"])).toEqual({
+      ...defaultOpenCommand(false),
+      key: "claude-code:abcd",
+    });
+    expect(
+      parseCommandLine([
+        "open",
+        "--latest",
+        "--no-browser",
+        "--port",
+        "8123",
+        "--config-dir",
+        "some/folder",
+        "--extra-roots",
+        "--json",
+      ]),
+    ).toEqual({
+      kind: "open",
+      json: true,
+      sources: { configDirs: ["some/folder"], extraRoots: true },
+      latest: true,
+      browser: false,
+      port: 8123,
+    });
+  });
+
+  it("refuses a key with --latest, two keys, an empty key and a bad port", () => {
+    for (const argv of [
+      ["open", "abcd", "--latest"],
+      ["open", "abcd", "efgh"],
+      ["open", " "],
+      ["open", "--port", "0"],
+      ["open", "--port", "65536"],
+      ["open", "--port", "80a"],
+      ["open", "--browser"],
+    ]) {
+      expect(() => parseCommandLine(argv)).toThrow(CliError);
+    }
+  });
+});
+
+describe("parsePort", () => {
+  it("takes 1 to 65535 and nothing else", () => {
+    expect(parsePort("1")).toBe(1);
+    expect(parsePort(" 65535 ")).toBe(65535);
+    for (const bad of ["0", "65536", "-1", "1.5", "", "123456", "0x50"]) {
+      expect(() => parsePort(bad)).toThrow(CliError);
+    }
   });
 });

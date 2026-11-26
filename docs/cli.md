@@ -1,11 +1,11 @@
 # Command line
 
-`orbitrace` lists the Claude Code sessions on your machine and exports a structure-only replay of
-one of them. Orbitrace is not affiliated with Anthropic.
+`orbitrace` lists the Claude Code sessions on your machine, opens one in your browser through a
+local server, and exports a structure-only replay of one of them. Orbitrace is not affiliated with
+Anthropic.
 
 **Status: not released.** The package is private and not on npm, so `npx orbitrace` does not work
-yet (see [Install](#install)). Opening a session in the browser is not available yet; it comes with
-the local server (#17).
+yet (see [Install](#install)).
 
 ## Install
 
@@ -21,13 +21,64 @@ node packages/cli/dist/index.js --help
 
 | Command                      | What it does                                               |
 | ---------------------------- | ---------------------------------------------------------- |
+| `orbitrace`                  | The same as `orbitrace open`.                              |
+| `orbitrace open [<key>]`     | Opens a session in your browser; runs until Ctrl+C.        |
 | `orbitrace list`             | Lists sessions, newest first.                              |
 | `orbitrace export <key>`     | Writes the replay of one session.                          |
 | `orbitrace export --latest`  | Writes the replay of the session with the newest activity. |
 | `orbitrace help [<command>]` | Shows help. `orbitrace <command> --help` shows the same.   |
 | `orbitrace --version`        | Prints the version and the status of `@orbitrace/core`.    |
 
-`orbitrace` with no command prints the help.
+`orbitrace` with no command runs `open` with its defaults: the newest session opens in your
+default browser. `orbitrace --help` prints the help.
+
+### `orbitrace open`
+
+```text
+orbitrace open [<session-key> | --latest] [--no-browser] [--port <n>]
+               [--config-dir <path>]... [--extra-roots] [--json]
+```
+
+Starts a local server on `127.0.0.1` (this computer only), prints a link to the web app, opens
+the link in your default browser and keeps running until you press Ctrl+C. Ctrl+C closes every
+live stream and stops the server; the command then exits with 0. A second Ctrl+C exits at once.
+
+The link looks like `http://127.0.0.1:<port>/#t=<token>&key=<session key>`. The token is new
+every time the command starts. **Anyone who has the link can read your sessions while the server
+runs, so do not share it or paste it anywhere.** It is in the part after `#`, which the browser
+never sends to a server. The security design and what it does not protect against are in
+[architecture.md](architecture.md#loopback-server-and-routes-17).
+
+| Option                          | Meaning                                                                                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `<session-key>`                 | A key from `orbitrace list`, or a unique start of one, as for `export`.                                                                   |
+| `--latest`                      | The session with the newest activity. Fails with `no-sessions` when there is none.                                                        |
+| (neither)                       | The newest session when there is one; otherwise the link opens the session list (the app shows its built-in demo when the list is empty). |
+| `--no-browser`                  | Print the link only. Use it on a machine without a desktop, or to open the link in another browser.                                       |
+| `--port <n>`                    | Listen on this port (1 to 65535). Without it the system picks a free port. A port in use fails with `port-unavailable`.                   |
+| `--config-dir`, `--extra-roots` | As for `list`. The server looks for sessions again each time the app asks for the list, so a session started later shows up.              |
+| `--json`                        | See [JSON output](#json-output).                                                                                                          |
+
+Without `--json`, the link is the only line written to stdout, so a script can read it. The
+other lines (where the server listens, whether the browser opened, how to stop) go to stderr.
+The token is never written to stderr and never passed as a program argument.
+
+The link is never put on a command line, because other accounts on the machine can read the
+arguments of every process. The command writes a small launcher page instead (`open.html`,
+readable by your account only, in a new private folder under the system's temporary folder) that
+redirects to the link, and opens that page without a shell: `open <page>` on macOS,
+`xdg-open <page>` on Linux and other systems, and `cmd.exe /d /v:off /s /c "start "" "<page>""` on
+Windows. Only the page's path, which holds no token, appears in the process list. The page is
+deleted when the command stops. If the opener cannot start, the command says so and keeps
+running: open the link yourself.
+
+If you pass the link to a browser on its command line yourself, other accounts on the machine can
+see it in the process list. On a shared machine, use `--no-browser` and paste the link into a
+browser that is already running. Use `--no-browser` too when `.html` files open in an editor on
+your system, or when your browser is a Snap or Flatpak that cannot read the temporary folder.
+
+Asking the server to open a session in the browser (the app's `openInBrowser` request) answers
+with the `unsupported` error: the browser view is already in the browser.
 
 ### `orbitrace list`
 
@@ -96,11 +147,17 @@ document, not on stderr.
 | `list --json`             | `{ "sessions": [SessionSummary...], "warnings": [...] }`                  |
 | `export --json` (stdout)  | `{ "key", "fileName", "output": null, "bytes", "warnings", "replay" }`    |
 | `export --json -o <file>` | `{ "key", "fileName", "output": "<file as typed>", "bytes", "warnings" }` |
+| `open --json`             | `{ "url", "origin", "port", "key", "browser", "warnings" }`               |
 
 A `SessionSummary` has `key`, `runtime`, `projectLabel`, `sessionId`, `lastActivity` (Unix epoch
 milliseconds), `live` (`busy`, `idle`, `ended` or `unknown`) and `subagentCount`. It has no path.
 The project name and the session id are local data: they are shown to you and are not part of an
 export.
+
+For `open`, the document is written once the server listens, and the command keeps running
+after it. `url` is the link with the token. `key` is the session key in the link, or `null` for
+the session list. `browser` is `opened`, `failed` (the opener could not start) or `skipped`
+(`--no-browser`).
 
 A warning is `{ "code": "config-dir-unavailable", "message" }`.
 
@@ -138,6 +195,8 @@ replayer.
 | 7    | `invalid`           | The replay did not pass the replay format check.                              |
 | 8    | `output-exists`     | The output file exists and `--force` was not given.                           |
 | 9    | `output-unwritable` | The output file could not be written (missing folder, no permission).         |
+| 10   | `port-unavailable`  | `open --port`: the port is in use or may not be used.                         |
+| 11   | `app-missing`       | `open`: this build of the command has no web app (run `npm run build`).       |
 
 ## Privacy of messages
 
@@ -150,6 +209,6 @@ with `?` before it is printed.
 ## The bundled web app
 
 The build copies the built web app (`packages/app/dist`, without its type declarations) into
-`packages/cli/dist/app`, so the package carries it for the browser view (#17). See the decision
-on #76 in [architecture.md](architecture.md#how-the-cli-ships-the-web-app-76). Nothing in this
-ticket serves it.
+`packages/cli/dist/app`, so the package carries it for the browser view. See the decision on #76
+in [architecture.md](architecture.md#how-the-cli-ships-the-web-app-76). `orbitrace open` serves
+it; run from the sources (without a build) the command fails with `app-missing`.

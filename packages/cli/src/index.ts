@@ -15,6 +15,22 @@ export { run, type CliIo } from "./cli.js";
 export { appBundleDir, APP_BUNDLE_FOLDER, APP_INDEX_FILE } from "./app-bundle.js";
 export { CLI_ERROR_CODES, CLI_EXIT_CODES, CliError, type CliErrorCode } from "./errors.js";
 export type { HostContext } from "./sessions.js";
+export type { OpenRuntime } from "./open.js";
+export {
+  startServer,
+  ServerStartError,
+  type LoopbackServer,
+  type LoopbackServerOptions,
+} from "./server/server.js";
+export { buildLink } from "./server/link.js";
+export {
+  browserCommand,
+  openInBrowser,
+  writeLauncherFile,
+  type BrowserOpening,
+  type BrowserOpenResult,
+  type LauncherFile,
+} from "./server/browser.js";
 
 /** The host context of this process. */
 export function processHost(): HostContext {
@@ -51,8 +67,28 @@ function isEntryPoint(): boolean {
   }
 }
 
+/**
+ * The stop signal of this process: aborted on the first SIGINT (Ctrl+C) or SIGTERM, so `open`
+ * closes its live streams and watches and exits. A second signal exits at once.
+ */
+export function processStopSignal(): AbortSignal {
+  const controller = new AbortController();
+  const onSignal = (signal: NodeJS.Signals): void => {
+    if (controller.signal.aborted) process.exit(signal === "SIGINT" ? 130 : 143);
+    controller.abort();
+  };
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+  return controller.signal;
+}
+
 if (isEntryPoint()) {
-  void run(process.argv.slice(2), processIo(), processHost()).then((code) => {
+  void run(process.argv.slice(2), processIo(), processHost(), {
+    stopSignal: processStopSignal(),
+  }).then((code) => {
     process.exitCode = code;
+    // The signal handlers above keep nothing alive; every server handle is closed by now.
+    process.removeAllListeners("SIGINT");
+    process.removeAllListeners("SIGTERM");
   });
 }

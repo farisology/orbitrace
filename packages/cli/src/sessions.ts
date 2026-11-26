@@ -11,6 +11,7 @@ import {
   claudeCodeAdapter,
   createNodeSessionReplayer,
   type SessionReplayer,
+  type SessionRootsSource,
 } from "@orbitrace/core/node";
 import {
   resolveSources,
@@ -100,9 +101,21 @@ export async function resolveRoots(
   return { roots, warnings };
 }
 
-/** A session replayer over fixed roots. */
+/**
+ * Roots resolved again on every listing, for a command that keeps running (`open`): a config
+ * folder created after start-up is found by the next listing.
+ */
+export function rootsOnEveryListing(
+  host: HostContext,
+  sources: SourceFlags,
+  adapters: readonly SourceAdapter[] = CLI_ADAPTERS,
+): () => Promise<readonly SourceRoot[]> {
+  return () => resolveSources(resolveContext(host, sources), adapters);
+}
+
+/** A session replayer over fixed roots, or over roots resolved on every listing. */
 export function createReplayer(
-  roots: readonly SourceRoot[],
+  roots: SessionRootsSource,
   adapters: readonly SourceAdapter[] = CLI_ADAPTERS,
 ): SessionReplayer {
   return createNodeSessionReplayer({ roots, adapters });

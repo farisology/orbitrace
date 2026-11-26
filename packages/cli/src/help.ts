@@ -28,7 +28,7 @@ export function mainHelpText(): string {
     "Orbitrace is not affiliated with Anthropic.",
     "",
     "Usage:",
-    "  orbitrace <command> [options]",
+    "  orbitrace [<command>] [options]",
     "",
     "Commands:",
     ...table(COMMAND_NAMES.map((name) => [name, COMMANDS[name].summary] as const)),
@@ -36,7 +36,7 @@ export function mainHelpText(): string {
     "Options:",
     ...table(GLOBAL_OPTIONS.map((option) => [optionLabel(option), option.description] as const)),
     "",
-    "Opening a session in the browser is not available yet.",
+    "With no command, orbitrace runs 'open': the newest session opens in your browser.",
     "Run 'orbitrace <command> --help' for the options of a command.",
     "Exit codes and error codes are listed in docs/cli.md.",
   ];
@@ -67,7 +67,15 @@ export function commandHelpText(name: CommandName): string {
       "check them before you share the file.",
     );
   }
-  if (name === "list" || name === "export") {
+  if (name === "open") {
+    lines.push(
+      "",
+      "The server listens on 127.0.0.1 only and runs until Ctrl+C. The link holds a token for",
+      "this run: anyone with it can read your sessions while the server runs, so do not share it.",
+      "Without --json the link is the only line on stdout.",
+    );
+  }
+  if (name === "list" || name === "export" || name === "open") {
     lines.push(
       "",
       "Folders are searched in this order: --config-dir, CLAUDE_CONFIG_DIR, the default",
