@@ -1,0 +1,60 @@
+Orbitrace
+Third-party notices
+
+This is a working note by the maintainers. It is not legal advice.
+Orbitrace itself is licensed under the MIT licence (see LICENSE).
+
+1. Third-party code
+
+No third-party code has been copied into this repository.
+
+The Agent Flow project (Apache License 2.0, https://github.com/patoles/agent-flow)
+was studied for rendering technique only. No source from it is included.
+Its README states "Apache 2.0 - see LICENSE for details" and that the name
+"Agent Flow" and its logos are trademarks of Simon Patole.
+
+2. Fonts planned for the interface
+
+The interface is not built yet. These fonts are planned. When they are bundled,
+each one's licence text must ship with it. Status of each: planned, not bundled.
+
+Chakra Petch
+  Designer: Cadson Demak
+  Licence: SIL Open Font License, Version 1.1
+  Copyright line: "Copyright 2018 The Chakra Petch Project Authors
+  (https://github.com/m4rc1e/Chakra-Petch.git)"
+  Sources:
+    https://github.com/google/fonts/blob/main/ofl/chakrapetch/OFL.txt
+    https://github.com/google/fonts/blob/main/ofl/chakrapetch/METADATA.pb
+
+IBM Plex Sans
+  Licence: SIL Open Font License, Version 1.1
+  Copyright line: "Copyright (c) 2017 IBM Corp. with Reserved Font Name "Plex""
+  Sources:
+    https://github.com/IBM/plex
+    https://github.com/IBM/plex/blob/master/LICENSE.txt
+    https://github.com/google/fonts/blob/main/ofl/ibmplexsans/OFL.txt
+
+IBM Plex Mono
+  Licence: SIL Open Font License, Version 1.1 (same IBM Plex project and
+  licence file as IBM Plex Sans)
+  Copyright line: "Copyright (c) 2017 IBM Corp. with Reserved Font Name "Plex""
+  Sources:
+    https://github.com/IBM/plex
+    https://github.com/IBM/plex/blob/master/LICENSE.txt
+
+Notes on the SIL Open Font License 1.1 (full text: https://openfontlicense.org):
+- The fonts may not be sold by themselves.
+- A Modified Version may not use a Reserved Font Name, here "Plex", without
+  written permission. Orbitrace does not modify the fonts.
+- Unverified: the Reserved Font Name wording above is taken from a fetched
+  copy of the IBM licence file; read the file itself before bundling.
+- Unverified: Reserved Font Name status of "Chakra Petch" (its copyright line
+  names none).
+- Unverified: whether the font files that will be bundled carry exactly the
+  copyright lines above. Check the files at the time of bundling.
+
+3. npm dependencies
+
+Not yet listed. Dependencies are added by other tickets. Their licences will
+be recorded here when they are added.
