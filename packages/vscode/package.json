@@ -1,0 +1,22 @@
+{
+  "name": "orbitrace-vscode",
+  "displayName": "Orbitrace",
+  "description": "Replay Claude Code agent sessions as an orrery. Stub: activates and does nothing yet.",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "engines": {
+    "vscode": "^1.146.0"
+  },
+  "activationEvents": [],
+  "contributes": {},
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

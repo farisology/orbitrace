@@ -1,0 +1,34 @@
+{
+  "name": "orbitrace-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Orbitrace: replay Claude Code agent sessions as an orrery. Monorepo root.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "node scripts/run-workspaces.mjs build",
+    "test": "npm run build && node scripts/run-workspaces.mjs test && vitest run --dir scripts",
+    "lint": "eslint .",
+    "typecheck": "npm run build && node scripts/run-workspaces.mjs typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "privacy": "node scripts/privacy-check.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@vitest/eslint-plugin": "^1.6.28",
+    "eslint": "^10.15.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.74.0",
+    "vitest": "^4.1.12"
+  }
+}
