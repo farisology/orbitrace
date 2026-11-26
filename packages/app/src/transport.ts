@@ -1,5 +1,7 @@
 /**
- * HostTransport: how the app talks to whatever hosts it. Types only; not implemented yet.
+ * HostTransport: how the app talks to whatever hosts it. Types only. The app ships one
+ * implementation, the no-host transport (`no-host-transport.ts`), which serves the bundled demo
+ * replay when there is no editor and no server.
  *
  * The same app bundle runs in two hosts:
  * - an editor tab (ticket #12), where the transport passes messages to the extension;
@@ -20,12 +22,14 @@
 
 import type {
   ListSessionsOptions,
-  LiveStatus,
   ReplayModel,
   SessionSummary,
-  TransportErrorCode,
+  TransportErrorInfo,
   Unsubscribe,
 } from "@orbitrace/core";
+// Type-only: erased from the bundle, so no Node module reaches the browser. The update shape is
+// declared once, beside the host-side session replayer that produces it (#75, follow-up #81).
+import type { SessionReplayUpdate } from "@orbitrace/core/node";
 
 /**
  * Why a request failed. Defined once in core (`model/errors.ts`), so the hosts and core's
@@ -35,11 +39,12 @@ export type { TransportErrorCode } from "@orbitrace/core";
 
 export type HostKind = "editor" | "browser";
 
-/** Error a transport method rejects with. `message` is for display and holds no file paths. */
-export interface TransportError {
-  readonly code: TransportErrorCode;
-  readonly message: string;
-}
+/**
+ * Error a transport method rejects with. `message` is for display and holds no file paths.
+ * The same shape as core's `TransportErrorInfo` (what `toTransportError` returns on the host),
+ * so the two cannot drift apart.
+ */
+export type TransportError = TransportErrorInfo;
 
 /**
  * Pushed to a subscriber while a session is open. The first update of a subscription is the
@@ -47,14 +52,14 @@ export interface TransportError {
  * change, in order. Consecutive `replay` models keep the append-stability rules in core's
  * `model/replay.ts`, so the app passes each one after the first to
  * `OrreryHandle.updateModel`.
+ *
+ * - `replay`: the full model at that moment (not a diff) and the session's `LiveStatus`.
+ * - `ended`: the session stopped changing (process gone or watch closed). No more updates.
+ * - `error`: building or watching failed. No more updates follow.
+ *
+ * An alias of core's `SessionReplayUpdate`, so a host forwards the replayer's updates as they are.
  */
-export type LiveUpdate =
-  /** The current state, then each change. `replay` is the full model at that moment, not a diff. */
-  | { readonly type: "replay"; readonly replay: ReplayModel; readonly live: LiveStatus }
-  /** The session stopped changing (process gone or watch closed). No more updates follow. */
-  | { readonly type: "ended" }
-  /** Watching failed. No more updates follow. */
-  | { readonly type: "error"; readonly error: TransportError };
+export type LiveUpdate = SessionReplayUpdate;
 
 export type LiveUpdateListener = (update: LiveUpdate) => void;
 

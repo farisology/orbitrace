@@ -1,0 +1,2806 @@
+{
+  "formatVersion": 1,
+  "agents": [
+    {
+      "id": "main",
+      "name": "main",
+      "callsign": "main",
+      "model": "claude-fable-5-2",
+      "family": "fable",
+      "effort": "xhigh",
+      "parent": null,
+      "wave": null,
+      "start": 0,
+      "end": 535.07,
+      "tools": [
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 7.421,
+          "end": 11.309,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 8.971,
+          "end": 11.31,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 11.308,
+          "end": 11.527,
+          "failed": false
+        },
+        {
+          "name": "ToolSearch",
+          "kind": "other",
+          "start": 13.953,
+          "end": 14.085,
+          "failed": false
+        },
+        {
+          "name": "mcp:tide-almanac",
+          "kind": "mcp",
+          "start": 20.06,
+          "end": 21.134,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 27.053,
+          "end": 71.096,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 28.732,
+          "end": 84.412,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 31.102,
+          "end": 71.168,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 31.535,
+          "end": 64.802,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 90.235,
+          "end": 91.584,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 91.583,
+          "end": 92.005,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 93.763,
+          "end": 93.909,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 97.745,
+          "end": 169.745,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 174.064,
+          "end": 230.151,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 175.133,
+          "end": 238.259,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 177.23,
+          "end": 208.303,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 178.39,
+          "end": 225.905,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 180.03,
+          "end": 221.706,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 243.156,
+          "end": 245.886,
+          "failed": true
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 247.384,
+          "end": 247.56,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 251.085,
+          "end": 253.188,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 279.714,
+          "end": 281.982,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 280.239,
+          "end": 281.983,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 281.981,
+          "end": 282.371,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 288.126,
+          "end": 344.252,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 288.702,
+          "end": 387.092,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 289.993,
+          "end": 355.249,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 392.524,
+          "end": 392.661,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 398.103,
+          "end": 479.103,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 480.971,
+          "end": 524.673,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 483.098,
+          "end": 504.468,
+          "failed": false
+        },
+        {
+          "name": "mcp:marble-ledger",
+          "kind": "mcp",
+          "start": 525.322,
+          "end": 527.19,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 6.166,
+          "inputTokens": 22,
+          "outputTokens": 961,
+          "cacheReadTokens": 15946,
+          "cacheCreationTokens": 766
+        },
+        {
+          "t": 13.953,
+          "inputTokens": 11,
+          "outputTokens": 160,
+          "cacheReadTokens": 16712,
+          "cacheCreationTokens": 2859
+        },
+        {
+          "t": 18.043,
+          "inputTokens": 38,
+          "outputTokens": 211,
+          "cacheReadTokens": 19571,
+          "cacheCreationTokens": 1184
+        },
+        {
+          "t": 25.082,
+          "inputTokens": 49,
+          "outputTokens": 785,
+          "cacheReadTokens": 20755,
+          "cacheCreationTokens": 1489
+        },
+        {
+          "t": 89.562,
+          "inputTokens": 30,
+          "outputTokens": 332,
+          "cacheReadTokens": 22244,
+          "cacheCreationTokens": 4419
+        },
+        {
+          "t": 93.246,
+          "inputTokens": 19,
+          "outputTokens": 387,
+          "cacheReadTokens": 26663,
+          "cacheCreationTokens": 2615
+        },
+        {
+          "t": 96.858,
+          "inputTokens": 36,
+          "outputTokens": 373,
+          "cacheReadTokens": 29278,
+          "cacheCreationTokens": 893
+        },
+        {
+          "t": 172.876,
+          "inputTokens": 37,
+          "outputTokens": 590,
+          "cacheReadTokens": 30171,
+          "cacheCreationTokens": 1806
+        },
+        {
+          "t": 241.62,
+          "inputTokens": 18,
+          "outputTokens": 502,
+          "cacheReadTokens": 31977,
+          "cacheCreationTokens": 4270
+        },
+        {
+          "t": 247.384,
+          "inputTokens": 49,
+          "outputTokens": 138,
+          "cacheReadTokens": 36247,
+          "cacheCreationTokens": 1943
+        },
+        {
+          "t": 249.852,
+          "inputTokens": 30,
+          "outputTokens": 284,
+          "cacheReadTokens": 38190,
+          "cacheCreationTokens": 521
+        },
+        {
+          "t": 260.858,
+          "inputTokens": 41,
+          "outputTokens": 668,
+          "cacheReadTokens": 38711,
+          "cacheCreationTokens": 1406
+        },
+        {
+          "t": 277.268,
+          "inputTokens": 61,
+          "outputTokens": 666,
+          "cacheReadTokens": 40117,
+          "cacheCreationTokens": 668
+        },
+        {
+          "t": 286.636,
+          "inputTokens": 36,
+          "outputTokens": 827,
+          "cacheReadTokens": 40785,
+          "cacheCreationTokens": 2002
+        },
+        {
+          "t": 391.105,
+          "inputTokens": 61,
+          "outputTokens": 251,
+          "cacheReadTokens": 42787,
+          "cacheCreationTokens": 3463
+        },
+        {
+          "t": 396.051,
+          "inputTokens": 28,
+          "outputTokens": 392,
+          "cacheReadTokens": 46250,
+          "cacheCreationTokens": 684
+        },
+        {
+          "t": 480.485,
+          "inputTokens": 3,
+          "outputTokens": 529,
+          "cacheReadTokens": 46934,
+          "cacheCreationTokens": 880
+        },
+        {
+          "t": 525.322,
+          "inputTokens": 3,
+          "outputTokens": 107,
+          "cacheReadTokens": 47814,
+          "cacheCreationTokens": 3369
+        },
+        {
+          "t": 532.283,
+          "inputTokens": 46,
+          "outputTokens": 632,
+          "cacheReadTokens": 51183,
+          "cacheCreationTokens": 618
+        }
+      ],
+      "totals": {
+        "toolCalls": 32,
+        "failedToolCalls": 1,
+        "replies": 19,
+        "inputTokens": 618,
+        "outputTokens": 8795,
+        "cacheReadTokens": 642335,
+        "cacheCreationTokens": 35855
+      }
+    },
+    {
+      "id": "a1",
+      "name": "Explore",
+      "callsign": "Explore#1",
+      "model": "claude-haiku-5-5",
+      "family": "haiku",
+      "effort": "low",
+      "parent": "main",
+      "wave": 0,
+      "start": 27.053,
+      "end": 70.943,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 29.058,
+          "end": 29.278,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 30.19,
+          "end": 30.935,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 30.934,
+          "end": 31.412,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 42.378,
+          "end": 43.054,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 43.053,
+          "end": 43.221,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 44.58,
+          "end": 44.724,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 54.689,
+          "end": 54.716,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 56.498,
+          "end": 57.325,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 57.324,
+          "end": 57.504,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 67.592,
+          "end": 68.755,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 68.754,
+          "end": 69.152,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 29.058,
+          "inputTokens": 37,
+          "outputTokens": 78,
+          "cacheReadTokens": 8727,
+          "cacheCreationTokens": 2240
+        },
+        {
+          "t": 30.19,
+          "inputTokens": 23,
+          "outputTokens": 240,
+          "cacheReadTokens": 10967,
+          "cacheCreationTokens": 303
+        },
+        {
+          "t": 40.108,
+          "inputTokens": 12,
+          "outputTokens": 228,
+          "cacheReadTokens": 11270,
+          "cacheCreationTokens": 1204
+        },
+        {
+          "t": 44.58,
+          "inputTokens": 42,
+          "outputTokens": 128,
+          "cacheReadTokens": 12474,
+          "cacheCreationTokens": 1264
+        },
+        {
+          "t": 50.578,
+          "inputTokens": 7,
+          "outputTokens": 433,
+          "cacheReadTokens": 13738,
+          "cacheCreationTokens": 661
+        },
+        {
+          "t": 56.498,
+          "inputTokens": 57,
+          "outputTokens": 228,
+          "cacheReadTokens": 14399,
+          "cacheCreationTokens": 631
+        },
+        {
+          "t": 63.485,
+          "inputTokens": 4,
+          "outputTokens": 635,
+          "cacheReadTokens": 15030,
+          "cacheCreationTokens": 2364
+        },
+        {
+          "t": 70.943,
+          "inputTokens": 28,
+          "outputTokens": 200,
+          "cacheReadTokens": 17394,
+          "cacheCreationTokens": 3263
+        }
+      ],
+      "totals": {
+        "toolCalls": 11,
+        "failedToolCalls": 0,
+        "replies": 8,
+        "inputTokens": 210,
+        "outputTokens": 2170,
+        "cacheReadTokens": 103999,
+        "cacheCreationTokens": 11930
+      }
+    },
+    {
+      "id": "a2",
+      "name": "Explore",
+      "callsign": "Explore#2",
+      "model": "claude-haiku-5-5",
+      "family": "haiku",
+      "effort": "low",
+      "parent": "main",
+      "wave": 0,
+      "start": 28.732,
+      "end": 83.905,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 31.1,
+          "end": 32.833,
+          "failed": true
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 32.832,
+          "end": 32.862,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 36.377,
+          "end": 36.625,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 45.612,
+          "end": 45.795,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 47.218,
+          "end": 49.312,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 49.311,
+          "end": 49.403,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 49.746,
+          "end": 52.049,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 52.048,
+          "end": 52.285,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 62.063,
+          "end": 62.285,
+          "failed": true
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 76.551,
+          "end": 76.946,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 78.449,
+          "end": 78.715,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 79.586,
+          "end": 80.149,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 80.148,
+          "end": 80.19,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 31.1,
+          "inputTokens": 26,
+          "outputTokens": 172,
+          "cacheReadTokens": 9414,
+          "cacheCreationTokens": 1561
+        },
+        {
+          "t": 34.773,
+          "inputTokens": 41,
+          "outputTokens": 122,
+          "cacheReadTokens": 10975,
+          "cacheCreationTokens": 1885
+        },
+        {
+          "t": 43.427,
+          "inputTokens": 37,
+          "outputTokens": 343,
+          "cacheReadTokens": 12860,
+          "cacheCreationTokens": 393
+        },
+        {
+          "t": 47.218,
+          "inputTokens": 37,
+          "outputTokens": 256,
+          "cacheReadTokens": 13253,
+          "cacheCreationTokens": 1202
+        },
+        {
+          "t": 49.746,
+          "inputTokens": 5,
+          "outputTokens": 225,
+          "cacheReadTokens": 14455,
+          "cacheCreationTokens": 2481
+        },
+        {
+          "t": 60.989,
+          "inputTokens": 31,
+          "outputTokens": 327,
+          "cacheReadTokens": 16936,
+          "cacheCreationTokens": 2800
+        },
+        {
+          "t": 71.249,
+          "inputTokens": 16,
+          "outputTokens": 550,
+          "cacheReadTokens": 19736,
+          "cacheCreationTokens": 889
+        },
+        {
+          "t": 78.449,
+          "inputTokens": 4,
+          "outputTokens": 175,
+          "cacheReadTokens": 20625,
+          "cacheCreationTokens": 949
+        },
+        {
+          "t": 79.586,
+          "inputTokens": 53,
+          "outputTokens": 232,
+          "cacheReadTokens": 21574,
+          "cacheCreationTokens": 1199
+        },
+        {
+          "t": 83.905,
+          "inputTokens": 34,
+          "outputTokens": 230,
+          "cacheReadTokens": 22773,
+          "cacheCreationTokens": 2974
+        }
+      ],
+      "totals": {
+        "toolCalls": 13,
+        "failedToolCalls": 2,
+        "replies": 10,
+        "inputTokens": 284,
+        "outputTokens": 2632,
+        "cacheReadTokens": 162601,
+        "cacheCreationTokens": 16333
+      }
+    },
+    {
+      "id": "a3",
+      "name": "Explore",
+      "callsign": "Explore#3",
+      "model": "claude-haiku-5-5",
+      "family": "haiku",
+      "effort": "medium",
+      "parent": "main",
+      "wave": 0,
+      "start": 31.102,
+      "end": 70.974,
+      "tools": [
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 36.677,
+          "end": 36.924,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 42.359,
+          "end": 42.495,
+          "failed": false
+        },
+        {
+          "name": "mcp:tide-almanac",
+          "kind": "mcp",
+          "start": 49.607,
+          "end": 51.664,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 51.663,
+          "end": 51.943,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 53.334,
+          "end": 54.509,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 54.508,
+          "end": 54.967,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 58.343,
+          "end": 58.473,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 60.322,
+          "end": 61.3,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 61.299,
+          "end": 61.648,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 35.887,
+          "inputTokens": 27,
+          "outputTokens": 526,
+          "cacheReadTokens": 11965,
+          "cacheCreationTokens": 1019
+        },
+        {
+          "t": 38.96,
+          "inputTokens": 63,
+          "outputTokens": 333,
+          "cacheReadTokens": 12984,
+          "cacheCreationTokens": 1546
+        },
+        {
+          "t": 43.778,
+          "inputTokens": 57,
+          "outputTokens": 449,
+          "cacheReadTokens": 14530,
+          "cacheCreationTokens": 2084
+        },
+        {
+          "t": 53.334,
+          "inputTokens": 46,
+          "outputTokens": 269,
+          "cacheReadTokens": 16614,
+          "cacheCreationTokens": 1067
+        },
+        {
+          "t": 57.523,
+          "inputTokens": 12,
+          "outputTokens": 387,
+          "cacheReadTokens": 17681,
+          "cacheCreationTokens": 2074
+        },
+        {
+          "t": 60.322,
+          "inputTokens": 20,
+          "outputTokens": 321,
+          "cacheReadTokens": 19755,
+          "cacheCreationTokens": 1581
+        },
+        {
+          "t": 69.631,
+          "inputTokens": 42,
+          "outputTokens": 604,
+          "cacheReadTokens": 21336,
+          "cacheCreationTokens": 1906
+        }
+      ],
+      "totals": {
+        "toolCalls": 9,
+        "failedToolCalls": 0,
+        "replies": 7,
+        "inputTokens": 267,
+        "outputTokens": 2889,
+        "cacheReadTokens": 114865,
+        "cacheCreationTokens": 11277
+      }
+    },
+    {
+      "id": "a4",
+      "name": "Plan",
+      "callsign": "Plan",
+      "model": "claude-opus-5-5",
+      "family": "opus",
+      "effort": "high",
+      "parent": "main",
+      "wave": 0,
+      "start": 31.535,
+      "end": 64.43,
+      "tools": [
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 32.339,
+          "end": 32.66,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 32.659,
+          "end": 32.832,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 33.83,
+          "end": 35.489,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 35.488,
+          "end": 35.611,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 44.334,
+          "end": 44.632,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 51.305,
+          "end": 51.418,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 61.184,
+          "end": 61.632,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 63.746,
+          "end": 63.823,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 32.339,
+          "inputTokens": 14,
+          "outputTokens": 300,
+          "cacheReadTokens": 10767,
+          "cacheCreationTokens": 666
+        },
+        {
+          "t": 33.83,
+          "inputTokens": 7,
+          "outputTokens": 260,
+          "cacheReadTokens": 11433,
+          "cacheCreationTokens": 1028
+        },
+        {
+          "t": 42.319,
+          "inputTokens": 28,
+          "outputTokens": 158,
+          "cacheReadTokens": 12461,
+          "cacheCreationTokens": 2893
+        },
+        {
+          "t": 49.884,
+          "inputTokens": 7,
+          "outputTokens": 726,
+          "cacheReadTokens": 15354,
+          "cacheCreationTokens": 265
+        },
+        {
+          "t": 58.685,
+          "inputTokens": 45,
+          "outputTokens": 782,
+          "cacheReadTokens": 15619,
+          "cacheCreationTokens": 1430
+        },
+        {
+          "t": 63.746,
+          "inputTokens": 54,
+          "outputTokens": 69,
+          "cacheReadTokens": 17049,
+          "cacheCreationTokens": 2233
+        },
+        {
+          "t": 64.43,
+          "inputTokens": 35,
+          "outputTokens": 284,
+          "cacheReadTokens": 19282,
+          "cacheCreationTokens": 1755
+        }
+      ],
+      "totals": {
+        "toolCalls": 8,
+        "failedToolCalls": 0,
+        "replies": 7,
+        "inputTokens": 190,
+        "outputTokens": 2579,
+        "cacheReadTokens": 101965,
+        "cacheCreationTokens": 10270
+      }
+    },
+    {
+      "id": "a5",
+      "name": "lantern-builder",
+      "callsign": "lantern-builder#1",
+      "model": "claude-sonnet-5-5",
+      "family": "sonnet",
+      "effort": "medium",
+      "parent": "main",
+      "wave": 1,
+      "start": 174.064,
+      "end": 229.969,
+      "tools": [
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 176.028,
+          "end": 176.072,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 181.694,
+          "end": 182.125,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 182.124,
+          "end": 182.171,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 182.505,
+          "end": 182.585,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 186.394,
+          "end": 188.059,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 188.058,
+          "end": 188.144,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 190.097,
+          "end": 191.608,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 190.435,
+          "end": 196.761,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 191.607,
+          "end": 191.73,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 204.435,
+          "end": 209.768,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 212.306,
+          "end": 212.427,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 213.281,
+          "end": 213.306,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 214.04,
+          "end": 217.897,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 216.619,
+          "end": 217.898,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 217.896,
+          "end": 218.034,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 221.64,
+          "end": 221.812,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 222.563,
+          "end": 228.155,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 224.082,
+          "end": 226.023,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 226.022,
+          "end": 226.056,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 176.028,
+          "inputTokens": 17,
+          "outputTokens": 97,
+          "cacheReadTokens": 11114,
+          "cacheCreationTokens": 2280
+        },
+        {
+          "t": 179.451,
+          "inputTokens": 34,
+          "outputTokens": 420,
+          "cacheReadTokens": 13394,
+          "cacheCreationTokens": 307
+        },
+        {
+          "t": 182.505,
+          "inputTokens": 28,
+          "outputTokens": 41,
+          "cacheReadTokens": 13701,
+          "cacheCreationTokens": 3193
+        },
+        {
+          "t": 184.042,
+          "inputTokens": 18,
+          "outputTokens": 564,
+          "cacheReadTokens": 16894,
+          "cacheCreationTokens": 138
+        },
+        {
+          "t": 190.097,
+          "inputTokens": 46,
+          "outputTokens": 295,
+          "cacheReadTokens": 17032,
+          "cacheCreationTokens": 1533
+        },
+        {
+          "t": 203.8,
+          "inputTokens": 58,
+          "outputTokens": 313,
+          "cacheReadTokens": 18565,
+          "cacheCreationTokens": 2648
+        },
+        {
+          "t": 212.306,
+          "inputTokens": 23,
+          "outputTokens": 174,
+          "cacheReadTokens": 21213,
+          "cacheCreationTokens": 940
+        },
+        {
+          "t": 213.281,
+          "inputTokens": 20,
+          "outputTokens": 90,
+          "cacheReadTokens": 22153,
+          "cacheCreationTokens": 1584
+        },
+        {
+          "t": 214.04,
+          "inputTokens": 60,
+          "outputTokens": 279,
+          "cacheReadTokens": 23737,
+          "cacheCreationTokens": 1650
+        },
+        {
+          "t": 219.251,
+          "inputTokens": 16,
+          "outputTokens": 320,
+          "cacheReadTokens": 25387,
+          "cacheCreationTokens": 4140
+        },
+        {
+          "t": 222.563,
+          "inputTokens": 4,
+          "outputTokens": 279,
+          "cacheReadTokens": 29527,
+          "cacheCreationTokens": 1713
+        },
+        {
+          "t": 229.969,
+          "inputTokens": 63,
+          "outputTokens": 134,
+          "cacheReadTokens": 31240,
+          "cacheCreationTokens": 3821
+        }
+      ],
+      "totals": {
+        "toolCalls": 19,
+        "failedToolCalls": 0,
+        "replies": 12,
+        "inputTokens": 387,
+        "outputTokens": 3006,
+        "cacheReadTokens": 243957,
+        "cacheCreationTokens": 23947
+      }
+    },
+    {
+      "id": "a6",
+      "name": "lantern-builder",
+      "callsign": "lantern-builder#2",
+      "model": "claude-sonnet-5-5",
+      "family": "sonnet",
+      "effort": "medium",
+      "parent": "main",
+      "wave": 1,
+      "start": 175.133,
+      "end": 237.96,
+      "tools": [
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 178.578,
+          "end": 184.656,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 179.314,
+          "end": 179.456,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 186.15,
+          "end": 187.17,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 187.169,
+          "end": 187.212,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 198.029,
+          "end": 199.444,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 199.443,
+          "end": 199.656,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 202.039,
+          "end": 205.184,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 204.313,
+          "end": 205.185,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 205.183,
+          "end": 205.36,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 208.658,
+          "end": 209.802,
+          "failed": true
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 209.801,
+          "end": 209.902,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 210.925,
+          "end": 218.227,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 224.653,
+          "end": 226.783,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 225.951,
+          "end": 226.784,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 226.782,
+          "end": 226.834,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 227.521,
+          "end": 227.629,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 232.751,
+          "end": 233.095,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 233.094,
+          "end": 236.045,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 178.015,
+          "inputTokens": 60,
+          "outputTokens": 402,
+          "cacheReadTokens": 6746,
+          "cacheCreationTokens": 876
+        },
+        {
+          "t": 186.15,
+          "inputTokens": 21,
+          "outputTokens": 328,
+          "cacheReadTokens": 7622,
+          "cacheCreationTokens": 3205
+        },
+        {
+          "t": 195.65,
+          "inputTokens": 19,
+          "outputTokens": 604,
+          "cacheReadTokens": 10827,
+          "cacheCreationTokens": 2618
+        },
+        {
+          "t": 201.354,
+          "inputTokens": 10,
+          "outputTokens": 372,
+          "cacheReadTokens": 13445,
+          "cacheCreationTokens": 2809
+        },
+        {
+          "t": 208.296,
+          "inputTokens": 49,
+          "outputTokens": 243,
+          "cacheReadTokens": 16254,
+          "cacheCreationTokens": 4528
+        },
+        {
+          "t": 210.925,
+          "inputTokens": 35,
+          "outputTokens": 124,
+          "cacheReadTokens": 20782,
+          "cacheCreationTokens": 3537
+        },
+        {
+          "t": 222.913,
+          "inputTokens": 18,
+          "outputTokens": 503,
+          "cacheReadTokens": 24319,
+          "cacheCreationTokens": 1699
+        },
+        {
+          "t": 227.521,
+          "inputTokens": 22,
+          "outputTokens": 94,
+          "cacheReadTokens": 26018,
+          "cacheCreationTokens": 3584
+        },
+        {
+          "t": 231.3,
+          "inputTokens": 9,
+          "outputTokens": 406,
+          "cacheReadTokens": 29602,
+          "cacheCreationTokens": 1810
+        },
+        {
+          "t": 237.96,
+          "inputTokens": 8,
+          "outputTokens": 159,
+          "cacheReadTokens": 31412,
+          "cacheCreationTokens": 1399
+        }
+      ],
+      "totals": {
+        "toolCalls": 18,
+        "failedToolCalls": 1,
+        "replies": 10,
+        "inputTokens": 251,
+        "outputTokens": 3235,
+        "cacheReadTokens": 187027,
+        "cacheCreationTokens": 26065
+      }
+    },
+    {
+      "id": "a7",
+      "name": "schema-cartographer",
+      "callsign": "schema-cartographer",
+      "model": "claude-sonnet-5-5",
+      "family": "sonnet",
+      "effort": "high",
+      "parent": "main",
+      "wave": 1,
+      "start": 177.23,
+      "end": 207.774,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 179.261,
+          "end": 180.307,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 180.306,
+          "end": 180.553,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 184.703,
+          "end": 187.998,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 187.237,
+          "end": 187.999,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 187.997,
+          "end": 188.147,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 188.866,
+          "end": 190.916,
+          "failed": false
+        },
+        {
+          "name": "ToolSearch",
+          "kind": "other",
+          "start": 190.915,
+          "end": 191.127,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 191.513,
+          "end": 191.709,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 195.432,
+          "end": 195.744,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 197.687,
+          "end": 200.084,
+          "failed": false
+        },
+        {
+          "name": "ToolSearch",
+          "kind": "other",
+          "start": 200.083,
+          "end": 200.401,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 200.856,
+          "end": 201.055,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 179.261,
+          "inputTokens": 35,
+          "outputTokens": 162,
+          "cacheReadTokens": 6465,
+          "cacheCreationTokens": 1936
+        },
+        {
+          "t": 182.322,
+          "inputTokens": 8,
+          "outputTokens": 454,
+          "cacheReadTokens": 8401,
+          "cacheCreationTokens": 1400
+        },
+        {
+          "t": 188.866,
+          "inputTokens": 50,
+          "outputTokens": 270,
+          "cacheReadTokens": 9801,
+          "cacheCreationTokens": 3412
+        },
+        {
+          "t": 191.513,
+          "inputTokens": 35,
+          "outputTokens": 57,
+          "cacheReadTokens": 13213,
+          "cacheCreationTokens": 2125
+        },
+        {
+          "t": 194.928,
+          "inputTokens": 46,
+          "outputTokens": 358,
+          "cacheReadTokens": 15338,
+          "cacheCreationTokens": 482
+        },
+        {
+          "t": 197.354,
+          "inputTokens": 15,
+          "outputTokens": 296,
+          "cacheReadTokens": 15820,
+          "cacheCreationTokens": 1054
+        },
+        {
+          "t": 200.856,
+          "inputTokens": 20,
+          "outputTokens": 152,
+          "cacheReadTokens": 16874,
+          "cacheCreationTokens": 2319
+        },
+        {
+          "t": 204.602,
+          "inputTokens": 33,
+          "outputTokens": 336,
+          "cacheReadTokens": 19193,
+          "cacheCreationTokens": 288
+        }
+      ],
+      "totals": {
+        "toolCalls": 12,
+        "failedToolCalls": 0,
+        "replies": 8,
+        "inputTokens": 242,
+        "outputTokens": 2085,
+        "cacheReadTokens": 105105,
+        "cacheCreationTokens": 13016
+      }
+    },
+    {
+      "id": "a8",
+      "name": "kite-rigger",
+      "callsign": "kite-rigger",
+      "model": "claude-opus-5-5",
+      "family": "opus",
+      "effort": "xhigh",
+      "parent": "main",
+      "wave": 1,
+      "start": 178.39,
+      "end": 225.394,
+      "tools": [
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 180.409,
+          "end": 181.702,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 181.701,
+          "end": 181.73,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 184.159,
+          "end": 186.471,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 186.47,
+          "end": 186.513,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 187.307,
+          "end": 187.359,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 189.915,
+          "end": 192.639,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 191.183,
+          "end": 192.64,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 192.638,
+          "end": 192.689,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 202.585,
+          "end": 202.749,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 213.269,
+          "end": 214.431,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 214.43,
+          "end": 214.494,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 216.437,
+          "end": 216.925,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 216.924,
+          "end": 217.073,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 219.957,
+          "end": 222.104,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 222.103,
+          "end": 222.172,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 180.409,
+          "inputTokens": 4,
+          "outputTokens": 302,
+          "cacheReadTokens": 10804,
+          "cacheCreationTokens": 1528
+        },
+        {
+          "t": 184.159,
+          "inputTokens": 5,
+          "outputTokens": 119,
+          "cacheReadTokens": 12332,
+          "cacheCreationTokens": 2208
+        },
+        {
+          "t": 187.307,
+          "inputTokens": 22,
+          "outputTokens": 34,
+          "cacheReadTokens": 14540,
+          "cacheCreationTokens": 1871
+        },
+        {
+          "t": 189.915,
+          "inputTokens": 21,
+          "outputTokens": 178,
+          "cacheReadTokens": 16411,
+          "cacheCreationTokens": 890
+        },
+        {
+          "t": 198.902,
+          "inputTokens": 49,
+          "outputTokens": 445,
+          "cacheReadTokens": 17301,
+          "cacheCreationTokens": 3943
+        },
+        {
+          "t": 211.433,
+          "inputTokens": 3,
+          "outputTokens": 960,
+          "cacheReadTokens": 21244,
+          "cacheCreationTokens": 1890
+        },
+        {
+          "t": 216.437,
+          "inputTokens": 35,
+          "outputTokens": 134,
+          "cacheReadTokens": 23134,
+          "cacheCreationTokens": 3073
+        },
+        {
+          "t": 219.232,
+          "inputTokens": 8,
+          "outputTokens": 672,
+          "cacheReadTokens": 26207,
+          "cacheCreationTokens": 2302
+        },
+        {
+          "t": 225.394,
+          "inputTokens": 47,
+          "outputTokens": 114,
+          "cacheReadTokens": 28509,
+          "cacheCreationTokens": 2436
+        }
+      ],
+      "totals": {
+        "toolCalls": 15,
+        "failedToolCalls": 0,
+        "replies": 9,
+        "inputTokens": 194,
+        "outputTokens": 2958,
+        "cacheReadTokens": 170482,
+        "cacheCreationTokens": 20141
+      }
+    },
+    {
+      "id": "a9",
+      "name": "docs-scribe",
+      "callsign": "docs-scribe",
+      "model": "claude-haiku-5-5",
+      "family": "haiku",
+      "effort": "medium",
+      "parent": "main",
+      "wave": 1,
+      "start": 180.03,
+      "end": 221.5,
+      "tools": [
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 181.296,
+          "end": 183.555,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 183.554,
+          "end": 183.61,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 185.729,
+          "end": 185.774,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 189.721,
+          "end": 189.861,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 196.909,
+          "end": 199.598,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 198.529,
+          "end": 199.599,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 199.597,
+          "end": 199.749,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 206.895,
+          "end": 208.096,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 208.095,
+          "end": 208.171,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 210.063,
+          "end": 210.137,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 181.296,
+          "inputTokens": 33,
+          "outputTokens": 179,
+          "cacheReadTokens": 11005,
+          "cacheCreationTokens": 1710
+        },
+        {
+          "t": 185.729,
+          "inputTokens": 27,
+          "outputTokens": 160,
+          "cacheReadTokens": 12715,
+          "cacheCreationTokens": 1045
+        },
+        {
+          "t": 188.428,
+          "inputTokens": 48,
+          "outputTokens": 315,
+          "cacheReadTokens": 13760,
+          "cacheCreationTokens": 1435
+        },
+        {
+          "t": 194.9,
+          "inputTokens": 46,
+          "outputTokens": 745,
+          "cacheReadTokens": 15195,
+          "cacheCreationTokens": 897
+        },
+        {
+          "t": 204.441,
+          "inputTokens": 52,
+          "outputTokens": 569,
+          "cacheReadTokens": 16092,
+          "cacheCreationTokens": 4045
+        },
+        {
+          "t": 210.063,
+          "inputTokens": 47,
+          "outputTokens": 176,
+          "cacheReadTokens": 20137,
+          "cacheCreationTokens": 2626
+        },
+        {
+          "t": 217.393,
+          "inputTokens": 52,
+          "outputTokens": 231,
+          "cacheReadTokens": 22763,
+          "cacheCreationTokens": 1544
+        }
+      ],
+      "totals": {
+        "toolCalls": 10,
+        "failedToolCalls": 0,
+        "replies": 7,
+        "inputTokens": 305,
+        "outputTokens": 2375,
+        "cacheReadTokens": 111667,
+        "cacheCreationTokens": 13302
+      }
+    },
+    {
+      "id": "a10",
+      "name": "code-reviewer",
+      "callsign": "code-reviewer#1",
+      "model": "claude-opus-5-5",
+      "family": "opus",
+      "effort": "max",
+      "parent": "main",
+      "wave": 2,
+      "start": 288.126,
+      "end": 343.916,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 289.443,
+          "end": 289.526,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 295.113,
+          "end": 297.234,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 297.233,
+          "end": 297.34,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 299.18,
+          "end": 299.269,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 304.096,
+          "end": 307.414,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 306.484,
+          "end": 307.415,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 307.413,
+          "end": 307.524,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 312.687,
+          "end": 313.716,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 313.715,
+          "end": 322.705,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 327.29,
+          "end": 327.475,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 329.956,
+          "end": 332.481,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 330.988,
+          "end": 332.482,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 332.48,
+          "end": 332.547,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 336.664,
+          "end": 342.896,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 338.822,
+          "end": 339.026,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 289.443,
+          "inputTokens": 12,
+          "outputTokens": 123,
+          "cacheReadTokens": 6963,
+          "cacheCreationTokens": 2096
+        },
+        {
+          "t": 292.641,
+          "inputTokens": 36,
+          "outputTokens": 420,
+          "cacheReadTokens": 9059,
+          "cacheCreationTokens": 458
+        },
+        {
+          "t": 299.18,
+          "inputTokens": 35,
+          "outputTokens": 153,
+          "cacheReadTokens": 9517,
+          "cacheCreationTokens": 2288
+        },
+        {
+          "t": 301.685,
+          "inputTokens": 12,
+          "outputTokens": 1172,
+          "cacheReadTokens": 11805,
+          "cacheCreationTokens": 1715
+        },
+        {
+          "t": 311.134,
+          "inputTokens": 38,
+          "outputTokens": 1298,
+          "cacheReadTokens": 13520,
+          "cacheCreationTokens": 4385
+        },
+        {
+          "t": 325.405,
+          "inputTokens": 24,
+          "outputTokens": 311,
+          "cacheReadTokens": 17905,
+          "cacheCreationTokens": 2920
+        },
+        {
+          "t": 329.956,
+          "inputTokens": 34,
+          "outputTokens": 289,
+          "cacheReadTokens": 20825,
+          "cacheCreationTokens": 1302
+        },
+        {
+          "t": 334.955,
+          "inputTokens": 23,
+          "outputTokens": 372,
+          "cacheReadTokens": 22127,
+          "cacheCreationTokens": 2879
+        },
+        {
+          "t": 343.916,
+          "inputTokens": 32,
+          "outputTokens": 120,
+          "cacheReadTokens": 25006,
+          "cacheCreationTokens": 3403
+        }
+      ],
+      "totals": {
+        "toolCalls": 15,
+        "failedToolCalls": 0,
+        "replies": 9,
+        "inputTokens": 246,
+        "outputTokens": 4258,
+        "cacheReadTokens": 136727,
+        "cacheCreationTokens": 21446
+      }
+    },
+    {
+      "id": "a11",
+      "name": "test-writer",
+      "callsign": "test-writer",
+      "model": "claude-sonnet-5-5",
+      "family": "sonnet",
+      "effort": "medium",
+      "parent": "main",
+      "wave": 2,
+      "start": 288.702,
+      "end": 386.948,
+      "tools": [
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 297.53,
+          "end": 297.626,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 306.963,
+          "end": 309.985,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 308.563,
+          "end": 309.986,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 309.984,
+          "end": 310.14,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 310.588,
+          "end": 316.616,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 313.012,
+          "end": 315.083,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 315.082,
+          "end": 315.145,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 326.035,
+          "end": 334.413,
+          "failed": true
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 342.088,
+          "end": 342.429,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 342.428,
+          "end": 342.572,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 344.061,
+          "end": 344.263,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 346.642,
+          "end": 348.431,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 348.43,
+          "end": 348.497,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 356.051,
+          "end": 357.058,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 357.057,
+          "end": 357.227,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 360.743,
+          "end": 363.862,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 362.651,
+          "end": 367.513,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 363.861,
+          "end": 366.671,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 379.002,
+          "end": 385.319,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 295.85,
+          "inputTokens": 51,
+          "outputTokens": 422,
+          "cacheReadTokens": 8730,
+          "cacheCreationTokens": 761
+        },
+        {
+          "t": 304.396,
+          "inputTokens": 43,
+          "outputTokens": 548,
+          "cacheReadTokens": 9491,
+          "cacheCreationTokens": 696
+        },
+        {
+          "t": 310.588,
+          "inputTokens": 52,
+          "outputTokens": 214,
+          "cacheReadTokens": 10187,
+          "cacheCreationTokens": 3578
+        },
+        {
+          "t": 322.681,
+          "inputTokens": 32,
+          "outputTokens": 487,
+          "cacheReadTokens": 13765,
+          "cacheCreationTokens": 2738
+        },
+        {
+          "t": 340.308,
+          "inputTokens": 13,
+          "outputTokens": 307,
+          "cacheReadTokens": 16503,
+          "cacheCreationTokens": 984
+        },
+        {
+          "t": 344.061,
+          "inputTokens": 3,
+          "outputTokens": 99,
+          "cacheReadTokens": 17487,
+          "cacheCreationTokens": 3724
+        },
+        {
+          "t": 346.642,
+          "inputTokens": 63,
+          "outputTokens": 337,
+          "cacheReadTokens": 21211,
+          "cacheCreationTokens": 713
+        },
+        {
+          "t": 354.943,
+          "inputTokens": 51,
+          "outputTokens": 292,
+          "cacheReadTokens": 21924,
+          "cacheCreationTokens": 1473
+        },
+        {
+          "t": 358.935,
+          "inputTokens": 43,
+          "outputTokens": 296,
+          "cacheReadTokens": 23397,
+          "cacheCreationTokens": 1698
+        },
+        {
+          "t": 373.686,
+          "inputTokens": 12,
+          "outputTokens": 368,
+          "cacheReadTokens": 25095,
+          "cacheCreationTokens": 2373
+        },
+        {
+          "t": 386.948,
+          "inputTokens": 52,
+          "outputTokens": 166,
+          "cacheReadTokens": 27468,
+          "cacheCreationTokens": 1870
+        }
+      ],
+      "totals": {
+        "toolCalls": 19,
+        "failedToolCalls": 1,
+        "replies": 11,
+        "inputTokens": 415,
+        "outputTokens": 3536,
+        "cacheReadTokens": 195258,
+        "cacheCreationTokens": 20608
+      }
+    },
+    {
+      "id": "a12",
+      "name": "general-purpose",
+      "callsign": "general-purpose",
+      "model": "claude-fable-5-2",
+      "family": "fable",
+      "effort": "high",
+      "parent": "main",
+      "wave": 2,
+      "start": 289.993,
+      "end": 354.941,
+      "tools": [
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 292.207,
+          "end": 292.414,
+          "failed": false
+        },
+        {
+          "name": "mcp:tide-almanac",
+          "kind": "mcp",
+          "start": 301.422,
+          "end": 302.927,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 302.926,
+          "end": 303.083,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 308.437,
+          "end": 312.442,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 310.597,
+          "end": 312.443,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 312.441,
+          "end": 312.531,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 314.119,
+          "end": 314.269,
+          "failed": false
+        },
+        {
+          "name": "mcp:tide-almanac",
+          "kind": "mcp",
+          "start": 323.997,
+          "end": 325.596,
+          "failed": false
+        },
+        {
+          "name": "mcp:tide-almanac",
+          "kind": "mcp",
+          "start": 324.821,
+          "end": 326.595,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 331.09,
+          "end": 336.555,
+          "failed": false
+        },
+        {
+          "name": "mcp:tide-almanac",
+          "kind": "mcp",
+          "start": 332.824,
+          "end": 334.296,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 346.756,
+          "end": 346.842,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 292.207,
+          "inputTokens": 19,
+          "outputTokens": 78,
+          "cacheReadTokens": 7705,
+          "cacheCreationTokens": 1516
+        },
+        {
+          "t": 297.962,
+          "inputTokens": 11,
+          "outputTokens": 834,
+          "cacheReadTokens": 9221,
+          "cacheCreationTokens": 164
+        },
+        {
+          "t": 307.371,
+          "inputTokens": 16,
+          "outputTokens": 629,
+          "cacheReadTokens": 9385,
+          "cacheCreationTokens": 3597
+        },
+        {
+          "t": 314.119,
+          "inputTokens": 17,
+          "outputTokens": 110,
+          "cacheReadTokens": 12982,
+          "cacheCreationTokens": 3880
+        },
+        {
+          "t": 318.781,
+          "inputTokens": 48,
+          "outputTokens": 932,
+          "cacheReadTokens": 16862,
+          "cacheCreationTokens": 1268
+        },
+        {
+          "t": 328.582,
+          "inputTokens": 47,
+          "outputTokens": 292,
+          "cacheReadTokens": 18130,
+          "cacheCreationTokens": 1345
+        },
+        {
+          "t": 345,
+          "inputTokens": 59,
+          "outputTokens": 612,
+          "cacheReadTokens": 19475,
+          "cacheCreationTokens": 2125
+        },
+        {
+          "t": 353.497,
+          "inputTokens": 54,
+          "outputTokens": 753,
+          "cacheReadTokens": 21600,
+          "cacheCreationTokens": 1586
+        }
+      ],
+      "totals": {
+        "toolCalls": 12,
+        "failedToolCalls": 0,
+        "replies": 8,
+        "inputTokens": 271,
+        "outputTokens": 4240,
+        "cacheReadTokens": 115360,
+        "cacheCreationTokens": 15481
+      }
+    },
+    {
+      "id": "a13",
+      "name": "code-reviewer",
+      "callsign": "code-reviewer#2",
+      "model": "claude-opus-5-5",
+      "family": "opus",
+      "effort": "max",
+      "parent": "main",
+      "wave": 3,
+      "start": 480.971,
+      "end": 524.408,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 490.875,
+          "end": 490.942,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 491.636,
+          "end": 492.78,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 492.779,
+          "end": 492.956,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 493.76,
+          "end": 493.978,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 500.002,
+          "end": 500.839,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 500.838,
+          "end": 507.413,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 518.502,
+          "end": 520.718,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 489.372,
+          "inputTokens": 10,
+          "outputTokens": 620,
+          "cacheReadTokens": 7443,
+          "cacheCreationTokens": 434
+        },
+        {
+          "t": 491.636,
+          "inputTokens": 17,
+          "outputTokens": 206,
+          "cacheReadTokens": 7877,
+          "cacheCreationTokens": 2402
+        },
+        {
+          "t": 493.76,
+          "inputTokens": 9,
+          "outputTokens": 45,
+          "cacheReadTokens": 10279,
+          "cacheCreationTokens": 1034
+        },
+        {
+          "t": 498.75,
+          "inputTokens": 61,
+          "outputTokens": 660,
+          "cacheReadTokens": 11313,
+          "cacheCreationTokens": 201
+        },
+        {
+          "t": 513.462,
+          "inputTokens": 37,
+          "outputTokens": 522,
+          "cacheReadTokens": 11514,
+          "cacheCreationTokens": 2991
+        },
+        {
+          "t": 522.359,
+          "inputTokens": 10,
+          "outputTokens": 396,
+          "cacheReadTokens": 14505,
+          "cacheCreationTokens": 1147
+        }
+      ],
+      "totals": {
+        "toolCalls": 7,
+        "failedToolCalls": 0,
+        "replies": 6,
+        "inputTokens": 144,
+        "outputTokens": 2449,
+        "cacheReadTokens": 62931,
+        "cacheCreationTokens": 8209
+      }
+    },
+    {
+      "id": "a14",
+      "name": "Explore",
+      "callsign": "Explore#4",
+      "model": "claude-haiku-5-5",
+      "family": "haiku",
+      "effort": "low",
+      "parent": "main",
+      "wave": 3,
+      "start": 483.098,
+      "end": 503.886,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 488.284,
+          "end": 491.352,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 489.627,
+          "end": 491.353,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 491.351,
+          "end": 491.667,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 492.67,
+          "end": 495.456,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 493.466,
+          "end": 495.457,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 495.455,
+          "end": 495.675,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 496.614,
+          "end": 496.678,
+          "failed": false
+        },
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 499.804,
+          "end": 499.944,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 485.986,
+          "inputTokens": 34,
+          "outputTokens": 475,
+          "cacheReadTokens": 8718,
+          "cacheCreationTokens": 676
+        },
+        {
+          "t": 492.67,
+          "inputTokens": 48,
+          "outputTokens": 440,
+          "cacheReadTokens": 9394,
+          "cacheCreationTokens": 4244
+        },
+        {
+          "t": 496.614,
+          "inputTokens": 39,
+          "outputTokens": 139,
+          "cacheReadTokens": 13638,
+          "cacheCreationTokens": 1164
+        },
+        {
+          "t": 498.236,
+          "inputTokens": 39,
+          "outputTokens": 204,
+          "cacheReadTokens": 14802,
+          "cacheCreationTokens": 1559
+        },
+        {
+          "t": 503.886,
+          "inputTokens": 57,
+          "outputTokens": 71,
+          "cacheReadTokens": 16361,
+          "cacheCreationTokens": 1732
+        }
+      ],
+      "totals": {
+        "toolCalls": 8,
+        "failedToolCalls": 0,
+        "replies": 5,
+        "inputTokens": 217,
+        "outputTokens": 1329,
+        "cacheReadTokens": 62913,
+        "cacheCreationTokens": 9375
+      }
+    }
+  ],
+  "warps": [
+    {
+      "at": 270.268,
+      "skipped": 532.609
+    }
+  ],
+  "totals": {
+    "agents": 15,
+    "toolCalls": 208,
+    "failedToolCalls": 5,
+    "replies": 136,
+    "inputTokens": 4241,
+    "outputTokens": 48536,
+    "cacheReadTokens": 2517192,
+    "cacheCreationTokens": 257255,
+    "duration": 535.07,
+    "realDuration": 1067.679
+  }
+}

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="128" height="128" role="img" aria-labelledby="orbitrace-mark-title">
+  <title id="orbitrace-mark-title">Orbitrace</title>
+  <!-- Orbit ring (the O), open where the satellite sits. -->
+  <path d="M40.9 17.8A18 18 0 1 1 30.2 7.1" fill="none" stroke="#6E95FF" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Trace: a lowercase t drawn as a circuit trace that ends in a pad. -->
+  <g fill="none" stroke="#E4E7FA" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 20.25H28"/>
+    <path d="M21 13.25V28.75a5 5 0 0 0 5 5H28.5"/>
+  </g>
+  <circle cx="31" cy="33.75" r="2.75" fill="#E4E7FA"/>
+  <!-- Satellite. -->
+  <circle cx="36.73" cy="11.27" r="4.25" fill="#3EE0C0"/>
+</svg>

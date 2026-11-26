@@ -2,7 +2,7 @@
   "name": "@orbitrace/app",
   "version": "0.0.0",
   "private": true,
-  "description": "Orbitrace app: React and Vite shell that will host the renderer. Placeholder page only.",
+  "description": "Orbitrace app: React and Vite shell that hosts the renderer, with inspector, timeline, controls and event feed.",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -12,19 +12,28 @@
   },
   "scripts": {
     "dev": "vite",
+    "preview": "vite preview",
     "build": "vite build && tsc -p tsconfig.types.json",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync": "node scripts/sync-assets.mjs",
+    "sync:check": "node scripts/sync-assets.mjs --check"
   },
   "dependencies": {
     "@orbitrace/core": "0.0.0",
+    "@orbitrace/renderer": "0.0.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@orbitrace/fixtures": "0.0.0",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^20.19.43",
     "@types/react": "^19.3.3",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
+    "happy-dom": "^21.0.4",
     "vite": "^8.3.8"
   }
 }
