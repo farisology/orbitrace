@@ -8,10 +8,14 @@
  * `post` function, so this module is unit tested with fakes.
  */
 
-import { toTransportError, type TransportErrorInfo } from "@orbitrace/core";
+import {
+  checkTransportRequest,
+  toTransportError,
+  type TransportErrorInfo,
+  type TransportMessage,
+  type TransportRequest,
+} from "@orbitrace/core";
 import type { SessionReplayer } from "@orbitrace/core/node";
-import type { TransportMessage, TransportRequest } from "@orbitrace/app/transport";
-import { parseTransportRequest } from "./protocol.js";
 
 /** Fixed messages of the errors this host sends itself. No path, key or session id. */
 export const MESSAGE_HOST_ERRORS = {
@@ -116,14 +120,16 @@ export function createMessageHost(options: MessageHostOptions): MessageHost {
   return {
     async handle(message: unknown): Promise<void> {
       if (disposed) return;
-      const parsed = parseTransportRequest(message);
+      const parsed = checkTransportRequest(message);
       if (!parsed.ok) {
         if (parsed.id === null) return;
+        // An unknown method is one this host does not offer; anything else malformed is a bad
+        // request (#95).
         fail(
           parsed.id,
           parsed.problem === "unknown-method"
             ? { code: "unsupported", message: MESSAGE_HOST_ERRORS.unknownMethod }
-            : { code: "internal", message: MESSAGE_HOST_ERRORS.badParams },
+            : { code: "bad-request", message: MESSAGE_HOST_ERRORS.badParams },
         );
         return;
       }

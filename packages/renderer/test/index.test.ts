@@ -5,9 +5,12 @@ import {
   createOrrery,
   createOrreryWithEnvironment,
   type CreateOrrery,
+  type CreateOrreryWithEnvironment,
   type OrreryEnvironment,
   type OrreryHandle,
 } from "../src/index.js";
+import type { OrreryEnvironment as ContractEnvironment } from "../src/api.js";
+import type { OrreryEnvironment as ContextEnvironment } from "../src/context.js";
 
 describe("@orbitrace/renderer entry", () => {
   it("exports createOrrery with the contract's type", () => {
@@ -16,6 +19,16 @@ describe("@orbitrace/renderer entry", () => {
     expectTypeOf(createOrreryWithEnvironment).returns.toEqualTypeOf<OrreryHandle>();
     expect(typeof createOrrery).toBe("function");
     expect(typeof browserEnvironment).toBe("function");
+  });
+
+  it("types createOrreryWithEnvironment with the contract, and declares the environment there (#70)", () => {
+    expectTypeOf(createOrreryWithEnvironment).toEqualTypeOf<CreateOrreryWithEnvironment>();
+    expectTypeOf<Parameters<CreateOrreryWithEnvironment>[2]>().toEqualTypeOf<OrreryEnvironment>();
+    expectTypeOf<ContractEnvironment>().toEqualTypeOf<OrreryEnvironment>();
+    // The old import place still works and is the same type.
+    expectTypeOf<ContextEnvironment>().toEqualTypeOf<ContractEnvironment>();
+    expectTypeOf(browserEnvironment).returns.toEqualTypeOf<OrreryEnvironment>();
+    expect(typeof createOrreryWithEnvironment).toBe("function");
   });
 
   it("exports the default theme", () => {

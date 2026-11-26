@@ -1,4 +1,10 @@
-import { TOOL_KINDS, toRealSeconds } from "@orbitrace/core";
+import {
+  TOOL_KINDS,
+  formatDuration as formatDurationWords,
+  formatDurationShort,
+  formatTokens as coreFormatTokens,
+  toRealSeconds,
+} from "@orbitrace/core";
 import { describe, expect, it } from "vitest";
 import { formatDuration, formatTokens } from "../src/format.js";
 import { DESIGN_COLORS, FAMILY_SHAPES } from "../src/generated/design.js";
@@ -96,10 +102,22 @@ describe("shapes", () => {
 });
 
 describe("format", () => {
+  it("uses core's formatters, so the canvas matches the app's panels (#86)", () => {
+    expect(formatTokens).toBe(coreFormatTokens);
+    expect(formatDuration).toBe(formatDurationShort);
+    // The values from #86: one form on the canvas and in the app.
+    expect(formatTokens(2_517_192)).toBe("2.52M");
+    expect(formatTokens(257_255)).toBe("257k");
+    expect(formatTokens(150_000)).toBe("150k");
+    // The short form is the same length as the app's words, rounded the same way.
+    expect(formatDuration(185.9)).toBe("3m05s");
+    expect(formatDurationWords(185.9)).toBe("3 min 5 s");
+  });
+
   it("formats token counts", () => {
     expect(formatTokens(950)).toBe("950");
     expect(formatTokens(12_345)).toBe("12.3k");
-    expect(formatTokens(4_100_000)).toBe("4.1M");
+    expect(formatTokens(4_100_000)).toBe("4.10M");
     expect(formatTokens(1_250_000_000)).toBe("1.25B");
     expect(formatTokens(-5)).toBe("0");
     expect(formatTokens(Number.NaN)).toBe("0");
@@ -142,5 +160,16 @@ describe("labels", () => {
     expect(cache.get(-4).text).toBe("0s");
     expect(cache.get(5000).text).toBe("100s");
     expect(cache.size).toBe(3);
+  });
+
+  it("rounds with the given function, so durations round down like the app (#86)", () => {
+    const durations = new IntLabelCache(FONTS.small, formatDuration, undefined, Math.floor);
+    expect(durations.get(17.7).text).toBe("17s");
+    expect(durations.get(59.6).text).toBe("59s");
+    expect(durations.get(1067.7).text).toBe("17m47s");
+    expect(durations.get(17)).toBe(durations.get(17.7));
+    expect(durations.get(-2.5).text).toBe("0s");
+    // The default stays round-to-nearest for counts.
+    expect(new IntLabelCache(FONTS.small, String).get(17.7).text).toBe("18");
   });
 });

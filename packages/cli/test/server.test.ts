@@ -368,6 +368,7 @@ describe("token and origin", () => {
       body: "{}",
     });
     expect(noType.status).toBe(415);
+    expect(errorCode(noType)).toBe("bad-request");
     const compressed = await send(server.port, {
       method: "POST",
       path: "/api/rpc",
@@ -389,7 +390,7 @@ describe("request body", () => {
       headers: apiHeaders(server.token, { "content-length": String(DEFAULT_MAX_BODY_BYTES + 1) }),
     });
     expect(reply.status).toBe(413);
-    expect(errorCode(reply)).toBe("unsupported");
+    expect(errorCode(reply)).toBe("bad-request");
     expect(reply.headers.connection).toBe("close");
     expect(replayer.calls).toBe(0);
   });
@@ -435,7 +436,7 @@ describe("request body", () => {
       });
       expect(reply.status).toBe(400);
       expect(JSON.parse(reply.body)).toEqual({
-        error: { code: "unsupported", message: SERVER_MESSAGES.badRequest },
+        error: { code: "bad-request", message: SERVER_MESSAGES.badRequest },
       });
     }
     expect(replayer.calls).toBe(0);

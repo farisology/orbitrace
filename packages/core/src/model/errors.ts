@@ -22,6 +22,12 @@ export type TransportErrorCode =
   | "unsupported"
   /** The browser host rejected the token or the Host header. */
   | "unauthorized"
+  /**
+   * The host could not read the request or will not take it: malformed JSON or message, a
+   * missing or wrongly typed field, the wrong content type, a body that is too large (#95).
+   * `unsupported` stays for a well-formed request this host does not offer.
+   */
+  | "bad-request"
   /** Anything else. */
   | "internal";
 
@@ -32,5 +38,6 @@ export const TRANSPORT_ERROR_CODES = [
   "invalid",
   "unsupported",
   "unauthorized",
+  "bad-request",
   "internal",
 ] as const satisfies readonly TransportErrorCode[];

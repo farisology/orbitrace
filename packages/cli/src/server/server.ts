@@ -18,10 +18,18 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { realpath } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import type { SessionReplayer } from "@orbitrace/core/node";
-import type { TransportErrorCode, Unsubscribe } from "@orbitrace/core";
-import type { TransportMessage } from "@orbitrace/app/transport";
+import {
+  LIVE_PATH,
+  RPC_PATH,
+  encodeLiveLine,
+  parseLiveRequest,
+  parseTransportRequest,
+  type TransportErrorCode,
+  type TransportMessage,
+  type Unsubscribe,
+} from "@orbitrace/core";
 import { buildLink } from "./link.js";
-import { handleRpc, parseLiveRequest, parseRpcRequest, SERVER_MESSAGES } from "./rpc.js";
+import { handleRpc, SERVER_MESSAGES } from "./rpc.js";
 import {
   LOOPBACK_HOST,
   SECURITY_HEADERS,
@@ -43,8 +51,8 @@ export const DEFAULT_MAX_LIVE_STREAMS = 16;
 /** Content type of a live stream. */
 export const LIVE_CONTENT_TYPE = "application/x-ndjson; charset=utf-8";
 
-export const RPC_PATH = "/api/rpc";
-export const LIVE_PATH = "/api/live";
+/** Core's routes (the lead's layout on #17), re-exported so existing imports keep working. */
+export { LIVE_PATH, RPC_PATH };
 
 export interface LoopbackServerOptions {
   /** Answers the API requests. */
@@ -221,7 +229,7 @@ export async function startServer(options: LoopbackServerOptions): Promise<Loopb
     following.stop = replayer.follow(key, (update) => {
       if (done) return;
       const message: TransportMessage = { kind: "live", subscriptionId: id, key, update };
-      res.write(`${JSON.stringify(message)}\n`);
+      res.write(encodeLiveLine(message));
       if (update.type === "ended" || update.type === "error") end();
     });
     if (done) following.stop();
@@ -258,7 +266,7 @@ export async function startServer(options: LoopbackServerOptions): Promise<Loopb
       !isJsonContentType(req.headers["content-type"]) ||
       (encoding ?? "identity") !== "identity"
     ) {
-      refuse(res, 415, "unsupported", SERVER_MESSAGES.contentType);
+      refuse(res, 415, "bad-request", SERVER_MESSAGES.contentType);
       return;
     }
     if (target !== RPC_PATH && target !== LIVE_PATH) {
@@ -267,17 +275,17 @@ export async function startServer(options: LoopbackServerOptions): Promise<Loopb
     }
     const body = await readJsonBody(req, maxBodyBytes);
     if (!body.ok) {
-      if (body.reason === "too-large") refuse(res, 413, "unsupported", SERVER_MESSAGES.tooLarge);
+      if (body.reason === "too-large") refuse(res, 413, "bad-request", SERVER_MESSAGES.tooLarge);
       else if (body.reason === "bad-json") {
-        refuse(res, 400, "unsupported", SERVER_MESSAGES.badRequest);
+        refuse(res, 400, "bad-request", SERVER_MESSAGES.badRequest);
       } else res.destroy();
       return;
     }
 
     if (target === RPC_PATH) {
-      const request = parseRpcRequest(body.value);
+      const request = parseTransportRequest(body.value);
       if (request === null) {
-        refuse(res, 400, "unsupported", SERVER_MESSAGES.badRequest);
+        refuse(res, 400, "bad-request", SERVER_MESSAGES.badRequest);
         return;
       }
       const reply = await handleRpc(request, {
@@ -290,7 +298,7 @@ export async function startServer(options: LoopbackServerOptions): Promise<Loopb
 
     const live = parseLiveRequest(body.value);
     if (live === null) {
-      refuse(res, 400, "unsupported", SERVER_MESSAGES.badRequest);
+      refuse(res, 400, "bad-request", SERVER_MESSAGES.badRequest);
       return;
     }
     if (streams.has(live.id)) {

@@ -1,6 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { SESSION_REPLAY_MESSAGES } from "@orbitrace/core/node";
 import type { TransportMessage } from "@orbitrace/app/transport";
+import type { TransportMessage as CoreTransportMessage } from "@orbitrace/core";
+// The app's real webview transport, from source: the agreement test below runs it against this
+// host (#100).
+import { createWebviewTransport } from "../../app/src/webview-transport";
 import { MESSAGE_HOST_ERRORS, createMessageHost } from "../src/message-host.js";
 import {
   demoReplay,
@@ -143,7 +147,7 @@ describe("createMessageHost", () => {
       {
         kind: "error",
         id: 51,
-        error: { code: "internal", message: MESSAGE_HOST_ERRORS.badParams },
+        error: { code: "bad-request", message: MESSAGE_HOST_ERRORS.badParams },
       },
     ]);
     expect(replayer.listCalls).toBe(0);
@@ -247,5 +251,50 @@ describe("createMessageHost with core's session replayer and the synthetic fixtu
 
     host.dispose();
     expect(watching()).toBe(0);
+  });
+});
+
+describe("the editor host and the app's webview transport (#100)", () => {
+  /** The app's webview transport wired to a message host, messages cloned as the webview does. */
+  function connect() {
+    const ref = makeRef(makeSummary(), "-workspace-kite-workshop");
+    const listeners = new Set<(event: MessageEvent) => void>();
+    let deliver: (message: unknown) => void = () => undefined;
+    const transport = createWebviewTransport({
+      api: { postMessage: (message) => deliver(structuredClone(message)) },
+      events: {
+        addEventListener: (type, listener) => {
+          if (type === "message") listeners.add(listener);
+        },
+        removeEventListener: (_type, listener) => {
+          listeners.delete(listener);
+        },
+      },
+    });
+    const host = createMessageHost({
+      replayer: fakeReplayer([ref]),
+      post: (message) => {
+        const event = { data: structuredClone(message) } as MessageEvent;
+        for (const listener of listeners) listener(event);
+      },
+    });
+    deliver = (message) => void host.handle(message);
+    return { transport, host };
+  }
+
+  it("speaks one message type on both sides", () => {
+    expectTypeOf<TransportMessage>().toEqualTypeOf<CoreTransportMessage>();
+  });
+
+  it("reports canOpenInBrowser exactly when the host does not answer unsupported", async () => {
+    const { transport, host } = connect();
+    const outcome = await transport.openInBrowser().then(
+      () => "opened",
+      (error: { code?: string }) => error.code,
+    );
+    expect(outcome).toBe("unsupported");
+    expect(transport.canOpenInBrowser).toBe(outcome !== "unsupported");
+    transport.close();
+    host.dispose();
   });
 });

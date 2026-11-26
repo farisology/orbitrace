@@ -52,10 +52,15 @@ export class IntLabelCache {
     private readonly format: (n: number) => string,
     /** Values above this share the label of `limit`, which bounds memory. */
     private readonly limit = 1_000_000,
+    /**
+     * How a fractional value becomes the integer that is formatted. Durations pass `Math.floor`
+     * so the canvas rounds down like core's formatters and the app (#86).
+     */
+    private readonly round: (value: number) => number = Math.round,
   ) {}
 
   get(value: number): Label {
-    const n = Math.min(this.limit, Math.max(0, Math.round(value)));
+    const n = Math.min(this.limit, Math.max(0, this.round(value)));
     let label = this.items[n];
     if (label === undefined) {
       label = new Label(this.format(n), this.font);

@@ -18,6 +18,7 @@ describe("TRANSPORT_ERROR_CODES", () => {
       "invalid",
       "unsupported",
       "unauthorized",
+      "bad-request",
       "internal",
     ]);
     expect(new Set(TRANSPORT_ERROR_CODES).size).toBe(TRANSPORT_ERROR_CODES.length);

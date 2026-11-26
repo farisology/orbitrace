@@ -13,7 +13,7 @@
  */
 
 import type { ReplayAgentId, ReplayModel, ReplaySeconds } from "@orbitrace/core";
-import type { OrreryEnvironment } from "./context.js";
+import type { SpriteSurface } from "./context.js";
 
 /**
  * Colours the renderer uses. Defaults come from design/tokens.json (see `DEFAULT_THEME`).
@@ -101,12 +101,29 @@ export interface OrreryHandle {
 export type CreateOrrery = (canvas: HTMLCanvasElement, options?: OrreryOptions) => OrreryHandle;
 
 /**
+ * Everything the engine takes from its environment. `createOrrery` uses the browser's
+ * (`browserEnvironment`). Declared here with `CreateOrreryWithEnvironment` (#70); context.ts
+ * re-exports it.
+ */
+export interface OrreryEnvironment {
+  /** Schedule one frame. Default `requestAnimationFrame`. */
+  requestFrame(callback: (now: number) => void): number;
+  /** Cancel a scheduled frame. Default `cancelAnimationFrame`. */
+  cancelFrame(handle: number): void;
+  /** The user's reduced-motion preference, read once at creation. */
+  prefersReducedMotion(): boolean;
+  /** Default device pixel ratio. */
+  devicePixelRatio(): number;
+  /** A small offscreen surface for a glow sprite, or `null` to draw without sprites. */
+  createSurface(width: number, height: number): SpriteSurface | null;
+}
+
+/**
  * `CreateOrrery` with an explicit environment: the frame scheduler, the reduced-motion and
  * device-pixel-ratio defaults, and offscreen sprite surfaces. For tests and for hosts with their
  * own scheduler, such as an editor webview (#12) or the app (#11). Part of the contract since
- * #70, because `OrreryOptions` has no way to inject a scheduler. `OrreryEnvironment` is declared
- * in context.ts and exported from the package entry. Ticket #10 exports
- * `createOrreryWithEnvironment` with this type.
+ * #70, because `OrreryOptions` has no way to inject a scheduler. orrery.ts declares
+ * `createOrreryWithEnvironment` with this type, so the two cannot drift apart.
  */
 export type CreateOrreryWithEnvironment = (
   canvas: HTMLCanvasElement,

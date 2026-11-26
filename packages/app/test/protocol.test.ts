@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as core from "@orbitrace/core";
 import {
   EDITOR_HOST_META_VALUE,
   HOST_META_NAME,
@@ -19,6 +20,18 @@ import {
   transportError,
 } from "../src/protocol";
 import { makeModel } from "./helpers";
+
+describe("one protocol (#92, #96)", () => {
+  it("re-exports core's wire layout and checks instead of a copy", () => {
+    expect(parseTransportRequest).toBe(core.parseTransportRequest);
+    expect(parseTransportMessage).toBe(core.parseTransportMessage);
+    expect(parseLiveRequest).toBe(core.parseLiveRequest);
+    expect(hostLinkFragment).toBe(core.hostLinkFragment);
+    expect(encodeLiveLine).toBe(core.encodeLiveLine);
+    expect(RPC_PATH).toBe(core.RPC_PATH);
+    expect(LIVE_PATH).toBe(core.LIVE_PATH);
+  });
+});
 
 describe("wire layout constants", () => {
   it("match the lead's layout on #85", () => {
@@ -66,7 +79,7 @@ describe("parseTransportRequest", () => {
     expect(
       parseTransportRequest({ id: 5, method: "unsubscribe", params: { subscriptionId: 4 } }),
     ).toEqual({ id: 5, method: "unsubscribe", params: { subscriptionId: 4 } });
-    expect(parseTransportRequest({ id: 6, method: "openInBrowser" })).toEqual({
+    expect(parseTransportRequest({ id: 6, method: "openInBrowser", params: {} })).toEqual({
       id: 6,
       method: "openInBrowser",
       params: {},
@@ -101,6 +114,13 @@ describe("parseTransportRequest", () => {
       { id: 1, method: "openInBrowser", params: { key: 3 } },
       { id: 1, method: "listSessions", params: { options: { limit: "3" } } },
       { id: 1, method: "listSessions", params: { options: 3 } },
+      // The limits shared with the hosts (#92): params required, keys of 1 to 512 characters,
+      // limit from 1, since from 0.
+      { id: 1, method: "openInBrowser" },
+      { id: 1, method: "loadReplay", params: { key: "" } },
+      { id: 1, method: "loadReplay", params: { key: "k".repeat(513) } },
+      { id: 1, method: "listSessions", params: { options: { limit: 0 } } },
+      { id: 1, method: "listSessions", params: { options: { since: -1 } } },
     ]) {
       expect(parseTransportRequest(value)).toBeNull();
     }
@@ -161,6 +181,7 @@ describe("live requests and lines", () => {
     expect(parseLiveRequest({ id: 4, key: "k" })).toEqual({ id: 4, key: "k" });
     expect(parseLiveRequest({ id: "4", key: "k" })).toBeNull();
     expect(parseLiveRequest({ id: 4 })).toBeNull();
+    expect(parseLiveRequest({ id: 4, key: "" })).toBeNull();
   });
 
   it("encodes one message per line", () => {

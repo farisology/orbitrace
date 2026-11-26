@@ -1,22 +1,29 @@
 /**
  * The request and reply shapes of `POST /api/rpc` and `POST /api/live`, on top of core's session
- * replayer. The shapes are the editor messages of `@orbitrace/app/transport`, unchanged (lead's
- * wire-layout decision on #17).
+ * replayer. The shapes are core's `TransportRequest` and `TransportMessage` (lead's wire-layout
+ * decision on #17, moved into core by #96).
  *
- * A request body is untrusted input from the network: it is checked field by field before
- * anything is done with it, and every failure reply carries a fixed, path-free message.
+ * A request body is untrusted input from the network: it is checked field by field with core's
+ * shared request check (#92), the same one the editor extension and the app use, before anything
+ * is done with it, and every failure reply carries a fixed, path-free message.
  */
 
-import type { ListSessionsOptions } from "@orbitrace/core";
+import {
+  MAX_SESSION_KEY_LENGTH,
+  parseTransportRequest,
+  type TransportMessage,
+  type TransportRequest,
+} from "@orbitrace/core";
 import {
   toTransportError,
   type SessionReplayer,
   type TransportErrorInfo,
 } from "@orbitrace/core/node";
-import type { TransportMessage, TransportRequest } from "@orbitrace/app/transport";
 
-/** Longest session key accepted. Real keys are far shorter. */
-export const MAX_KEY_LENGTH = 512;
+export { parseLiveRequest, type LiveRequest } from "@orbitrace/core";
+
+/** Longest session key accepted. Core's `MAX_SESSION_KEY_LENGTH`, the limit of every host. */
+export const MAX_KEY_LENGTH = MAX_SESSION_KEY_LENGTH;
 
 /** Fixed messages of the replies the server writes itself. */
 export const SERVER_MESSAGES = {
@@ -35,79 +42,8 @@ export const SERVER_MESSAGES = {
   shuttingDown: "The server is shutting down.",
 } as const;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isId(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-}
-
-function isKey(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && value.length <= MAX_KEY_LENGTH;
-}
-
-function listOptions(value: unknown): ListSessionsOptions | null {
-  if (value === undefined) return {};
-  if (!isRecord(value)) return null;
-  const options: { since?: number; limit?: number } = {};
-  if (value.since !== undefined) {
-    if (typeof value.since !== "number" || !Number.isFinite(value.since)) return null;
-    options.since = value.since;
-  }
-  if (value.limit !== undefined) {
-    if (!isId(value.limit) || value.limit < 1) return null;
-    options.limit = value.limit;
-  }
-  return options;
-}
-
-/** A `TransportRequest` checked from a parsed JSON body, or `null` when it is not one. */
-export function parseRpcRequest(body: unknown): TransportRequest | null {
-  if (!isRecord(body) || !isId(body.id) || !isRecord(body.params)) return null;
-  const { id, params } = body;
-  switch (body.method) {
-    case "listSessions": {
-      const options = listOptions(params.options);
-      if (options === null) return null;
-      return {
-        id,
-        method: "listSessions",
-        params: params.options === undefined ? {} : { options },
-      };
-    }
-    case "loadReplay":
-      return isKey(params.key) ? { id, method: "loadReplay", params: { key: params.key } } : null;
-    case "subscribe":
-      return isKey(params.key) ? { id, method: "subscribe", params: { key: params.key } } : null;
-    case "unsubscribe":
-      return isId(params.subscriptionId)
-        ? { id, method: "unsubscribe", params: { subscriptionId: params.subscriptionId } }
-        : null;
-    case "openInBrowser":
-      if (params.key !== undefined && !isKey(params.key)) return null;
-      return {
-        id,
-        method: "openInBrowser",
-        params: params.key === undefined ? {} : { key: params.key },
-      };
-    default:
-      return null;
-  }
-}
-
-/** The body of `POST /api/live`. */
-export interface LiveRequest {
-  /** The subscription id: every `live` message of the stream carries it. */
-  readonly id: number;
-  readonly key: string;
-}
-
-/** A `LiveRequest` checked from a parsed JSON body, or `null` when it is not one. */
-export function parseLiveRequest(body: unknown): LiveRequest | null {
-  if (!isRecord(body) || !isId(body.id) || !isKey(body.key)) return null;
-  return { id: body.id, key: body.key };
-}
+/** A `TransportRequest` checked from a parsed JSON body, or `null` when it is not one. Core's. */
+export const parseRpcRequest: (body: unknown) => TransportRequest | null = parseTransportRequest;
 
 /** What `handleRpc` needs from the server. */
 export interface RpcContext {

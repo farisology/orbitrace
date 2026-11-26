@@ -12,10 +12,10 @@ function setup() {
 }
 
 describe("webview transport", () => {
-  it("is the editor host and can open in a browser", () => {
+  it("is the editor host and cannot open in a browser yet (#100)", () => {
     const { transport } = setup();
     expect(transport.kind).toBe("editor");
-    expect(transport.canOpenInBrowser).toBe(true);
+    expect(transport.canOpenInBrowser).toBe(false);
   });
 
   it("sends requests with unique ids and settles each by its id", async () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { RUNTIME_IDS } from "@orbitrace/core";
 import {
   CLIENT_MESSAGES,
   asTransportError,
@@ -38,6 +39,12 @@ describe("decodeSessionSummary", () => {
     expect(decodeSessionSummary({ ...SUMMARY, lastActivity: "today" })).toBeNull();
     expect(decodeSessionSummary({ ...SUMMARY, live: "running" })).toBeNull();
     expect(decodeSessionSummary({ ...SUMMARY, subagentCount: -1 })).toBeNull();
+  });
+
+  it("accepts every runtime in core's RUNTIME_IDS (#94)", () => {
+    for (const runtime of RUNTIME_IDS) {
+      expect(decodeSessionSummary({ ...SUMMARY, runtime })?.runtime).toBe(runtime);
+    }
   });
 });
 

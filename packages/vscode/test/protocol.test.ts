@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as core from "@orbitrace/core";
 import {
   TRANSPORT_METHODS,
   isRequestId,
@@ -6,11 +7,20 @@ import {
   parseTransportRequest,
 } from "../src/protocol.js";
 
+describe("one request check for every host (#92)", () => {
+  it("re-exports core's check and limits", () => {
+    expect(parseTransportRequest).toBe(core.checkTransportRequest);
+    expect(isRequestId).toBe(core.isRequestId);
+    expect(parseListOptions).toBe(core.parseListOptions);
+    expect(TRANSPORT_METHODS).toBe(core.TRANSPORT_METHODS);
+  });
+});
+
 describe("isRequestId", () => {
-  it("accepts safe integers only", () => {
+  it("accepts safe integers from 0 only", () => {
     expect(isRequestId(0)).toBe(true);
     expect(isRequestId(42)).toBe(true);
-    expect(isRequestId(-1)).toBe(true);
+    expect(isRequestId(-1)).toBe(false);
     expect(isRequestId(1.5)).toBe(false);
     expect(isRequestId(Number.NaN)).toBe(false);
     expect(isRequestId(2 ** 60)).toBe(false);
@@ -36,6 +46,7 @@ describe("parseListOptions", () => {
     expect(parseListOptions({ since: Number.POSITIVE_INFINITY })).toBeNull();
     expect(parseListOptions({ limit: 1.5 })).toBeNull();
     expect(parseListOptions({ limit: -2 })).toBeNull();
+    expect(parseListOptions({ limit: 0 })).toBeNull();
   });
 });
 
@@ -97,6 +108,7 @@ describe("parseTransportRequest", () => {
       {},
       { id: "1" },
       { id: 1.5, method: "listSessions" },
+      { id: -1, method: "listSessions", params: {} },
     ]) {
       expect(parseTransportRequest(message)).toEqual({ ok: false, problem: "no-id", id: null });
     }

@@ -1,3 +1,4 @@
+import { formatDuration as formatDurationWords } from "@orbitrace/core";
 import { describe, expect, it } from "vitest";
 import { curvePoint, drawFrame, MAX_MOONS_PER_AGENT, type ViewState } from "../src/draw.js";
 import { computeLayout, createLayout } from "../src/layout.js";
@@ -16,7 +17,7 @@ import { buildScene } from "../src/scene.js";
 import { createPalette, DEFAULT_THEME, resolveTheme } from "../src/theme.js";
 import { computeFrameState, createFrameState, type TimingParams } from "../src/timeline.js";
 import { MockContext, MockGradient, mockSurfaces } from "./support/mock-context.js";
-import { call, emptyModel, mainAgent, model, smallModel } from "./support/models.js";
+import { call, emptyModel, mainAgent, model, smallModel, sub } from "./support/models.js";
 
 const timing = (over: Partial<TimingParams> = {}): TimingParams => ({
   speed: 1,
@@ -109,6 +110,29 @@ describe("drawFrame", () => {
     expect(selected).toContain("code-reviewer");
     expect(selected).toContain("Sonnet · medium");
     expect(selected).toContain("1 failed");
+  });
+
+  it("rounds an agent's run time down, as the app's inspector does (#86)", () => {
+    for (const [ran, canvas, words] of [
+      [17.7, "17s", "17 s"],
+      [59.6, "59s", "59 s"],
+      [1067.7, "17m47s", "17 min 47 s"],
+    ] as const) {
+      const agent = sub({
+        id: "a1",
+        name: "example-agent",
+        family: "sonnet",
+        effort: "medium",
+        wave: 0,
+        start: 10,
+        end: 10 + ran,
+      });
+      const end = 20 + ran;
+      const m = model(mainAgent(end, [call("Agent", "agent", 9.5, 10.5 + ran)], []), [agent], [], end);
+      const texts = render({ t: end, selected: 1, m }).texts();
+      expect(texts).toContain(canvas);
+      expect(formatDurationWords(ran)).toBe(words);
+    }
   });
 
   it("does not draw agents that have not started", () => {

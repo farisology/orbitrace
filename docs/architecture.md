@@ -60,8 +60,10 @@ can be linked, but no text, inputs, outputs, paths, branch, title or subagent de
 ## Interfaces and who implements them
 
 All core interfaces are exported from `@orbitrace/core`. Renderer types are exported from
-`@orbitrace/renderer`. Transport types are exported from `@orbitrace/app/transport`;
-`TransportErrorCode` is defined in core (`core/src/model/errors.ts`) and re-exported there.
+`@orbitrace/renderer`. The transport messages (`TransportRequest`, `TransportMessage`) are defined in
+core (`core/src/model/transport.ts`), with `TransportErrorCode` (`core/src/model/errors.ts`) and
+the shared request checks and wire layout (`core/src/protocol/`); `@orbitrace/app/transport`
+re-exports the message types beside `HostTransport`.
 
 | Ticket | Implements                                                                                  | Against                                                                                            | File                                                    |
 | ------ | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
@@ -71,7 +73,7 @@ All core interfaces are exported from `@orbitrace/core`. Renderer types are expo
 | #9     | Synthetic transcript and replay fixtures                                                    | `RawLine` and `RawSubagentMeta` shapes; replays must validate against the v1 schema                | `fixtures/`                                             |
 | #10    | `createOrrery: CreateOrrery`                                                                | `OrreryHandle`, `OrreryOptions`, `OrreryEvents`; draws a `ReplayModel`                             | `renderer/src/api.ts`                                   |
 | #11    | The app, coded against `HostTransport`                                                      | `HostTransport`, `LiveUpdate`, `TransportError`; drives `OrreryHandle`                             | `app/src/transport.ts`                                  |
-| #12    | The editor side of `HostTransport`                                                          | `TransportRequest` in, `TransportMessage` out; uses `SourceAdapter`, `parseSession`, `buildReplay` | `app/src/transport.ts`                                  |
+| #12    | The editor side of `HostTransport`                                                          | `TransportRequest` in, `TransportMessage` out; uses `SourceAdapter`, `parseSession`, `buildReplay` | `core/src/model/transport.ts`                           |
 | #16    | The browser side of `HostTransport` (loopback server) and commands                          | `HostTransport` semantics over HTTP; uses the core functions                                       | `app/src/transport.ts`, `core/src/api.ts`               |
 | #18    | `exportReplay: ExportReplay`, `validateReplay: ValidateReplay`                              | `ReplayModel`, `ExportOptions`, `ExportResult`; the v1 schema                                      | `core/src/api.ts`, `core/schema/replay-v1.schema.json`  |
 
@@ -169,14 +171,14 @@ the address bar. Values are percent-encoded outside `A-Z a-z 0-9 - . _ ~ :`.
 
 | Status | Code           | When                                                                                                 |
 | ------ | -------------- | ---------------------------------------------------------------------------------------------------- |
-| 400    | `unsupported`  | Body is not JSON or not a valid request.                                                             |
+| 400    | `bad-request`  | Body is not JSON or not a valid request.                                                             |
 | 401    | `unauthorized` | Missing or wrong `Authorization: Bearer <token>`.                                                    |
 | 403    | `unauthorized` | Host header is not `127.0.0.1:<port>` or `localhost:<port>`, or the request comes from another page. |
 | 404    | `not-found`    | No such file, or an `/api` path that is not a route.                                                 |
 | 405    | `unsupported`  | Another method (including `OPTIONS`, so every CORS preflight is refused).                            |
 | 409    | `unsupported`  | A live stream with that `id` is already open.                                                        |
-| 413    | `unsupported`  | Body larger than 64 KiB.                                                                             |
-| 415    | `unsupported`  | `Content-Type` is not `application/json` (optionally `; charset=utf-8`), or the body is encoded.     |
+| 413    | `bad-request`  | Body larger than 64 KiB.                                                                             |
+| 415    | `bad-request`  | `Content-Type` is not `application/json` (optionally `; charset=utf-8`), or the body is encoded.     |
 | 429    | `unsupported`  | 16 live streams are open already.                                                                    |
 | 503    | `internal`     | The server is shutting down.                                                                         |
 
@@ -268,7 +270,7 @@ What the token does **not** protect against:
 
 Claude Code is the only runtime. To add one:
 
-1. Add its id to `RuntimeId` in `core/src/model/sources.ts`.
+1. Add its id to `RUNTIME_IDS` in `core/src/model/sources.ts` (`RuntimeId` is derived from it).
 2. Write a `SourceAdapter` for it that produces a `SessionInput`.
 3. If its transcript lines differ from Claude Code's, give it a parser that returns a
    `ParsedSession`.
