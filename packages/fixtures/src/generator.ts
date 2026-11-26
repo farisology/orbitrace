@@ -36,8 +36,29 @@ export const CONFIG_FOLDER = "config";
 /** File, inside the fixtures folder, that lists every session and what is true of it. */
 export const MANIFEST_FILE = "manifest.json";
 
-/** Bumped when the layout of the manifest changes. */
-export const MANIFEST_VERSION = 1;
+/**
+ * Folder, inside the fixtures folder, that holds the golden replay files. The generator does
+ * not write it: the files are the output of the replay pipeline of `@orbitrace/core` over
+ * the generated transcripts (see `goldens.ts`). The generator only knows their names.
+ */
+export const REPLAYS_FOLDER = "replays";
+
+/** Ending of every replay file. */
+export const REPLAY_FILE_SUFFIX = ".replay.json";
+
+/**
+ * Replay files in the replays folder that are written by hand and are not goldens. Paths are
+ * relative to the fixtures folder, with forward slashes.
+ */
+export const HAND_WRITTEN_REPLAYS: readonly string[] = [
+  `${REPLAYS_FOLDER}/minimal${REPLAY_FILE_SUFFIX}`,
+];
+
+/**
+ * Bumped when the layout of the manifest changes. 2: `goldenReplays` lists the golden replay
+ * files and every session names its own (`goldenReplay`); 1 said `"pending"`.
+ */
+export const MANIFEST_VERSION = 2;
 
 export interface GenerateOptions {
   /** Default: DEFAULT_SEED. */
@@ -62,6 +83,8 @@ export interface ManifestSession {
   /** Paths are relative to the fixtures folder, with forward slashes. */
   transcript: string;
   subagents: { agentId: string; agentType: string; transcript: string; meta: string }[];
+  /** The golden replay of this session: what the replay pipeline makes of its transcripts. */
+  goldenReplay: string;
   expected: SessionFacts;
 }
 
@@ -69,8 +92,8 @@ export interface FixtureManifest {
   generator: "@orbitrace/fixtures";
   manifestVersion: number;
   seed: string;
-  /** Golden replay files are added once the replay model builder exists. */
-  goldenReplays: "pending";
+  /** The golden replay file of every session, in session order. */
+  goldenReplays: string[];
   sessions: ManifestSession[];
 }
 
@@ -125,6 +148,15 @@ function inConfig(path: string): string {
   return `${CONFIG_FOLDER}/${path}`;
 }
 
+/**
+ * The golden replay file of a scenario, relative to the fixtures folder, with forward
+ * slashes: `replays/<scenario>.replay.json`. The name is the scenario's, never a session id
+ * or a project name.
+ */
+export function goldenReplayFile(name: ScenarioName): string {
+  return `${REPLAYS_FOLDER}/${name}${REPLAY_FILE_SUFFIX}`;
+}
+
 /** The manifest for a set of sessions generated from one seed. */
 export function buildManifest(sessions: readonly GeneratedSession[]): FixtureManifest {
   const seeds = new Set(sessions.map((session) => session.seed));
@@ -133,7 +165,7 @@ export function buildManifest(sessions: readonly GeneratedSession[]): FixtureMan
     generator: "@orbitrace/fixtures",
     manifestVersion: MANIFEST_VERSION,
     seed: sessions[0]?.seed ?? String(DEFAULT_SEED),
-    goldenReplays: "pending",
+    goldenReplays: sessions.map((session) => goldenReplayFile(session.name)),
     sessions: sessions.map((session) => ({
       name: session.name,
       description: session.description,
@@ -147,6 +179,7 @@ export function buildManifest(sessions: readonly GeneratedSession[]): FixtureMan
         transcript: inConfig(subagent.transcriptPath),
         meta: inConfig(subagent.metaPath),
       })),
+      goldenReplay: goldenReplayFile(session.name),
       expected: session.expected,
     })),
   };

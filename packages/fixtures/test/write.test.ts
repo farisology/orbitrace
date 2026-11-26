@@ -7,6 +7,7 @@ import {
   MANIFEST_FILE,
   checkFixtureTree,
   isFixtureTreeCurrent,
+  listFiles,
   renderFixtureTree,
   writeFixtureTree,
 } from "../src/index.js";
@@ -97,6 +98,45 @@ describe("checkFixtureTree", () => {
     const diff = checkFixtureTree(dir);
     expect(diff).toEqual({ missing: [removed], changed: [edited], extra: [added] });
     expect(isFixtureTreeCurrent(diff)).toBe(false);
+  });
+});
+
+describe("listFiles", () => {
+  it("lists every file below a folder, sorted by name, under the prefix it is given", () => {
+    const dir = makeTempDir();
+    mkdirSync(join(dir, "b", "deep"), { recursive: true });
+    mkdirSync(join(dir, "empty"));
+    writeFileSync(join(dir, "z.txt"), "");
+    writeFileSync(join(dir, "a.txt"), "");
+    writeFileSync(join(dir, "b", "two.txt"), "");
+    writeFileSync(join(dir, "b", "deep", "one.txt"), "");
+    expect(listFiles(dir, "top")).toEqual([
+      "top/a.txt",
+      "top/b/deep/one.txt",
+      "top/b/two.txt",
+      "top/z.txt",
+    ]);
+  });
+
+  it("returns nothing for an empty folder and for a folder that does not exist", () => {
+    const dir = makeTempDir();
+    expect(listFiles(dir, "top")).toEqual([]);
+    expect(listFiles(join(dir, "absent"), "top")).toEqual([]);
+  });
+
+  it("sorts the entries of each folder by name, a folder among the files beside it", () => {
+    const dir = makeTempDir();
+    mkdirSync(join(dir, "session"));
+    writeFileSync(join(dir, "session.jsonl"), "");
+    writeFileSync(join(dir, "session", "agent.jsonl"), "");
+    expect(listFiles(dir, "top")).toEqual(["top/session/agent.jsonl", "top/session.jsonl"]);
+  });
+
+  it("lists exactly the files the generator wrote into the config folder", () => {
+    const dir = makeTempDir();
+    const written = writeFixtureTree(dir).filter((path) => path !== MANIFEST_FILE);
+    const listed = listFiles(join(dir, CONFIG_FOLDER), CONFIG_FOLDER);
+    expect([...listed].sort()).toEqual([...written].sort());
   });
 });
 

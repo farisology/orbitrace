@@ -1,0 +1,180 @@
+{
+  "formatVersion": 1,
+  "agents": [
+    {
+      "id": "main",
+      "name": "main",
+      "callsign": "main",
+      "model": "claude-sonnet-5-5",
+      "family": "sonnet",
+      "effort": "high",
+      "parent": null,
+      "wave": null,
+      "start": 0,
+      "end": 22.398,
+      "tools": [
+        {
+          "name": "ToolSearch",
+          "kind": "other",
+          "start": 0.495,
+          "end": 0.888,
+          "failed": false
+        },
+        {
+          "name": "mcp:tide-almanac",
+          "kind": "mcp",
+          "start": 9.59,
+          "end": 10.04,
+          "failed": false
+        },
+        {
+          "name": "mcp:paper_kites",
+          "kind": "mcp",
+          "start": 10.428,
+          "end": 12.406,
+          "failed": false
+        },
+        {
+          "name": "mcp:paper_kites",
+          "kind": "mcp",
+          "start": 11.152,
+          "end": 12.407,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 12.405,
+          "end": 12.534,
+          "failed": false
+        },
+        {
+          "name": "mcp:tide-almanac",
+          "kind": "mcp",
+          "start": 13.652,
+          "end": 14.223,
+          "failed": true
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 15.954,
+          "end": 20.615,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 0.495,
+          "inputTokens": 15,
+          "outputTokens": 124,
+          "cacheReadTokens": 20757,
+          "cacheCreationTokens": 1700
+        },
+        {
+          "t": 7.424,
+          "inputTokens": 5,
+          "outputTokens": 217,
+          "cacheReadTokens": 22457,
+          "cacheCreationTokens": 1610
+        },
+        {
+          "t": 10.428,
+          "inputTokens": 34,
+          "outputTokens": 289,
+          "cacheReadTokens": 24067,
+          "cacheCreationTokens": 431
+        },
+        {
+          "t": 13.652,
+          "inputTokens": 45,
+          "outputTokens": 156,
+          "cacheReadTokens": 24498,
+          "cacheCreationTokens": 1925
+        },
+        {
+          "t": 15.954,
+          "inputTokens": 20,
+          "outputTokens": 148,
+          "cacheReadTokens": 26423,
+          "cacheCreationTokens": 1712
+        },
+        {
+          "t": 22.398,
+          "inputTokens": 27,
+          "outputTokens": 233,
+          "cacheReadTokens": 28135,
+          "cacheCreationTokens": 1855
+        }
+      ],
+      "totals": {
+        "toolCalls": 7,
+        "failedToolCalls": 1,
+        "replies": 6,
+        "inputTokens": 146,
+        "outputTokens": 1167,
+        "cacheReadTokens": 146337,
+        "cacheCreationTokens": 9233
+      }
+    },
+    {
+      "id": "a1",
+      "name": "general-purpose",
+      "callsign": "general-purpose",
+      "model": "claude-haiku-5-5-20260115",
+      "family": "haiku",
+      "effort": "medium",
+      "parent": "main",
+      "wave": 0,
+      "start": 15.954,
+      "end": 20.279,
+      "tools": [
+        {
+          "name": "mcp:marble-ledger",
+          "kind": "mcp",
+          "start": 17.514,
+          "end": 19.456,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 17.514,
+          "inputTokens": 30,
+          "outputTokens": 179,
+          "cacheReadTokens": 9802,
+          "cacheCreationTokens": 687
+        },
+        {
+          "t": 20.279,
+          "inputTokens": 37,
+          "outputTokens": 197,
+          "cacheReadTokens": 10489,
+          "cacheCreationTokens": 1470
+        }
+      ],
+      "totals": {
+        "toolCalls": 1,
+        "failedToolCalls": 0,
+        "replies": 2,
+        "inputTokens": 67,
+        "outputTokens": 376,
+        "cacheReadTokens": 20291,
+        "cacheCreationTokens": 2157
+      }
+    }
+  ],
+  "warps": [],
+  "totals": {
+    "agents": 2,
+    "toolCalls": 8,
+    "failedToolCalls": 1,
+    "replies": 8,
+    "inputTokens": 213,
+    "outputTokens": 1543,
+    "cacheReadTokens": 166628,
+    "cacheCreationTokens": 11390,
+    "duration": 22.398,
+    "realDuration": 22.398
+  }
+}

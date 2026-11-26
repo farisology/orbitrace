@@ -11,7 +11,9 @@ import {
   CONFIG_FOLDER,
   DEMO_SCENARIO,
   MANIFEST_FILE,
+  REPLAYS_FOLDER,
   generateSession,
+  goldenReplayFile,
   type GeneratedSession,
   type ScenarioName,
 } from "./generator.js";
@@ -27,6 +29,24 @@ export const FIXTURE_CONFIG_DIR = join(FIXTURES_DIR, CONFIG_FOLDER);
 
 /** The manifest: every session, its files and what is true of it. */
 export const FIXTURE_MANIFEST_PATH = join(FIXTURES_DIR, MANIFEST_FILE);
+
+/** The folder that holds the golden replay files, and the hand-written example beside them. */
+export const GOLDEN_REPLAYS_DIR = join(FIXTURES_DIR, REPLAYS_FOLDER);
+
+/**
+ * The absolute path of the golden replay of one scenario. `fixturesDir` is for a set written
+ * somewhere else.
+ */
+export function goldenReplayPath(name: ScenarioName, fixturesDir: string = FIXTURES_DIR): string {
+  return join(fixturesDir, ...goldenReplayFile(name).split("/"));
+}
+
+/**
+ * The absolute path of the golden replay of the bundled demo session:
+ * `fixtures/replays/demo.replay.json`. A replay v1 file, safe to ship: structure and timing
+ * only. Check what is read from it with `validateReplay` from `@orbitrace/core` before use.
+ */
+export const DEMO_GOLDEN_REPLAY_PATH = goldenReplayPath(DEMO_SCENARIO);
 
 export interface FixtureSubagentPaths {
   agentId: string;

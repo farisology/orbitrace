@@ -6,14 +6,18 @@ import * as pure from "../src/generator.js";
 import {
   CONFIG_FOLDER,
   DEFAULT_SEED,
+  HAND_WRITTEN_REPLAYS,
   MANIFEST_FILE,
   MANIFEST_VERSION,
+  REPLAYS_FOLDER,
+  REPLAY_FILE_SUFFIX,
   SCENARIOS,
   SCENARIO_NAMES,
   buildManifest,
   generateAll,
   generateSession,
   getScenario,
+  goldenReplayFile,
   renderFixtureTree,
   type FixtureManifest,
   type GeneratedFile,
@@ -115,7 +119,15 @@ describe("source of the generator", () => {
   const sources = readdirSync(SOURCE_DIR)
     .filter((name) => name.endsWith(".ts"))
     .map((name) => ({ name, text: readFileSync(`${SOURCE_DIR}${name}`, "utf8") }));
-  const NODE_ONLY = ["cli.ts", "index.ts", "paths.ts", "write.ts"];
+  const NODE_ONLY = [
+    "cli.ts",
+    "entry.ts",
+    "goldens-cli.ts",
+    "goldens.ts",
+    "index.ts",
+    "paths.ts",
+    "write.ts",
+  ];
 
   it("never calls Math.random, Date.now or a Date without a value", () => {
     expect(sources.length).toBeGreaterThanOrEqual(10);
@@ -261,8 +273,9 @@ describe("buildManifest", () => {
       generator: "@orbitrace/fixtures",
       manifestVersion: MANIFEST_VERSION,
       seed: DEFAULT_SEED,
-      goldenReplays: "pending",
+      goldenReplays: SCENARIO_NAMES.map((name) => `replays/${name}.replay.json`),
     });
+    expect(MANIFEST_VERSION).toBe(2);
     expect(manifest.sessions.map((session) => session.name)).toEqual([...SCENARIO_NAMES]);
     for (const [index, listed] of manifest.sessions.entries()) {
       const session = sessions[index] as (typeof sessions)[number];
@@ -279,9 +292,27 @@ describe("buildManifest", () => {
           transcript: `${CONFIG_FOLDER}/${subagent.transcriptPath}`,
           meta: `${CONFIG_FOLDER}/${subagent.metaPath}`,
         })),
+        goldenReplay: goldenReplayFile(session.name),
         expected: session.expected,
       });
     }
+  });
+
+  it("lists the golden replay of every session it is given, in order, and of no other", () => {
+    const some = [generateSession("idle-gap"), generateSession("demo")];
+    const manifest = buildManifest(some);
+    expect(manifest.goldenReplays).toEqual([
+      "replays/idle-gap.replay.json",
+      "replays/demo.replay.json",
+    ]);
+    expect(manifest.sessions.map((session) => session.goldenReplay)).toEqual(
+      manifest.goldenReplays,
+    );
+    expect(buildManifest([]).goldenReplays).toEqual([]);
+    // The name of a golden comes from the scenario, so another seed lists the same files.
+    expect(buildManifest(generateAll({ seed: "elsewhere" })).goldenReplays).toEqual(
+      buildManifest(generateAll()).goldenReplays,
+    );
   });
 
   it("refuses sessions generated from different seeds, and accepts an empty list", () => {
@@ -292,6 +323,28 @@ describe("buildManifest", () => {
     expect(() => buildManifest(mixed)).toThrow("one seed");
     expect(buildManifest([])).toMatchObject({ seed: DEFAULT_SEED, sessions: [] });
     expect(buildManifest([generateSession("idle-gap", { seed: "b" })]).seed).toBe("b");
+  });
+});
+
+describe("goldenReplayFile", () => {
+  it("names a file in the replays folder after the scenario", () => {
+    expect(REPLAYS_FOLDER).toBe("replays");
+    expect(REPLAY_FILE_SUFFIX).toBe(".replay.json");
+    expect(goldenReplayFile("demo")).toBe("replays/demo.replay.json");
+    for (const name of SCENARIO_NAMES) {
+      expect(goldenReplayFile(name)).toBe(`${REPLAYS_FOLDER}/${name}${REPLAY_FILE_SUFFIX}`);
+    }
+  });
+
+  it("never names the hand-written example, and never a session id or a project", () => {
+    const files = SCENARIO_NAMES.map(goldenReplayFile);
+    expect(HAND_WRITTEN_REPLAYS).toEqual(["replays/minimal.replay.json"]);
+    expect(files.filter((file) => HAND_WRITTEN_REPLAYS.includes(file))).toEqual([]);
+    for (const session of generateAll()) {
+      const file = goldenReplayFile(session.name);
+      expect(file).not.toContain(session.sessionId);
+      expect(file).not.toContain(session.project);
+    }
   });
 });
 
@@ -309,6 +362,10 @@ describe("renderFixtureTree", () => {
     expect(files.slice(1).map((file) => file.content)).toEqual(
       sessions.flatMap((session) => session.files.map((file) => file.content)),
     );
+  });
+
+  it("writes nothing into the replays folder: the goldens come from the replay pipeline", () => {
+    expect(files.filter((file) => file.path.startsWith(`${REPLAYS_FOLDER}/`))).toEqual([]);
   });
 
   it("writes each path once, as a clean relative path", () => {

@@ -1,0 +1,307 @@
+{
+  "formatVersion": 1,
+  "agents": [
+    {
+      "id": "main",
+      "name": "main",
+      "callsign": "main",
+      "model": "claude-opus-5-5",
+      "family": "opus",
+      "effort": "high",
+      "parent": null,
+      "wave": null,
+      "start": 0,
+      "end": 35.851,
+      "tools": [
+        {
+          "name": "Glob",
+          "kind": "read",
+          "start": 2.368,
+          "end": 2.418,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 4.146,
+          "end": 31.831,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 2.368,
+          "inputTokens": 40,
+          "outputTokens": 34,
+          "cacheReadTokens": 15653,
+          "cacheCreationTokens": 1603
+        },
+        {
+          "t": 4.146,
+          "inputTokens": 56,
+          "outputTokens": 38,
+          "cacheReadTokens": 17256,
+          "cacheCreationTokens": 1516
+        },
+        {
+          "t": 35.851,
+          "inputTokens": 28,
+          "outputTokens": 188,
+          "cacheReadTokens": 18772,
+          "cacheCreationTokens": 642
+        }
+      ],
+      "totals": {
+        "toolCalls": 2,
+        "failedToolCalls": 0,
+        "replies": 3,
+        "inputTokens": 124,
+        "outputTokens": 260,
+        "cacheReadTokens": 51681,
+        "cacheCreationTokens": 3761
+      }
+    },
+    {
+      "id": "a1",
+      "name": "lantern-foreman",
+      "callsign": "lantern-foreman",
+      "model": "claude-sonnet-5-5",
+      "family": "sonnet",
+      "effort": "high",
+      "parent": "main",
+      "wave": 0,
+      "start": 4.146,
+      "end": 31.638,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 5.013,
+          "end": 5.168,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 6.751,
+          "end": 25.946,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 8.093,
+          "end": 27.687,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 28.37,
+          "end": 28.544,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 5.013,
+          "inputTokens": 3,
+          "outputTokens": 182,
+          "cacheReadTokens": 10230,
+          "cacheCreationTokens": 2263
+        },
+        {
+          "t": 6.751,
+          "inputTokens": 5,
+          "outputTokens": 68,
+          "cacheReadTokens": 12493,
+          "cacheCreationTokens": 866
+        },
+        {
+          "t": 28.37,
+          "inputTokens": 35,
+          "outputTokens": 57,
+          "cacheReadTokens": 13359,
+          "cacheCreationTokens": 2815
+        },
+        {
+          "t": 31.638,
+          "inputTokens": 55,
+          "outputTokens": 320,
+          "cacheReadTokens": 16174,
+          "cacheCreationTokens": 1722
+        }
+      ],
+      "totals": {
+        "toolCalls": 4,
+        "failedToolCalls": 0,
+        "replies": 4,
+        "inputTokens": 98,
+        "outputTokens": 627,
+        "cacheReadTokens": 52256,
+        "cacheCreationTokens": 7666
+      }
+    },
+    {
+      "id": "a2",
+      "name": "Explore",
+      "callsign": "Explore#1",
+      "model": "claude-haiku-5-5",
+      "family": "haiku",
+      "effort": "low",
+      "parent": "a1",
+      "wave": 0,
+      "start": 6.751,
+      "end": 25.519,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 7.632,
+          "end": 8.797,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 8.796,
+          "end": 9.004,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 10.847,
+          "end": 11.079,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 15.642,
+          "end": 15.727,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 7.632,
+          "inputTokens": 4,
+          "outputTokens": 64,
+          "cacheReadTokens": 9581,
+          "cacheCreationTokens": 2381
+        },
+        {
+          "t": 10.847,
+          "inputTokens": 4,
+          "outputTokens": 60,
+          "cacheReadTokens": 11962,
+          "cacheCreationTokens": 1774
+        },
+        {
+          "t": 13.263,
+          "inputTokens": 13,
+          "outputTokens": 285,
+          "cacheReadTokens": 13736,
+          "cacheCreationTokens": 710
+        },
+        {
+          "t": 24.719,
+          "inputTokens": 52,
+          "outputTokens": 276,
+          "cacheReadTokens": 14446,
+          "cacheCreationTokens": 874
+        }
+      ],
+      "totals": {
+        "toolCalls": 4,
+        "failedToolCalls": 0,
+        "replies": 4,
+        "inputTokens": 73,
+        "outputTokens": 685,
+        "cacheReadTokens": 49725,
+        "cacheCreationTokens": 5739
+      }
+    },
+    {
+      "id": "a3",
+      "name": "Explore",
+      "callsign": "Explore#2",
+      "model": "claude-haiku-5-5",
+      "family": "haiku",
+      "effort": "low",
+      "parent": "a1",
+      "wave": 0,
+      "start": 8.093,
+      "end": 27.414,
+      "tools": [
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 13.048,
+          "end": 13.281,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 14.892,
+          "end": 16.759,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 16.758,
+          "end": 16.838,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 10.941,
+          "inputTokens": 48,
+          "outputTokens": 172,
+          "cacheReadTokens": 11541,
+          "cacheCreationTokens": 1438
+        },
+        {
+          "t": 14.892,
+          "inputTokens": 7,
+          "outputTokens": 334,
+          "cacheReadTokens": 12979,
+          "cacheCreationTokens": 1359
+        },
+        {
+          "t": 23.299,
+          "inputTokens": 21,
+          "outputTokens": 206,
+          "cacheReadTokens": 14338,
+          "cacheCreationTokens": 2477
+        }
+      ],
+      "totals": {
+        "toolCalls": 3,
+        "failedToolCalls": 0,
+        "replies": 3,
+        "inputTokens": 76,
+        "outputTokens": 712,
+        "cacheReadTokens": 38858,
+        "cacheCreationTokens": 5274
+      }
+    }
+  ],
+  "warps": [],
+  "totals": {
+    "agents": 4,
+    "toolCalls": 13,
+    "failedToolCalls": 0,
+    "replies": 14,
+    "inputTokens": 371,
+    "outputTokens": 2284,
+    "cacheReadTokens": 192520,
+    "cacheCreationTokens": 22440,
+    "duration": 35.851,
+    "realDuration": 35.851
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "formatVersion": 1,
+  "agents": [
+    {
+      "id": "main",
+      "name": "main",
+      "callsign": "main",
+      "model": "claude-haiku-5-5",
+      "family": "haiku",
+      "effort": "high",
+      "parent": null,
+      "wave": null,
+      "start": 0,
+      "end": 27.796,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 1.72,
+          "end": 1.863,
+          "failed": false
+        },
+        {
+          "name": "SyntheticFutureTool",
+          "kind": "other",
+          "start": 19.989,
+          "end": 20.149,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 21.511,
+          "end": 25.891,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 1.72,
+          "inputTokens": 48,
+          "outputTokens": 73,
+          "cacheReadTokens": 19116,
+          "cacheCreationTokens": 371
+        },
+        {
+          "t": 8.499,
+          "inputTokens": 40,
+          "outputTokens": 912,
+          "cacheReadTokens": 19487,
+          "cacheCreationTokens": 305
+        },
+        {
+          "t": 14.021,
+          "inputTokens": 43,
+          "outputTokens": 311,
+          "cacheReadTokens": 19792,
+          "cacheCreationTokens": 912
+        },
+        {
+          "t": 17.498,
+          "inputTokens": 11,
+          "outputTokens": 93,
+          "cacheReadTokens": 20704,
+          "cacheCreationTokens": 311
+        },
+        {
+          "t": 19.989,
+          "inputTokens": 28,
+          "outputTokens": 180,
+          "cacheReadTokens": 21015,
+          "cacheCreationTokens": 93
+        },
+        {
+          "t": 21.511,
+          "inputTokens": 41,
+          "outputTokens": 70,
+          "cacheReadTokens": 21108,
+          "cacheCreationTokens": 1913
+        },
+        {
+          "t": 27.796,
+          "inputTokens": 36,
+          "outputTokens": 319,
+          "cacheReadTokens": 23021,
+          "cacheCreationTokens": 1749
+        }
+      ],
+      "totals": {
+        "toolCalls": 3,
+        "failedToolCalls": 0,
+        "replies": 7,
+        "inputTokens": 247,
+        "outputTokens": 1958,
+        "cacheReadTokens": 144243,
+        "cacheCreationTokens": 5654
+      }
+    },
+    {
+      "id": "a1",
+      "name": "schema-cartographer",
+      "callsign": "schema-cartographer",
+      "model": "claude-quartz-1-0",
+      "family": "quartz",
+      "effort": "medium",
+      "parent": "main",
+      "wave": 0,
+      "start": 21.511,
+      "end": 25.331,
+      "tools": [
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 22.759,
+          "end": 23.038,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 22.759,
+          "inputTokens": 5,
+          "outputTokens": 111,
+          "cacheReadTokens": 6808,
+          "cacheCreationTokens": 1068
+        },
+        {
+          "t": 25.331,
+          "inputTokens": 8,
+          "outputTokens": 165,
+          "cacheReadTokens": 7876,
+          "cacheCreationTokens": 249
+        }
+      ],
+      "totals": {
+        "toolCalls": 1,
+        "failedToolCalls": 0,
+        "replies": 2,
+        "inputTokens": 13,
+        "outputTokens": 276,
+        "cacheReadTokens": 14684,
+        "cacheCreationTokens": 1317
+      }
+    }
+  ],
+  "warps": [],
+  "totals": {
+    "agents": 2,
+    "toolCalls": 4,
+    "failedToolCalls": 0,
+    "replies": 9,
+    "inputTokens": 260,
+    "outputTokens": 2234,
+    "cacheReadTokens": 158927,
+    "cacheCreationTokens": 6971,
+    "duration": 27.796,
+    "realDuration": 27.796
+  }
+}
