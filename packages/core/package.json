@@ -11,6 +11,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./node": {
+      "types": "./dist/sources/node.d.ts",
+      "default": "./dist/sources/node.js"
+    },
     "./schema/replay-v1.schema.json": "./schema/replay-v1.schema.json"
   },
   "files": [
@@ -23,6 +27,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/node": "^20.19.43",
     "ajv": "^8.20.0"
   }
 }
