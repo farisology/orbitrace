@@ -2,10 +2,9 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
-    "emitDeclarationOnly": true,
     "declaration": true,
     "rootDir": "src",
     "outDir": "dist/types"
   },
-  "include": ["src/transport.ts"]
+  "include": ["src/index.ts", "src/transport.ts"]
 }

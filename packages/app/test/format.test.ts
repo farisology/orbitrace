@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatClock, formatCount, formatDuration, formatTokens, plural } from "../src/format";
+import {
+  formatAgo,
+  formatClock,
+  formatCount,
+  formatDuration,
+  formatTokens,
+  plural,
+} from "../src/format";
 
 describe("format", () => {
   it("formats clock readings", () => {
@@ -39,5 +46,16 @@ describe("format", () => {
     expect(plural(1, "call")).toBe("1 call");
     expect(plural(3, "call")).toBe("3 calls");
     expect(plural(2, "child", "children")).toBe("2 children");
+  });
+
+  it("formats how long ago, the same in every locale", () => {
+    const now = 100 * 24 * 60 * 60 * 1000;
+    expect(formatAgo(now - 30_000, now)).toBe("just now");
+    expect(formatAgo(now + 5_000, now)).toBe("just now");
+    expect(formatAgo(now - 12 * 60_000, now)).toBe("12 min ago");
+    expect(formatAgo(now - 3 * 60 * 60_000, now)).toBe("3 h ago");
+    expect(formatAgo(now - 24 * 60 * 60_000, now)).toBe("1 day ago");
+    expect(formatAgo(now - 50 * 24 * 60 * 60_000, now)).toBe("50 days ago");
+    expect(formatAgo(Number.NaN, now)).toBe("just now");
   });
 });
