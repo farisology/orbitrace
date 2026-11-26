@@ -2,7 +2,7 @@
   "name": "@orbitrace/fixtures",
   "version": "0.0.0",
   "private": true,
-  "description": "Orbitrace test fixtures: a seeded generator of synthetic Claude Code transcripts and the paths of the generated files. Invented data only.",
+  "description": "Orbitrace test fixtures: a seeded generator of synthetic Claude Code transcripts, the paths of the generated files, and the golden replay files made from them. Invented data only.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -25,7 +25,9 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "generate": "npm run build && node dist/cli.js",
-    "check": "npm run build && node dist/cli.js --check"
+    "check": "npm run build && node dist/cli.js --check",
+    "goldens": "npm run build && node dist/goldens-cli.js",
+    "goldens:check": "npm run build && node dist/goldens-cli.js --check"
   },
   "dependencies": {
     "@orbitrace/core": "0.0.0"

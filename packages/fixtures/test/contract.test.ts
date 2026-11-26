@@ -21,6 +21,7 @@ import {
   INVENTED_LINE_TYPES,
   KNOWN_EFFORT_LEVELS,
   KNOWN_RAW_LINE_TYPES,
+  MODELS,
   SCENARIO_NAMES,
   SUBAGENT_META_KEYS,
   USAGE_KEYS,
@@ -121,6 +122,31 @@ describe("types come from the contract", () => {
   it("an agent's effort is one of the contract's effort levels", () => {
     expectTypeOf<SubagentSpec["effort"]>().toEqualTypeOf<core.KnownEffortLevel>();
     expectTypeOf<AgentFacts["effort"]>().toEqualTypeOf<core.KnownEffortLevel>();
+  });
+
+  it("every effort a fixture can write is an effort a replay can hold", () => {
+    // The contract has two lists: the raw one the generator writes from, and the replay
+    // one. A raw level missing from the replay list would become null in a golden.
+    expect([...KNOWN_EFFORT_LEVELS]).toEqual([...core.EFFORT_LEVELS]);
+    expectTypeOf<KnownEffortLevel>().toEqualTypeOf<core.EffortLevel>();
+  });
+
+  it("the model ids are this package's own: the contract names families, not ids", () => {
+    // If core ever exports model ids, import them in src/lines.ts instead of MODELS.
+    const exported = Object.keys(core).filter((name) => /MODEL/.test(name));
+    expect(exported).toEqual(["KNOWN_MODEL_FAMILIES"]);
+    const ids = Object.values(MODELS);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ids) {
+      // What the replay schema allows for a model id, and room for a family after claude-.
+      expect(id).toMatch(/^claude-[a-z][a-z0-9]*-[a-z0-9._-]+$/);
+      expect(id.length).toBeLessThanOrEqual(64);
+    }
+    const known: readonly string[] = core.KNOWN_MODEL_FAMILIES;
+    const families = Object.entries(MODELS).map(([key, id]) => [key, id.split("-")[1]] as const);
+    for (const [key, family] of families) {
+      expect(known.includes(String(family)), `MODELS.${key}`).toBe(key !== "unknownFamily");
+    }
   });
 
   it("the key lists name every key the contract types declare, and no other", () => {

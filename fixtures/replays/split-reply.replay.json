@@ -1,0 +1,99 @@
+{
+  "formatVersion": 1,
+  "agents": [
+    {
+      "id": "main",
+      "name": "main",
+      "callsign": "main",
+      "model": "claude-opus-5-5",
+      "family": "opus",
+      "effort": "xhigh",
+      "parent": null,
+      "wave": null,
+      "start": 0,
+      "end": 25.836,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 8.287,
+          "end": 9.537,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 9.501,
+          "end": 9.759,
+          "failed": false
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 14.827,
+          "end": 14.872,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 16.08,
+          "end": 16.176,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 4.781,
+          "inputTokens": 57,
+          "outputTokens": 455,
+          "cacheReadTokens": 18200,
+          "cacheCreationTokens": 910
+        },
+        {
+          "t": 13.911,
+          "inputTokens": 45,
+          "outputTokens": 419,
+          "cacheReadTokens": 20212,
+          "cacheCreationTokens": 2797
+        },
+        {
+          "t": 18.581,
+          "inputTokens": 39,
+          "outputTokens": 402,
+          "cacheReadTokens": 23009,
+          "cacheCreationTokens": 2867
+        },
+        {
+          "t": 25.836,
+          "inputTokens": 61,
+          "outputTokens": 320,
+          "cacheReadTokens": 25876,
+          "cacheCreationTokens": 402
+        }
+      ],
+      "totals": {
+        "toolCalls": 4,
+        "failedToolCalls": 0,
+        "replies": 4,
+        "inputTokens": 202,
+        "outputTokens": 1596,
+        "cacheReadTokens": 87297,
+        "cacheCreationTokens": 6976
+      }
+    }
+  ],
+  "warps": [],
+  "totals": {
+    "agents": 1,
+    "toolCalls": 4,
+    "failedToolCalls": 0,
+    "replies": 4,
+    "inputTokens": 202,
+    "outputTokens": 1596,
+    "cacheReadTokens": 87297,
+    "cacheCreationTokens": 6976,
+    "duration": 25.836,
+    "realDuration": 25.836
+  }
+}

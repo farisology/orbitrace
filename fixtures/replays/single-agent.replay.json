@@ -1,0 +1,141 @@
+{
+  "formatVersion": 1,
+  "agents": [
+    {
+      "id": "main",
+      "name": "main",
+      "callsign": "main",
+      "model": "claude-opus-5-5",
+      "family": "opus",
+      "effort": "high",
+      "parent": null,
+      "wave": null,
+      "start": 0,
+      "end": 45.327,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 0.641,
+          "end": 0.797,
+          "failed": false
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 2.015,
+          "end": 2.401,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 3.601,
+          "end": 4.958,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 30.754,
+          "end": 30.822,
+          "failed": false
+        },
+        {
+          "name": "Write",
+          "kind": "edit",
+          "start": 32.165,
+          "end": 32.295,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 34.458,
+          "end": 42.571,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 0.641,
+          "inputTokens": 51,
+          "outputTokens": 152,
+          "cacheReadTokens": 15055,
+          "cacheCreationTokens": 1531
+        },
+        {
+          "t": 2.015,
+          "inputTokens": 33,
+          "outputTokens": 39,
+          "cacheReadTokens": 16586,
+          "cacheCreationTokens": 213
+        },
+        {
+          "t": 3.601,
+          "inputTokens": 5,
+          "outputTokens": 155,
+          "cacheReadTokens": 16799,
+          "cacheCreationTokens": 1365
+        },
+        {
+          "t": 7.048,
+          "inputTokens": 10,
+          "outputTokens": 278,
+          "cacheReadTokens": 18164,
+          "cacheCreationTokens": 1743
+        },
+        {
+          "t": 30.754,
+          "inputTokens": 54,
+          "outputTokens": 79,
+          "cacheReadTokens": 19907,
+          "cacheCreationTokens": 278
+        },
+        {
+          "t": 32.165,
+          "inputTokens": 18,
+          "outputTokens": 149,
+          "cacheReadTokens": 20185,
+          "cacheCreationTokens": 372
+        },
+        {
+          "t": 34.458,
+          "inputTokens": 7,
+          "outputTokens": 176,
+          "cacheReadTokens": 20557,
+          "cacheCreationTokens": 682
+        },
+        {
+          "t": 45.319,
+          "inputTokens": 14,
+          "outputTokens": 56,
+          "cacheReadTokens": 21239,
+          "cacheCreationTokens": 892
+        }
+      ],
+      "totals": {
+        "toolCalls": 6,
+        "failedToolCalls": 0,
+        "replies": 8,
+        "inputTokens": 192,
+        "outputTokens": 1084,
+        "cacheReadTokens": 148492,
+        "cacheCreationTokens": 7076
+      }
+    }
+  ],
+  "warps": [],
+  "totals": {
+    "agents": 1,
+    "toolCalls": 6,
+    "failedToolCalls": 0,
+    "replies": 8,
+    "inputTokens": 192,
+    "outputTokens": 1084,
+    "cacheReadTokens": 148492,
+    "cacheCreationTokens": 7076,
+    "duration": 45.327,
+    "realDuration": 45.327
+  }
+}

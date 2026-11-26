@@ -1,8 +1,18 @@
 {
   "generator": "@orbitrace/fixtures",
-  "manifestVersion": 1,
+  "manifestVersion": 2,
   "seed": "orbitrace-fixtures-1",
-  "goldenReplays": "pending",
+  "goldenReplays": [
+    "replays/single-agent.replay.json",
+    "replays/two-waves.replay.json",
+    "replays/tool-failures.replay.json",
+    "replays/idle-gap.replay.json",
+    "replays/unknown-lines.replay.json",
+    "replays/split-reply.replay.json",
+    "replays/mcp-tools.replay.json",
+    "replays/nested-subagents.replay.json",
+    "replays/demo.replay.json"
+  ],
   "sessions": [
     {
       "name": "single-agent",
@@ -12,6 +22,7 @@
       "cwd": "/workspace/lantern-ledger",
       "transcript": "config/projects/-workspace-lantern-ledger/00000000-0000-4000-8000-4aba577ef353.jsonl",
       "subagents": [],
+      "goldenReplay": "replays/single-agent.replay.json",
       "expected": {
         "agents": [
           {
@@ -107,6 +118,7 @@
           "meta": "config/projects/-workspace-kite-workshop/00000000-0000-4000-8000-dc471cdc3b8c/subagents/agent-a000004bdd2c23cbd.meta.json"
         }
       ],
+      "goldenReplay": "replays/two-waves.replay.json",
       "expected": {
         "agents": [
           {
@@ -317,6 +329,7 @@
           "meta": "config/projects/-workspace-marble-run/00000000-0000-4000-8000-f31302ec3c15/subagents/agent-a000005a55a4e2022.meta.json"
         }
       ],
+      "goldenReplay": "replays/tool-failures.replay.json",
       "expected": {
         "agents": [
           {
@@ -433,6 +446,7 @@
       "cwd": "/workspace/quill-archive",
       "transcript": "config/projects/-workspace-quill-archive/00000000-0000-4000-8000-d797bf493e0e.jsonl",
       "subagents": [],
+      "goldenReplay": "replays/idle-gap.replay.json",
       "expected": {
         "agents": [
           {
@@ -509,6 +523,7 @@
           "meta": "config/projects/-workspace-juniper-almanac/00000000-0000-4000-8000-785a23fc31ad/subagents/agent-a000001329b7a5e15.meta.json"
         }
       ],
+      "goldenReplay": "replays/unknown-lines.replay.json",
       "expected": {
         "agents": [
           {
@@ -608,6 +623,7 @@
       "cwd": "/workspace/lantern-ledger",
       "transcript": "config/projects/-workspace-lantern-ledger/00000000-0000-4000-8000-d60dd3aa61cf.jsonl",
       "subagents": [],
+      "goldenReplay": "replays/split-reply.replay.json",
       "expected": {
         "agents": [
           {
@@ -677,6 +693,7 @@
           "meta": "config/projects/-workspace-tidepool-atlas/00000000-0000-4000-8000-92220258ad2e/subagents/agent-a00000d2272d82f72.meta.json"
         }
       ],
+      "goldenReplay": "replays/mcp-tools.replay.json",
       "expected": {
         "agents": [
           {
@@ -785,6 +802,7 @@
           "meta": "config/projects/-workspace-compass-foundry/00000000-0000-4000-8000-5c9d7a3e3675/subagents/agent-a00000d86f6ce658b.meta.json"
         }
       ],
+      "goldenReplay": "replays/nested-subagents.replay.json",
       "expected": {
         "agents": [
           {
@@ -1013,6 +1031,7 @@
           "meta": "config/projects/-workspace-paper-orrery/00000000-0000-4000-8000-422450c39dbb/subagents/agent-a00000ad555648fff.meta.json"
         }
       ],
+      "goldenReplay": "replays/demo.replay.json",
       "expected": {
         "agents": [
           {

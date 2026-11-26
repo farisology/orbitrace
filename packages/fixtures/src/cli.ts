@@ -6,17 +6,15 @@
  *   node dist/cli.js --check    exit 1 when fixtures/ differs from the generator
  *   --out <dir>                 use another folder
  *   --seed <seed>               use another seed (never for the committed set)
+ *
+ * The golden replay files beside them have their own command: see goldens-cli.ts.
  */
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { isEntryPoint, type CliIo } from "./entry.js";
 import { DEFAULT_SEED } from "./generator.js";
 import { FIXTURES_DIR } from "./paths.js";
 import { checkFixtureTree, isFixtureTreeCurrent, writeFixtureTree } from "./write.js";
 
-export interface CliIo {
-  log: (line: string) => void;
-  error: (line: string) => void;
-}
+export type { CliIo };
 
 interface CliArguments {
   check: boolean;
@@ -70,17 +68,6 @@ export function runCli(argv: readonly string[], io: CliIo = console): number {
   return 0;
 }
 
-/** True when this module is the file Node was started with. */
-function isEntryPoint(): boolean {
-  const entry = process.argv[1];
-  if (entry === undefined) return false;
-  try {
-    return realpathSync(entry) === fileURLToPath(import.meta.url);
-  } catch {
-    return false;
-  }
-}
-
-if (isEntryPoint()) {
+if (isEntryPoint(import.meta.url)) {
   process.exitCode = runCli(process.argv.slice(2));
 }

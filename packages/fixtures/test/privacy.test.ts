@@ -10,8 +10,12 @@ import { beforeAll, describe, expect, it } from "vitest";
 import {
   DEFAULT_SEED,
   FIXTURES_DIR,
+  SCENARIO_NAMES,
   SYNTHETIC_MARKER,
+  goldenReplayFile,
+  goldenReplayPath,
   renderFixtureTree,
+  renderGoldenReplays,
   type GeneratedFile,
 } from "../src/index.js";
 
@@ -83,9 +87,26 @@ describe("privacy of the fixtures", () => {
     const listed = privacy.listFiles(REPO_ROOT).filter((file) => file.startsWith("fixtures/"));
     const generated = renderFixtureTree().map((file) => `fixtures/${file.path}`);
     expect(generated.filter((file) => !listed.includes(file))).toEqual([]);
+    const goldens = SCENARIO_NAMES.map((name) => `fixtures/${goldenReplayFile(name)}`);
+    expect(goldens.filter((file) => !listed.includes(file))).toEqual([]);
     const result = privacy.scanFiles(REPO_ROOT, listed, rules);
     expect(result.findings).toEqual([]);
     expect(result.scanned).toBe(listed.length);
+  });
+
+  it("the golden replays pass the privacy check, committed and regenerated", async () => {
+    const committed: GeneratedFile[] = SCENARIO_NAMES.map((name) => ({
+      path: goldenReplayFile(name),
+      content: readFileSync(goldenReplayPath(name), "utf8"),
+    }));
+    expect(committed.every((file) => file.content.length > 0)).toBe(true);
+    expect(findings(committed)).toEqual([]);
+    expect(findings(await renderGoldenReplays())).toEqual([]);
+    // A replay has no free text at all: no at-sign, no slash, no space inside a value.
+    for (const file of committed) {
+      const strings = file.content.match(/"(?:[^"\\]|\\.)*"/g) ?? [];
+      expect(strings.filter((value) => /[@/\\\s]/.test(value))).toEqual([]);
+    }
   });
 
   it("holds no home folder, no address and no real-looking id in any generated file", () => {

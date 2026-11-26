@@ -23,7 +23,11 @@ function toDiskPath(fixturesDir: string, relative: string): string {
   return join(fixturesDir, ...relative.split("/"));
 }
 
-function listFiles(dir: string, prefix: string): string[] {
+/**
+ * Every file below `dir` as `prefix/<path>` with forward slashes, the entries of each folder
+ * in name order. Empty when the folder does not exist.
+ */
+export function listFiles(dir: string, prefix: string): string[] {
   if (!existsSync(dir)) return [];
   const found: string[] = [];
   const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>

@@ -1,0 +1,282 @@
+{
+  "formatVersion": 1,
+  "agents": [
+    {
+      "id": "main",
+      "name": "main",
+      "callsign": "main",
+      "model": "claude-sonnet-5-5",
+      "family": "sonnet",
+      "effort": "low",
+      "parent": null,
+      "wave": null,
+      "start": 0,
+      "end": null,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 1.121,
+          "end": 1.298,
+          "failed": true
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 11.495,
+          "end": 16.418,
+          "failed": true
+        },
+        {
+          "name": "Grep",
+          "kind": "read",
+          "start": 13.357,
+          "end": 13.74,
+          "failed": false
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 17.402,
+          "end": 17.478,
+          "failed": true
+        },
+        {
+          "name": "Edit",
+          "kind": "edit",
+          "start": 19.426,
+          "end": 19.588,
+          "failed": false
+        },
+        {
+          "name": "mcp:tide-almanac",
+          "kind": "mcp",
+          "start": 21.771,
+          "end": 24.3,
+          "failed": true
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 29.267,
+          "end": 50.75,
+          "failed": false
+        },
+        {
+          "name": "Agent",
+          "kind": "agent",
+          "start": 30.079,
+          "end": null,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 51.823,
+          "end": null,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 1.121,
+          "inputTokens": 40,
+          "outputTokens": 126,
+          "cacheReadTokens": 18755,
+          "cacheCreationTokens": 2130
+        },
+        {
+          "t": 9.258,
+          "inputTokens": 13,
+          "outputTokens": 211,
+          "cacheReadTokens": 20885,
+          "cacheCreationTokens": 1134
+        },
+        {
+          "t": 17.402,
+          "inputTokens": 14,
+          "outputTokens": 135,
+          "cacheReadTokens": 22019,
+          "cacheCreationTokens": 1988
+        },
+        {
+          "t": 19.426,
+          "inputTokens": 5,
+          "outputTokens": 98,
+          "cacheReadTokens": 24007,
+          "cacheCreationTokens": 1353
+        },
+        {
+          "t": 21.771,
+          "inputTokens": 31,
+          "outputTokens": 129,
+          "cacheReadTokens": 25360,
+          "cacheCreationTokens": 1826
+        },
+        {
+          "t": 26.796,
+          "inputTokens": 26,
+          "outputTokens": 535,
+          "cacheReadTokens": 27186,
+          "cacheCreationTokens": 730
+        },
+        {
+          "t": 51.823,
+          "inputTokens": 6,
+          "outputTokens": 146,
+          "cacheReadTokens": 27916,
+          "cacheCreationTokens": 1755
+        }
+      ],
+      "totals": {
+        "toolCalls": 9,
+        "failedToolCalls": 4,
+        "replies": 7,
+        "inputTokens": 135,
+        "outputTokens": 1380,
+        "cacheReadTokens": 166128,
+        "cacheCreationTokens": 10916
+      }
+    },
+    {
+      "id": "a1",
+      "name": "test-runner",
+      "callsign": "test-runner",
+      "model": "claude-sonnet-5-5",
+      "family": "sonnet",
+      "effort": "medium",
+      "parent": "main",
+      "wave": 0,
+      "start": 29.267,
+      "end": 50.376,
+      "tools": [
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 31.196,
+          "end": 35.752,
+          "failed": true
+        },
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 36.873,
+          "end": 37.056,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 45.093,
+          "end": 47.307,
+          "failed": true
+        }
+      ],
+      "replies": [
+        {
+          "t": 31.196,
+          "inputTokens": 24,
+          "outputTokens": 31,
+          "cacheReadTokens": 8436,
+          "cacheCreationTokens": 1337
+        },
+        {
+          "t": 36.873,
+          "inputTokens": 38,
+          "outputTokens": 46,
+          "cacheReadTokens": 9773,
+          "cacheCreationTokens": 1627
+        },
+        {
+          "t": 43.566,
+          "inputTokens": 19,
+          "outputTokens": 228,
+          "cacheReadTokens": 11400,
+          "cacheCreationTokens": 1141
+        },
+        {
+          "t": 50.376,
+          "inputTokens": 40,
+          "outputTokens": 48,
+          "cacheReadTokens": 12541,
+          "cacheCreationTokens": 1562
+        }
+      ],
+      "totals": {
+        "toolCalls": 3,
+        "failedToolCalls": 2,
+        "replies": 4,
+        "inputTokens": 121,
+        "outputTokens": 353,
+        "cacheReadTokens": 42150,
+        "cacheCreationTokens": 5667
+      }
+    },
+    {
+      "id": "a2",
+      "name": "general-purpose",
+      "callsign": "general-purpose",
+      "model": "claude-haiku-5-5",
+      "family": "haiku",
+      "effort": "low",
+      "parent": "main",
+      "wave": 0,
+      "start": 30.079,
+      "end": null,
+      "tools": [
+        {
+          "name": "Read",
+          "kind": "read",
+          "start": 31.74,
+          "end": 31.934,
+          "failed": false
+        },
+        {
+          "name": "Bash",
+          "kind": "shell",
+          "start": 34.124,
+          "end": null,
+          "failed": false
+        }
+      ],
+      "replies": [
+        {
+          "t": 31.74,
+          "inputTokens": 45,
+          "outputTokens": 115,
+          "cacheReadTokens": 7896,
+          "cacheCreationTokens": 1483
+        },
+        {
+          "t": 34.124,
+          "inputTokens": 37,
+          "outputTokens": 189,
+          "cacheReadTokens": 9379,
+          "cacheCreationTokens": 1690
+        }
+      ],
+      "totals": {
+        "toolCalls": 2,
+        "failedToolCalls": 0,
+        "replies": 2,
+        "inputTokens": 82,
+        "outputTokens": 304,
+        "cacheReadTokens": 17275,
+        "cacheCreationTokens": 3173
+      }
+    }
+  ],
+  "warps": [],
+  "totals": {
+    "agents": 3,
+    "toolCalls": 14,
+    "failedToolCalls": 6,
+    "replies": 13,
+    "inputTokens": 338,
+    "outputTokens": 2037,
+    "cacheReadTokens": 225553,
+    "cacheCreationTokens": 19756,
+    "duration": 51.823,
+    "realDuration": 51.823
+  }
+}
