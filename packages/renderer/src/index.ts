@@ -1,7 +1,8 @@
 /**
- * Public entry of @orbitrace/renderer. The API types are in place; the Canvas 2D engine is
- * not built yet. This package has no framework dependency.
+ * Public entry of @orbitrace/renderer: a framework-free Canvas 2D engine that draws one
+ * replay model. The host owns the clock; see `OrreryHandle` in api.ts.
  */
-export const RENDERER_STATUS = "scaffold" as const;
-
 export type * from "./api.js";
+export type { DrawContext, OrreryEnvironment, SpriteSurface } from "./context.js";
+export { browserEnvironment, createOrrery, createOrreryWithEnvironment } from "./orrery.js";
+export { DEFAULT_THEME } from "./theme.js";
