@@ -149,10 +149,27 @@ describe("source of the generator", () => {
       .flatMap(({ text }) => [...text.matchAll(/from\s+"([^."][^"]*)"/g)].map((match) => match[1]));
     expect([...new Set(bare)]).toEqual(["@orbitrace/core"]);
 
-    const coreSources = readdirSync(CORE_SOURCE_DIR, { recursive: true, encoding: "utf8" }).filter(
-      (name) => name.endsWith(".ts"),
-    );
-    expect(coreSources.length).toBeGreaterThan(0);
+    // Only the files the main entry of core reaches count. Node-only code behind the
+    // `@orbitrace/core/node` subpath is never loaded by the generator half.
+    const coreSources: string[] = [];
+    const pending = ["index.ts"];
+    while (pending.length > 0) {
+      const name = pending.pop()!;
+      if (coreSources.includes(name)) continue;
+      coreSources.push(name);
+      const dir = name.includes("/") ? name.slice(0, name.lastIndexOf("/") + 1) : "";
+      const text = readFileSync(`${CORE_SOURCE_DIR}${name}`, "utf8");
+      for (const match of text.matchAll(/from\s+"(\.\.?\/[^"]+)\.js"/g)) {
+        const parts = `${dir}${match[1]!}.ts`.split("/");
+        const resolved: string[] = [];
+        for (const part of parts) {
+          if (part === "..") resolved.pop();
+          else if (part !== ".") resolved.push(part);
+        }
+        pending.push(resolved.join("/"));
+      }
+    }
+    expect(coreSources.length).toBeGreaterThan(1);
     const coreWithNode = coreSources.filter((name) =>
       /from\s+"node:|import\s*\(?\s*"node:|\brequire\(/.test(
         readFileSync(`${CORE_SOURCE_DIR}${name}`, "utf8"),
