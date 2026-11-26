@@ -1,0 +1,70 @@
+Orbitrace
+Third-party notices
+
+This is a working note by the maintainers. It is not legal advice.
+Orbitrace itself is licensed under the MIT licence (see LICENSE).
+
+
+1. Third-party code
+
+No third-party code has been copied into this repository.
+
+The Agent Flow project by Simon Patole was studied for rendering technique
+only. No source from it is included.
+  Licence: Apache License, Version 2.0, January 2004
+  Sources (read 26 Nov 2026):
+    https://github.com/patoles/agent-flow
+    https://github.com/patoles/agent-flow/blob/main/LICENSE
+  Its repository page also states that the name "Agent Flow" and associated
+  logos are trademarks of Simon Patole. Orbitrace does not use them.
+  See docs/legal/trademarks.md.
+
+
+2. Fonts planned for the interface
+
+The interface is not built yet. No font files are in this repository. The
+fonts below are planned. When a font is bundled, its full licence text must
+ship with it and its copyright line must be checked against the bundled files.
+
+All three are licensed under the SIL Open Font License, Version 1.1 (OFL 1.1).
+The licence texts below were read on 26 Nov 2026.
+
+Chakra Petch
+  Designer: Cadson Demak
+  Copyright line: Copyright 2018 The Chakra Petch Project Authors
+    (https://github.com/m4rc1e/Chakra-Petch.git)
+  Reserved Font Name: none declared in the licence file
+  Sources:
+    https://github.com/google/fonts/blob/main/ofl/chakrapetch/OFL.txt
+    https://github.com/google/fonts/blob/main/ofl/chakrapetch/METADATA.pb
+
+IBM Plex Sans
+  Copyright line: Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"
+  Reserved Font Name: Plex
+  Sources:
+    https://github.com/IBM/plex/blob/master/LICENSE.txt
+    https://github.com/google/fonts/blob/main/ofl/ibmplexsans/OFL.txt
+
+IBM Plex Mono
+  Copyright line: Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"
+  Reserved Font Name: Plex
+  Sources:
+    https://github.com/IBM/plex/blob/master/LICENSE.txt
+    https://github.com/google/fonts/blob/main/ofl/ibmplexmono/OFL.txt
+
+Two OFL 1.1 conditions that matter here, quoted from the IBM Plex licence file:
+- "Neither the Font Software nor any of its individual components, in
+  Original or Modified Versions, may be sold by itself."
+- "No Modified Version of the Font Software may use the Reserved Font
+  Name(s) unless explicit written permission is granted by the
+  corresponding Copyright Holder."
+Orbitrace plans to ship the fonts unmodified.
+
+Verification: the licence texts and copyright lines were read through an
+automated page fetch on 26 Nov 2026, not from downloaded files. Compare them
+with the licence files when the fonts are bundled.
+
+
+3. npm dependencies
+
+None listed yet. Each dependency's licence is recorded here when it is added.
