@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orbitrace renderer demo</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --void: #060714;
+        --deck: #0c0e22;
+        --rim: #23284f;
+        --text: #e4e7fa;
+        --dim: #9ba1c9;
+        --ion: #6e95ff;
+        font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--void);
+        color: var(--text);
+      }
+      body {
+        display: grid;
+        grid-template-rows: 1fr auto;
+      }
+      #stage {
+        position: relative;
+        min-height: 0;
+      }
+      #orrery {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      #hud {
+        position: absolute;
+        top: 8px;
+        left: 12px;
+        font-size: 12px;
+        color: var(--dim);
+        pointer-events: none;
+        white-space: pre;
+      }
+      #controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        padding: 8px 12px;
+        background: var(--deck);
+        border-top: 1px solid var(--rim);
+        font-size: 12px;
+      }
+      #controls button,
+      #controls select {
+        font: inherit;
+        color: var(--text);
+        background: var(--void);
+        border: 1px solid var(--rim);
+        padding: 4px 10px;
+      }
+      #controls :focus-visible {
+        outline: 2px solid var(--ion);
+      }
+      #scrub {
+        flex: 1;
+        min-width: 160px;
+      }
+      #bench {
+        position: absolute;
+        right: 12px;
+        top: 8px;
+        max-width: 40ch;
+        font-size: 11px;
+        white-space: pre-wrap;
+        color: var(--dim);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <canvas id="orrery" aria-label="Orrery: synthetic demo session"></canvas>
+      <div id="hud"></div>
+      <pre id="bench" hidden></pre>
+    </div>
+    <div id="controls">
+      <button id="play" type="button">Play</button>
+      <label
+        >Speed
+        <select id="speed">
+          <option>1</option>
+          <option>4</option>
+          <option selected>8</option>
+          <option>30</option>
+          <option>60</option>
+        </select></label
+      >
+      <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Replay time" />
+      <span id="clock">0.0 s</span>
+      <label
+        >Session
+        <select id="session">
+          <option value="demo">demo</option>
+          <option value="large">large</option>
+          <option value="live">live (updateModel)</option>
+        </select></label
+      >
+      <label><input id="reduced" type="checkbox" /> Reduced motion</label>
+      <span id="selected">selected: none</span>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
