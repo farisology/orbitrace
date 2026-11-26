@@ -1,77 +1,84 @@
 # Privacy
 
-Orbitrace is local first. Session data stays on your machine. There is no telemetry unless you opt in.
-
 **Status: nothing is released.** This page describes the design. Where something is not built yet, it says so.
 
-Orbitrace is not affiliated with or endorsed by Anthropic. "Claude Code" is named here only to describe the tool whose files Orbitrace reads.
+The design rules are: session data stays on your machine, there is no telemetry unless you opt in, and a shared replay is built from an allow-list of fields instead of by redacting content.
+
+Orbitrace is not affiliated with or endorsed by Anthropic. Claude Code is named here only to describe the tool whose files Orbitrace reads.
 
 ## What Orbitrace reads
 
 ### Claude Code transcripts (the default source)
 
-Claude Code writes one transcript per session:
+Claude Code already writes these files. Orbitrace reads them and does not change them.
 
-- `<config>/projects/<project>/<session-id>.jsonl`
-- Subagent transcripts: `<config>/projects/<project>/<session-id>/subagents/agent-<agentId>.jsonl`, with an `agent-<agentId>.meta.json` file beside each one.
+- Session transcript: `<config>/projects/<project>/<session-id>.jsonl`
+- Subagent transcript: `<config>/projects/<project>/<session-id>/subagents/agent-<agentId>.jsonl`, with an `agent-<agentId>.meta.json` file beside it.
 
-The config folder is, by default, a `.claude` folder in the user's home directory. On Windows it is under the user's profile folder. The `CLAUDE_CONFIG_DIR` setting moves it.
+`<config>` is the `.claude` folder in your home folder on macOS and Linux, and in your user profile folder on Windows. The `CLAUDE_CONFIG_DIR` environment variable moves it.
 
-Transcript lines also carry fields such as the working directory, the git branch and the session title. Shared replays never include them (see below).
+Each transcript line is a JSON object. Besides the structure Orbitrace needs (line type, timestamps, model, token counts, tool names, tool call ids, whether a call failed), a line can hold your prompts, the model's replies, tool inputs and outputs, the working directory, the git branch and the session title. The parser has to read whole lines to find the structural fields, so this content passes through memory on your machine. The replay model built from the parsed lines keeps structure only (see [What a shared replay contains](#what-a-shared-replay-contains)).
 
-### Other locations
+The transcript format is internal to Claude Code and changes between releases. There is no published schema. The parser (issue #6, not built yet) must skip line types it does not know and count them.
 
-- Live session registry (observed, not documented by Anthropic): `<config>/sessions/<pid>.json`. Orbitrace would check that the process is still running. This may be dropped.
-- Session folders kept by the Claude Code desktop app. These are an opt-in source.
-- Paths that hooks report. Hooks are optional and are not built yet.
+### Other sources
+
+- Live session registry: `<config>/sessions/<pid>.json`. Seen on one machine, not documented by Anthropic. Treated as optional. Where Orbitrace uses it, it must check that the process is still running before treating a session as live.
+- Session folders kept by the Claude Code desktop app. Opt-in only.
+- Paths reported by Claude Code hooks. Hooks are optional and not built yet.
+- A transcript file you drop onto the app.
 
 ### How Orbitrace picks a source
 
-In this order: an explicit setting from the user, `CLAUDE_CONFIG_DIR`, the default location for the operating system, known extra locations (opt in only), and paths reported by hooks. Dropping a transcript file onto the app always works.
+In this order: a path you set explicitly, `CLAUDE_CONFIG_DIR`, the default location for your operating system, known extra locations (opt in), and paths reported by hooks. Dropping a file onto the app always works.
 
 ### Retention by Claude Code
 
-Claude Code removes old transcripts after `cleanupPeriodDays`, which defaults to 30 days. The minimum is 1 day. It cannot be turned off. A replay of a session is only possible after the transcript is removed if Orbitrace has kept its own copy (see the next section).
+Claude Code deletes transcripts older than `cleanupPeriodDays`. The default is 30 days and the minimum is 1. It cannot be turned off. After Claude Code deletes a transcript, Orbitrace can replay that session only from its own record (next section).
 
 ## What Orbitrace will store
 
 **Not built yet.** The first release has no database.
 
-- Orbitrace plans to keep its own record of sessions, so a session can be replayed after Claude Code removes its transcript.
-- The format, location and retention period of that record are not decided yet.
-- Until they are decided, treat any stored copy of a session as sensitive. It can contain prompts and file contents, the same as the transcript it came from.
+- A history record that outlives Claude Code's cleanup is planned. Its format, location and retention are not decided (see issues #24 and #25).
+- Until that is decided, treat any stored copy of a session as being as sensitive as the transcript it came from.
+- Whatever is stored stays on your machine. Nothing is uploaded unless you share a file yourself.
 
 ## What a shared replay contains
 
-A shared replay file holds structure only. It is built from an allow-list of fields. Orbitrace does not start from the full transcript and remove the sensitive parts.
+A shared replay file holds structure only. It is built from the allow-list below. Orbitrace does not copy the transcript and then remove sensitive parts.
 
-The field list below is the suggested shape. The final shape is set by the replay contract work and may change. Any change to the list updates this page in the same change.
+**Not built yet.** The list below is the suggested shape. The final shape is fixed by the replay format work (issue #2) and the export work (issue #18). Any change to this list updates this page in the same pull request.
 
 **Contains:**
 
-- For each agent: its name (the agent type, such as `code-reviewer`), a callsign (the name, with `#n` when the name repeats), the model name, the model family, the effort level, the parent agent, the wave it belongs to, and its start and end times.
-- For each tool call: the tool name, start and end times, and whether it failed. Built-in tool names such as `Bash` or `Read` are kept. MCP tools keep only the server name, as `mcp:<server>`.
-- For each model reply: the time and the token counts (output, cache read and the other token classes).
-- Idle gaps that were cut from the timeline, with the time each one skipped.
+- For each agent: an id, its name (the agent type, such as `code-reviewer`), a callsign (the name plus `#n` when the name repeats), the model (such as `claude-opus-5-5`), the model family, the effort level, the parent agent, its wave, and its start and end times.
+- For each tool call: the tool name, the start and end times, and whether it failed. Built-in tool names such as `Bash` or `Read` are kept as they are. For an MCP tool only the server name is kept, as `mcp:<server>`.
+- For each model reply: its time and its token counts (output, input, cache read and cache creation).
+- Idle gaps cut from the timeline, with the time each one skipped.
 - Totals for each agent and for the whole session.
 
 **Never contains:**
 
-- Message text, including the text of prompts and replies.
-- Tool inputs and tool outputs.
+- Message text: prompts, replies or thinking.
+- Tool inputs or tool outputs.
 - File paths.
 - Command lines.
 - The working directory.
 - The git branch.
 - The session title.
-- The description of a subagent.
+- The description of a subagent (from its `.meta.json` file).
 
-The suggested shape has no session id field. If a session id field is ever added, this page changes in the same pull request.
+The suggested shape has no session id field.
 
-## Checks
+### Check before you share
 
-The `npm run privacy` command is meant to check the privacy rules. **It is not built yet.** Until it exists, check the rules by hand with the checklist in the pull request template.
+Some allowed fields are names you chose. A custom agent type, an MCP server name or a callsign can reveal a project or a client if you named it after one. Look at the agent and tool names in a replay before you post it.
 
-## Your own copies
+## Browser view
 
-A replay file or a stored record stays on your machine unless you share it. Review a shared replay yourself before you post it anywhere.
+**Not built yet.** The planned browser view serves transcripts from your machine to your browser. It must listen on loopback only, on a random port, with a one-time token in the link, a Host header check and no cross-origin access. Without the token, any web page open in the same browser could read your transcripts from localhost. See [SECURITY.md](../SECURITY.md).
+
+## Checks in this repository
+
+`npm run privacy` fails when forbidden strings appear in the repository (issue #1). The CI pipeline will run it on every pull request (issue #3). **Neither is built yet.** Until then, use the privacy checklist in the pull request template.

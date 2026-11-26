@@ -28,8 +28,9 @@ Tick every box. If a box does not apply, say why.
 - [ ] No real transcript content (prompts, replies, file contents, tool inputs or outputs, command lines) in any file, commit message or this description.
 - [ ] No paths from a user's machine, project names from a user's machine, session ids, emails, tokens or secrets anywhere in the change.
 - [ ] Every transcript fixture is synthetic and lives under `fixtures/` or `test/fixtures/`. I ran `git status` and checked the list.
+- [ ] Screenshots, recordings and attached replay files come from synthetic sessions only.
 - [ ] No code copied from another project.
-- [ ] If the shared replay output changed, it still uses only the allow-list in `docs/privacy.md`, and the never-included list is unchanged.
+- [ ] If what Orbitrace reads, stores or exports changed, `docs/privacy.md` is updated in this pull request, and a shared replay still uses only its allow-list.
 - [ ] Documentation states only verified facts. Anything not built is marked as not built.
 
 ## Branch
