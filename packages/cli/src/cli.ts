@@ -13,6 +13,7 @@ import { exportReplay, type ReplayModel } from "@orbitrace/core";
 import { parseCommandLine, wantsJson, type ParsedCommand } from "./args.js";
 import { EXIT_OK, errorToJson, errorToText, toCliError } from "./errors.js";
 import { helpJson, helpText } from "./help.js";
+import { runOpen, type OpenRuntime } from "./open.js";
 import { formatSessionTable, writeOutputFile } from "./output.js";
 import {
   chooseSession,
@@ -117,7 +118,12 @@ async function runExport(
   return EXIT_OK;
 }
 
-async function runCommand(command: ParsedCommand, io: CliIo, host: HostContext): Promise<number> {
+async function runCommand(
+  command: ParsedCommand,
+  io: CliIo,
+  host: HostContext,
+  runtime: OpenRuntime,
+): Promise<number> {
   switch (command.kind) {
     case "help":
       if (command.json) writeJson(io, helpJson(command.command));
@@ -131,17 +137,25 @@ async function runCommand(command: ParsedCommand, io: CliIo, host: HostContext):
       return runList(command, io, host);
     case "export":
       return runExport(command, io, host);
+    case "open":
+      return runOpen(command, io, host, runtime);
   }
 }
 
 /**
  * Run `orbitrace` with the arguments after the command name. Never throws: every failure is
- * written to stderr and turned into its exit code.
+ * written to stderr and turned into its exit code. `runtime` is for `open`, which keeps running
+ * until its stop signal; see `OpenRuntime`.
  */
-export async function run(argv: readonly string[], io: CliIo, host: HostContext): Promise<number> {
+export async function run(
+  argv: readonly string[],
+  io: CliIo,
+  host: HostContext,
+  runtime: OpenRuntime = {},
+): Promise<number> {
   const json = wantsJson(argv);
   try {
-    return await runCommand(parseCommandLine(argv), io, host);
+    return await runCommand(parseCommandLine(argv), io, host, runtime);
   } catch (error) {
     const cliError = toCliError(error);
     if (json) io.stderr(`${JSON.stringify(errorToJson(cliError))}\n`);

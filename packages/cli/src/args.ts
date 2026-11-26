@@ -31,7 +31,7 @@ export interface CommandSpec {
   readonly options: readonly OptionSpec[];
 }
 
-export const COMMAND_NAMES = ["list", "export", "help"] as const;
+export const COMMAND_NAMES = ["open", "list", "export", "help"] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
 const JSON_OPTION: OptionSpec = {
@@ -71,6 +71,41 @@ const SOURCE_OPTIONS: readonly OptionSpec[] = [
 ];
 
 export const COMMANDS: Readonly<Record<CommandName, CommandSpec>> = {
+  open: {
+    name: "open",
+    summary: "Open a session in your browser through a local server. The default command.",
+    usage:
+      "orbitrace open [<session-key> | --latest] [--no-browser] [--port <n>] [--config-dir <path>]... [--extra-roots] [--json]",
+    arguments: [
+      {
+        name: "session-key",
+        optional: true,
+        description:
+          "Key from 'orbitrace list', or a unique start of it. Without a key or --latest, the newest session opens, or the session list when there is none.",
+      },
+    ],
+    options: [
+      {
+        name: "latest",
+        type: "boolean",
+        description: "Open the session with the newest activity; fail when there is none.",
+      },
+      {
+        name: "no-browser",
+        type: "boolean",
+        description: "Print the link only; do not open a browser.",
+      },
+      {
+        name: "port",
+        type: "string",
+        value: "n",
+        description: "Listen on this port of 127.0.0.1 (1-65535). Default: a free port.",
+      },
+      ...SOURCE_OPTIONS,
+      JSON_OPTION,
+      HELP_OPTION,
+    ],
+  },
   list: {
     name: "list",
     summary: "List sessions, newest first.",
@@ -163,6 +198,16 @@ export type ParsedCommand =
       readonly output?: string;
       readonly force: boolean;
       readonly pretty: boolean;
+    }
+  | {
+      readonly kind: "open";
+      readonly json: boolean;
+      readonly sources: SourceFlags;
+      readonly key?: string;
+      readonly latest: boolean;
+      /** False with --no-browser. */
+      readonly browser: boolean;
+      readonly port?: number;
     };
 
 /**
@@ -246,12 +291,34 @@ export function parseLimit(value: string, command: CommandName = "list"): number
   return limit;
 }
 
+/** A port number from 1 to 65535, or a usage error. */
+export function parsePort(value: string): number {
+  const trimmed = value.trim();
+  const port = /^\d{1,5}$/.test(trimmed) ? Number(trimmed) : NaN;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw usageError("--port needs a whole number from 1 to 65535.", "open");
+  }
+  return port;
+}
+
+/** The command a bare `orbitrace` runs: `open` with its defaults. */
+export function defaultOpenCommand(json: boolean): ParsedCommand {
+  return {
+    kind: "open",
+    json,
+    sources: { configDirs: [], extraRoots: false },
+    latest: false,
+    browser: true,
+  };
+}
+
 const GLOBAL_FLAGS = new Set(["--help", "-h", "--version", "-V", "--json"]);
 
 /**
  * Parse the arguments after `orbitrace`. Throws a `usage` `CliError` for anything it cannot
  * understand. Global flags (`--help`, `--version`, `--json`) may come before the command; a
- * command's own options come after it.
+ * command's own options come after it. With no command, `orbitrace` runs `open` with its
+ * defaults (newest session, default browser, free port).
  */
 export function parseCommandLine(argv: readonly string[]): ParsedCommand {
   let index = 0;
@@ -276,7 +343,7 @@ export function parseCommandLine(argv: readonly string[]): ParsedCommand {
   if (name === undefined) {
     if (help) return { kind: "help", json };
     if (leading.has("--version") || leading.has("-V")) return { kind: "version", json };
-    return { kind: "help", json };
+    return defaultOpenCommand(json);
   }
   if (!isCommandName(name)) {
     throw usageError(`Unknown command '${name}'. Commands: ${COMMAND_NAMES.join(", ")}.`);
@@ -342,6 +409,27 @@ export function parseCommandLine(argv: readonly string[]): ParsedCommand {
         ...(output === undefined ? {} : { output }),
         force: values.force === true,
         pretty: values.pretty === true,
+      };
+    }
+    case "open": {
+      if (positionals.length > 1) throw usageError("open takes one session key.", "open");
+      const key = positionals[0];
+      const latest = values.latest === true;
+      if (key !== undefined && latest) {
+        throw usageError("Give a session key or --latest, not both.", "open");
+      }
+      if (key !== undefined && key.trim() === "") {
+        throw usageError("The session key is empty.", "open");
+      }
+      const port = typeof values.port === "string" ? parsePort(values.port) : undefined;
+      return {
+        kind: "open",
+        json: commandJson,
+        sources: sourceFlags(values, "open"),
+        ...(key === undefined ? {} : { key }),
+        latest,
+        browser: values["no-browser"] !== true,
+        ...(port === undefined ? {} : { port }),
       };
     }
   }

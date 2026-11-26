@@ -107,8 +107,9 @@ Notes for implementers:
   `load` a one-off replay, and `follow` the snapshots of a watched session, each built with the
   last one as `previous`. Its updates have the shape of `LiveUpdate`, and its errors carry a
   `TransportErrorCode` with a path-free message.
-- #12 and #16: the HTTP route layout for the browser host is not defined yet. It is for #16 to
-  define, carrying the same request and reply shapes as the editor messages.
+- #12 and #16: the HTTP route layout for the browser host is defined in
+  [Loopback server and routes](#loopback-server-and-routes-17) (lead's decision on #17). It
+  carries the same request and reply shapes as the editor messages.
 - #18: Ajv is a dev dependency of core today (used only by the schema test). Export will need a
   validator at run time.
 
@@ -132,6 +133,136 @@ Decision by the lead on #76: option (a). Implemented by #16.
 Option (b), publishing `@orbitrace/app` with its assets as a runtime dependency and resolving
 them with `import.meta.resolve`, was not chosen: it adds a second published package and an
 export for static files.
+
+## Loopback server and routes (#17)
+
+`orbitrace open` (and a bare `orbitrace`) starts a server on Node's own `http` module
+(`packages/cli/src/server/`), prints a link and opens it in the default browser. The route layout
+is the lead's decision on #17; the server implements it on top of core's session replayer
+(`createNodeSessionReplayer`, #75).
+
+### Link
+
+`http://127.0.0.1:<port>/#t=<token>&key=<session key>`. `key` is left out to open the session
+list. The token and key are in the fragment, so the browser never sends them in a request line
+or a `Referer` header. The app reads the fragment with `URLSearchParams`, then removes it from
+the address bar. Values are percent-encoded outside `A-Z a-z 0-9 - . _ ~ :`.
+
+### Routes
+
+| Route                    | Token | Body in                          | Reply                                                                                               |
+| ------------------------ | ----- | -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `GET` or `HEAD` any path | no    | none                             | A file of the built web app (`appBundleDir()`); `/` is `index.html`.                                |
+| `POST /api/rpc`          | yes   | one `TransportRequest`           | One `TransportMessage` (`result` or `error`), `200`.                                                |
+| `POST /api/live`         | yes   | `{ "id": <number>, "key": "…" }` | `200`, `application/x-ndjson`: one `live` `TransportMessage` per line, the first the current state. |
+
+- `/api/rpc` answers `listSessions`, `loadReplay`, `unsubscribe` and `openInBrowser`.
+  `openInBrowser` answers with an `unsupported` error. `subscribe` answers with an `unsupported`
+  error too: follow a session with `/api/live`. `unsubscribe` ends the `/api/live` stream whose
+  `id` it names.
+- `/api/live` ends after an `ended` or `error` update. The client aborting the request is the
+  unsubscribe: the server stops following the session and stops its watch. While the Claude Code
+  adapter has no `watchSession`, every stream is the current state followed by `ended`.
+- A request the server refuses before there is a `TransportMessage` gets a non-200 status and the
+  JSON body `{ "error": { "code": <TransportErrorCode>, "message": "…" } }`, with fixed,
+  path-free messages:
+
+| Status | Code           | When                                                                                                 |
+| ------ | -------------- | ---------------------------------------------------------------------------------------------------- |
+| 400    | `unsupported`  | Body is not JSON or not a valid request.                                                             |
+| 401    | `unauthorized` | Missing or wrong `Authorization: Bearer <token>`.                                                    |
+| 403    | `unauthorized` | Host header is not `127.0.0.1:<port>` or `localhost:<port>`, or the request comes from another page. |
+| 404    | `not-found`    | No such file, or an `/api` path that is not a route.                                                 |
+| 405    | `unsupported`  | Another method (including `OPTIONS`, so every CORS preflight is refused).                            |
+| 409    | `unsupported`  | A live stream with that `id` is already open.                                                        |
+| 413    | `unsupported`  | Body larger than 64 KiB.                                                                             |
+| 415    | `unsupported`  | `Content-Type` is not `application/json` (optionally `; charset=utf-8`), or the body is encoded.     |
+| 429    | `unsupported`  | 16 live streams are open already.                                                                    |
+| 503    | `internal`     | The server is shutting down.                                                                         |
+
+### Checks, in order
+
+1. **Listen on loopback only.** The server binds `127.0.0.1` on a port the system picks (or
+   `--port`), and refuses to start if the bound address is anything else. Nothing listens on
+   other interfaces or on IPv6.
+2. **Host header**, on every request, static files included: `127.0.0.1:<port>` or
+   `localhost:<port>`, without regard to case. Anything else is `403`.
+3. **`/api` only:** method `POST`; then, when the browser sends them, `Origin` must be this
+   server's origin and `Sec-Fetch-Site` must be `same-origin` or `none` (`same-site` is refused,
+   because a page on another port of `127.0.0.1` is the same site); then the token; then the
+   content type; then the body size, read with a hard limit.
+4. **Token:** 32 bytes from `crypto.randomBytes`, base64url, new on every start. Read from the
+   `Authorization` header only (never a query string, cookie or body), and compared in constant
+   time (both sides hashed with SHA-256, then `timingSafeEqual`).
+5. **Static files:** the path is decoded once and split into segments; a segment that is empty,
+   `.`, `..`, hidden (starts with `.`), or holds a backslash, a colon or a NUL is refused. The
+   joined path and its real path (symlinks followed) must both be inside the app folder, the file
+   is opened with `O_NOFOLLOW` where the OS has it, and only regular files are served.
+
+Every reply carries `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src
+'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri
+'none'; form-action 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy:
+same-origin`, `Cross-Origin-Resource-Policy: same-origin` and `Cache-Control: no-store`. No reply
+carries a CORS header (`Access-Control-*`) or sets a cookie. Header and request timeouts, a cap of
+128 connections and the 16-stream cap bound what one client can hold open.
+
+### Opening the browser
+
+Other accounts on the machine can read the arguments of every process (`ps` on macOS,
+`/proc/<pid>/cmdline` on Linux), and an opener such as `xdg-open` hands its argument to the
+browser, which keeps it in its own arguments for its whole life when the opener had to start it.
+So the link is never an argument. `orbitrace open` writes a launcher page instead: `open.html`,
+mode `0600`, in a new folder from `fs.mkdtemp` under the system's temporary folder (mode `0700`).
+The page holds the link in `<meta http-equiv="refresh" content="0;url=…">` (the fragment is
+kept; no script) and a plain link as a fallback. The opener gets the page's path: `open <path>`
+on macOS, `xdg-open <path>` on Linux and other systems, `cmd.exe /d /v:off /s /c "start ""
+"<path>""` on Windows, through `spawn` with an argument array and no shell. The path is checked
+first (absolute, ends in `.html`, no control characters; on Windows a drive path without `"`,
+`%`, `!` or `^`), and the link written into the page must match the server's own link pattern.
+The page and its folder are deleted when the server stops, and at once if the opener could not
+start. This is the approach Jupyter uses for the same problem.
+
+### Threat model
+
+What the server protects: the session list (project names, session ids, times) and the replays
+of every session the CLI can see, for as long as it runs.
+
+| Threat                                                                                                                        | What stops it                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Another web page in the user's browser reads the API (any origin, including another port of `127.0.0.1`).                     | It cannot know the token. A request that sets `Authorization` needs a CORS preflight, which is refused; without CORS headers a reply cannot be read anyway. `Origin` and `Sec-Fetch-Site` from another page are refused.                                                 |
+| A cross-origin "simple" POST (a plain HTML form, or `fetch` with `text/plain`).                                               | No token (`401`), and only `application/json` is accepted (`415`). The API has no action that changes anything but ending one's own live stream, which needs the token too.                                                                                              |
+| DNS rebinding: a page on an attacker's name that resolves to `127.0.0.1`, which the browser treats as that page's own origin. | The Host header carries the attacker's name and is refused (`403`), and the page still has no token.                                                                                                                                                                     |
+| Another machine on the network.                                                                                               | The server listens on `127.0.0.1` only.                                                                                                                                                                                                                                  |
+| Another user account on the same machine (loopback is shared; process arguments are visible to every account).                | The token: 256 random bits, new on every start. The link is never a command-line argument: the browser opener gets the path of a launcher page (see below), so neither the opener's nor a newly started browser's arguments hold the token.                              |
+| The token leaking through a request line, `Referer`, cookie, cache, log or process list.                                      | It is in the fragment, read from the `Authorization` header only, never set as a cookie, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, never passed as a program argument, and written only to stdout (the link) and to the launcher page, never to stderr. |
+| Reading files outside the app folder through the static route.                                                                | Segment checks, containment checks on the joined and the real path, `O_NOFOLLOW`, regular files only.                                                                                                                                                                    |
+| Exhausting the process with large or many requests.                                                                           | 64 KiB body limit, header and request timeouts, connection and stream caps.                                                                                                                                                                                              |
+| Framing the app (clickjacking) or injecting script into it.                                                                   | `frame-ancestors 'none'` and `X-Frame-Options: DENY`; a CSP with no inline script, no `eval` and no other origin.                                                                                                                                                        |
+
+What the token does **not** protect against:
+
+- **Another process running as the same user.** It can read the transcripts from disk directly,
+  without the server, and it can read the terminal the link was printed in. The server adds no
+  protection against it and takes none away.
+- **Anyone the link is given to** who can reach `127.0.0.1` on this machine, while the server
+  runs. The token is not bound to one browser and does not expire before the server stops.
+- **Browser extensions** allowed to read every page, and a compromised browser: they see the page,
+  the token and the data.
+- **The link in browser history.** The browser may record the address with the fragment before the
+  app removes it. The token is worthless once that server run has stopped.
+- **An administrator (root) account**, which can read loopback traffic (plain HTTP) and the files.
+- **The link on a command line you start yourself.** The CLI never puts the link in a program's
+  arguments, but if you pass it to a browser yourself (for example `firefox '<link>'`), other
+  accounts can see it in the process list for as long as that browser runs. On a shared machine,
+  use `--no-browser` and paste the link into a browser that is already running.
+- **The launcher page after a hard stop.** If the process is killed (`SIGKILL`, a crash), the
+  launcher page stays in the temporary folder. Only your account can read it, and its token is
+  worthless once that server run has ended.
+- **An opener that does not reach a browser.** `.html` files go to the program the system has for
+  them. If that is an editor, or a browser installed as a Snap or Flatpak that cannot read the
+  system's temporary folder, the page does not open the app; use `--no-browser` and open the link
+  yourself.
 
 ## Adding another agent runtime
 

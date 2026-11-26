@@ -31,6 +31,10 @@ export const CLI_EXIT_CODES = {
   "output-exists": 8,
   /** The output file could not be written. */
   "output-unwritable": 9,
+  /** `open`: the port given with `--port` is in use or may not be used. */
+  "port-unavailable": 10,
+  /** `open`: this build of the command carries no web app to serve. */
+  "app-missing": 11,
 } as const;
 
 export type CliErrorCode = keyof typeof CLI_EXIT_CODES;

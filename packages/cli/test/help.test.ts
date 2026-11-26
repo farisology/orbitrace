@@ -5,13 +5,13 @@ import { commandHelpText, helpJson, helpText, mainHelpText } from "../src/help.j
 import { cliVersion } from "../src/version.js";
 
 describe("mainHelpText", () => {
-  it("names every command and the global options, and says opening is not available", () => {
+  it("names every command and the global options, and says a bare orbitrace runs open", () => {
     const text = mainHelpText();
     expect(text.startsWith(`orbitrace ${cliVersion()}`)).toBe(true);
     for (const name of COMMAND_NAMES) expect(text).toContain(COMMANDS[name].summary);
     for (const flag of ["--help", "--version", "--json", "-h", "-V"]) expect(text).toContain(flag);
     expect(text).toContain("not affiliated with Anthropic");
-    expect(text).toContain("not available yet");
+    expect(text).toContain("With no command, orbitrace runs 'open'");
     expect(text.endsWith("\n")).toBe(true);
   });
 });
