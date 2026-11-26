@@ -25,7 +25,17 @@ const FIXTURE_PROJECT = resolve(
 );
 const PROJECT_FOLDER = "-srv-example-project";
 const LIVE_PID = 4242;
-const FAST: SessionWatchOptions = { debounceMs: 20, pollIntervalMs: 40, backstopIntervalMs: 0 };
+/**
+ * These tests check what the adapter reports (fresh refs, live status, subagents), not how fast
+ * `fs.watch` is. `fs.watch` can be slow or drop an event on a loaded machine (macOS FSEvents
+ * especially), so a short backstop keeps them from depending on it. The backstop only reports
+ * differences, so the call counts stay exact. The event path itself is tested in
+ * watch-files.test.ts.
+ */
+const FAST: SessionWatchOptions = { debounceMs: 20, pollIntervalMs: 40, backstopIntervalMs: 100 };
+
+/** Generous: a loaded CI machine or a full `npm test` run can delay timers and events. */
+const WAIT = { timeout: 5000 } as const;
 
 const sleep = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
 
@@ -95,7 +105,7 @@ afterEach(() => {
   for (const stop of stops.splice(0)) stop();
 });
 
-describe("Claude Code watchSession on real files", () => {
+describe("Claude Code watchSession on real files", { timeout: 30_000 }, () => {
   it("reports appended lines, late subagents and live status changes with a fresh ref", async () => {
     const adapter = adapterFor();
     const [ref] = await adapter.listSessions(root);
@@ -106,7 +116,7 @@ describe("Claude Code watchSession on real files", () => {
 
     // Appended lines: one call, same session, fresh fields.
     await appendFile(transcript, mainLines.slice(4).join("\n") + "\n");
-    await vi.waitFor(() => expect(seen).toHaveLength(1), { timeout: 3000 });
+    await vi.waitFor(() => expect(seen).toHaveLength(1), WAIT);
     await sleep(150);
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({
@@ -123,15 +133,13 @@ describe("Claude Code watchSession on real files", () => {
     // The subagent folder did not exist when the watch started.
     await addSubagents();
     const transcripts = subagentFiles.filter((f) => f.name.endsWith(".jsonl")).length;
-    await vi.waitFor(() => expect(seen.at(-1)?.subagentCount).toBe(transcripts), {
-      timeout: 3000,
-    });
+    await vi.waitFor(() => expect(seen.at(-1)?.subagentCount).toBe(transcripts), WAIT);
 
     // A registry change for this session that changes its live status.
     await sleep(150);
     const beforeIdle = seen.length;
     await setRegistry("idle");
-    await vi.waitFor(() => expect(seen.length).toBe(beforeIdle + 1), { timeout: 3000 });
+    await vi.waitFor(() => expect(seen.length).toBe(beforeIdle + 1), WAIT);
     expect(seen.at(-1)?.live).toBe("idle");
 
     // A registry change that leaves this session's status alone is not reported.
@@ -141,7 +149,7 @@ describe("Claude Code watchSession on real files", () => {
 
     // The process ends without a new line: its registry entry goes away.
     await rm(join(config, "sessions", `${LIVE_PID}.json`));
-    await vi.waitFor(() => expect(seen.at(-1)?.live).toBe("ended"), { timeout: 3000 });
+    await vi.waitFor(() => expect(seen.at(-1)?.live).toBe("ended"), WAIT);
 
     // Stopped: no more calls, and stopping again is safe.
     stop();
@@ -161,7 +169,7 @@ describe("Claude Code watchSession on real files", () => {
     const stop = replayer.follow(summary!.key, (update) => updates.push(update));
     stops.push(stop);
 
-    await vi.waitFor(() => expect(updates).toHaveLength(1), { timeout: 3000 });
+    await vi.waitFor(() => expect(updates).toHaveLength(1), WAIT);
     const first = updates[0]!;
     if (first.type !== "replay") throw new Error(`expected a replay, got ${first.type}`);
     expect(first.live).toBe("busy");
@@ -174,7 +182,7 @@ describe("Claude Code watchSession on real files", () => {
         const agents = last?.type === "replay" ? last.replay.agents.length : -1;
         expect(agents).toBeGreaterThan(first.replay.agents.length);
       },
-      { timeout: 5000 },
+      { timeout: 10_000 },
     );
     const last = updates.at(-1);
     if (last?.type !== "replay") throw new Error("expected a replay");
@@ -183,13 +191,10 @@ describe("Claude Code watchSession on real files", () => {
     expect(updates.every((update) => update.type === "replay")).toBe(true);
 
     await setRegistry("idle");
-    await vi.waitFor(
-      () => {
-        const latest = updates.at(-1);
-        expect(latest?.type === "replay" && latest.live).toBe("idle");
-      },
-      { timeout: 3000 },
-    );
+    await vi.waitFor(() => {
+      const latest = updates.at(-1);
+      expect(latest?.type === "replay" && latest.live).toBe("idle");
+    }, WAIT);
 
     stop();
     const atStop = updates.length;
@@ -204,9 +209,7 @@ describe("Claude Code watchSession on real files", () => {
     const seen: SessionRef[] = [];
     stops.push(adapter.watchSession!(ref!, (changed) => seen.push(changed)));
     await addSubagents();
-    await vi.waitFor(() => expect(seen.at(-1)?.subagentCount).toBeGreaterThan(0), {
-      timeout: 3000,
-    });
+    await vi.waitFor(() => expect(seen.at(-1)?.subagentCount).toBeGreaterThan(0), WAIT);
   });
 });
 

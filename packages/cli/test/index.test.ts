@@ -32,7 +32,7 @@ describe("orbitrace cli", () => {
   });
 
   it("prints the core status imported from @orbitrace/core", () => {
-    expect(CORE_STATUS).toBe("scaffold");
+    expect(CORE_STATUS).toBe("ready");
     expect(statusLine()).toBe(`${versionLine()} (core: ${CORE_STATUS})`);
   });
 

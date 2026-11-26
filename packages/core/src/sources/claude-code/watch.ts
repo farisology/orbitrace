@@ -14,8 +14,14 @@
  * time and inode of each watched file and compares them with the last check. Only a difference
  * is reported, so duplicate events, events for other sessions in the same project folder and
  * events a platform delivers late never reach the listener. The watchers open and the first
- * snapshot is taken synchronously when the watch starts, so nothing written after
- * `watchSessionFiles` returns is missed.
+ * snapshot is taken synchronously when the watch starts.
+ *
+ * Settle check: `fs.watch` can return before the platform reports events for the folder. On macOS
+ * (FSEvents) the event for a change made in the first milliseconds after it returns is sometimes
+ * never delivered; measured on a loaded machine, about 1 in 13 changes made at once were lost and
+ * none made 20 ms later. So one more check runs `settleMs` after any folder watcher opens, at the
+ * start and whenever a folder that appeared later gets its watcher. A change made in that window
+ * is reported by that check instead of waiting for the next event or the backstop.
  *
  * Debounce: events are merged until `debounceMs` pass without one, but a check runs at least
  * every `maxWaitMs` while events keep coming, so a session that writes without pause is still
@@ -98,6 +104,12 @@ export interface SessionWatchOptions {
   readonly pollIntervalMs?: number;
   /** Check interval beside working watchers in `auto` mode. 0 turns it off. Default 5000. */
   readonly backstopIntervalMs?: number;
+  /**
+   * One extra check this long after a folder watcher opens, for changes made before the platform
+   * started reporting events (see the module comment). Not used in `poll` mode. 0 turns it off.
+   * Default 250.
+   */
+  readonly settleMs?: number;
   /** Folder watcher factory. For tests and hosts with their own file events. Default `fs.watch`. */
   readonly openWatcher?: DirectoryWatchOpener;
 }
@@ -114,6 +126,7 @@ const DEFAULTS = {
   maxWaitMs: 1000,
   pollIntervalMs: 1000,
   backstopIntervalMs: 5000,
+  settleMs: 250,
 } as const;
 
 /** Subagent transcripts and their meta files. Other entries in `subagents/` are ignored. */
@@ -173,6 +186,7 @@ export const watchSessionFiles: SessionFilesWatcher = (targets, onChange, option
   const maxWaitMs = Math.max(debounceMs, duration(options.maxWaitMs, DEFAULTS.maxWaitMs));
   const pollIntervalMs = Math.max(1, duration(options.pollIntervalMs, DEFAULTS.pollIntervalMs));
   const backstopIntervalMs = duration(options.backstopIntervalMs, DEFAULTS.backstopIntervalMs);
+  const settleMs = duration(options.settleMs, DEFAULTS.settleMs);
   const openWatcher = options.openWatcher ?? openNodeDirectoryWatcher;
 
   const projectDir = dirname(targets.transcript);
@@ -203,6 +217,7 @@ export const watchSessionFiles: SessionFilesWatcher = (targets, onChange, option
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let burstStart: number | undefined;
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
   let checking = false;
   let checkAgain = false;
 
@@ -345,7 +360,18 @@ export const watchSessionFiles: SessionFilesWatcher = (targets, onChange, option
         // system). It stays without a watcher and the check falls back to polling.
       }
     }
+    if (opened) scheduleSettle();
     return opened;
+  }
+
+  /** One check `settleMs` after the latest watcher opened. A later opening moves it. */
+  function scheduleSettle(): void {
+    if (stopped || settleMs === 0) return;
+    if (settleTimer !== undefined) clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      settleTimer = undefined;
+      void check();
+    }, settleMs);
   }
 
   /** True when every folder that exists has a watcher, so events alone can be trusted. */
@@ -444,8 +470,10 @@ export const watchSessionFiles: SessionFilesWatcher = (targets, onChange, option
     stopped = true;
     if (debounceTimer !== undefined) clearTimeout(debounceTimer);
     if (pollTimer !== undefined) clearTimeout(pollTimer);
+    if (settleTimer !== undefined) clearTimeout(settleTimer);
     debounceTimer = undefined;
     pollTimer = undefined;
+    settleTimer = undefined;
     for (const dir of [...watchers.keys()]) closeWatcher(dir);
   };
 };

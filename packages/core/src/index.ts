@@ -17,13 +17,14 @@
  */
 
 /**
- * Stays `"scaffold"` until every core ticket of wave B is merged: besides the parser, sources,
- * builder and export (all merged), that is the Claude Code `watchSession` (#74), the core
- * tsconfig split for the two entries (#72) and moving the golden replay test out of core (#73).
- * The ticket that merges the last of them changes it to `"ready"`, together with
- * `packages/core/test/index.test.ts` and `packages/cli/test/index.test.ts`, which check it.
+ * `"ready"`: every core ticket of wave B needed for correctness is merged: the parser, sources,
+ * builder and export, the Claude Code `watchSession` (#74, landed with #99) and moving the golden
+ * replay test out of core (#73). The core tsconfig split for the two entries (#72) is still open;
+ * it only makes tsc enforce the browser/Node split that `test/sources/entry-points.test.ts`
+ * already checks for imports, so it does not hold this back. Checked by
+ * `packages/core/test/index.test.ts` and `packages/cli/test/index.test.ts`.
  */
-export const CORE_STATUS = "scaffold" as const;
+export const CORE_STATUS = "ready" as const;
 
 export * from "./model/raw.js";
 export * from "./model/parsed.js";

@@ -7,9 +7,10 @@
  */
 import { request as httpRequest, type IncomingHttpHeaders } from "node:http";
 import { connect } from "node:net";
-import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionChangeListener, SourceAdapter, SourceRoot } from "@orbitrace/core";
+import { SCENARIO_NAMES, fixturePaths } from "@orbitrace/fixtures";
 import {
   claudeCodeAdapter,
   createSessionReplayer,
@@ -295,4 +296,67 @@ export async function eventually(check: () => boolean, timeoutMs = 5000): Promis
     if (Date.now() - start > timeoutMs) throw new Error("Condition not met in time.");
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
+}
+
+/** The same adapter with no `watchSession`, as a runtime without live support would be. */
+export function withoutWatch(adapter: SourceAdapter): SourceAdapter {
+  return {
+    runtime: adapter.runtime,
+    displayName: adapter.displayName,
+    resolveRoots: (context) => adapter.resolveRoots(context),
+    listSessions: (root, options) => adapter.listSessions(root, options),
+    openSession: (ref) => adapter.openSession(ref),
+  };
+}
+
+/** The main transcript of the fixture session with `sessionId` in a fake machine. */
+export function fixtureTranscript(machine: FakeMachine, sessionId: string): string {
+  for (const name of SCENARIO_NAMES) {
+    const paths = fixturePaths(name, machine.fixturesDir);
+    if (paths.sessionId === sessionId) return paths.transcript;
+  }
+  throw new Error("no fixture session with that id");
+}
+
+/**
+ * Append one more assistant line with one tool call to a synthetic transcript, as a running
+ * session would. It copies the shape of the transcript's last tool-calling assistant line with
+ * new invented ids, a time after the latest one in the file and the last line as its parent.
+ */
+export function appendToolCall(transcript: string, n = 1): void {
+  const lines = readFileSync(transcript, "utf8")
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+  const isToolCall = (line: Record<string, unknown>): boolean => {
+    const message = line.message as { content?: unknown } | undefined;
+    return (
+      line.type === "assistant" &&
+      Array.isArray(message?.content) &&
+      message.content.some((part) => (part as { type?: unknown }).type === "tool_use")
+    );
+  };
+  const template = [...lines].reverse().find(isToolCall);
+  const last = lines.at(-1);
+  if (template === undefined || last === undefined) throw new Error("no tool call to copy");
+  const message = template.message as { content: Record<string, unknown>[] };
+  const tool = message.content.find((part) => part.type === "tool_use") as Record<string, unknown>;
+  const times = lines
+    .map((line) => (typeof line.timestamp === "string" ? Date.parse(line.timestamp) : NaN))
+    .filter((time) => Number.isFinite(time));
+  if (times.length === 0) throw new Error("no timestamp to follow");
+  const time = Math.max(...times) + 1000;
+  const line = {
+    ...template,
+    uuid: `00000000-0000-4000-8000-${String(900000000000 + n)}`,
+    parentUuid: last.uuid,
+    timestamp: new Date(time).toISOString(),
+    requestId: `req_synthetic_appended_${n}`,
+    message: {
+      ...message,
+      id: `msg_synthetic_appended_${n}`,
+      content: [{ ...tool, id: `toolu_synthetic_appended_${n}` }],
+    },
+  };
+  appendFileSync(transcript, `${JSON.stringify(line)}\n`);
 }

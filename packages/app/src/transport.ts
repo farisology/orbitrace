@@ -5,7 +5,7 @@
  *
  * The same app bundle runs in two hosts:
  * - an editor tab (ticket #12), where the transport passes messages to the extension;
- * - a browser tab opened by the CLI (ticket #16), where the transport makes HTTP requests
+ * - a browser tab opened by the CLI (ticket #17), where the transport makes HTTP requests
  *   to a loopback server that checks a one-time token.
  *
  * The app (ticket #11) codes only against `HostTransport` for sessions the host can see.
@@ -23,13 +23,11 @@
 import type {
   ListSessionsOptions,
   ReplayModel,
+  SessionReplayUpdate,
   SessionSummary,
   TransportErrorInfo,
   Unsubscribe,
 } from "@orbitrace/core";
-// Type-only: erased from the bundle, so no Node module reaches the browser. The update shape is
-// declared once, beside the host-side session replayer that produces it (#75, follow-up #81).
-import type { SessionReplayUpdate } from "@orbitrace/core/node";
 
 /**
  * Why a request failed. Defined once in core (`model/errors.ts`), so the hosts and core's
