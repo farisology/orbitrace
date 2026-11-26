@@ -12,3 +12,4 @@ export * from "./model/replay.js";
 export * from "./model/sources.js";
 export * from "./api.js";
 export * from "./parser/index.js";
+export * from "./replay/index.js";
