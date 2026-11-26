@@ -19,3 +19,6 @@ replays/private/
 .env.*
 .DS_Store
 .vscode-test/
+
+# private patterns for scripts/privacy-check.mjs: never commit
+.privacy-denylist.local
