@@ -2,7 +2,6 @@
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 console.log(JSON.stringify({ node: process.versions.node, electron: process.versions.electron ?? null }));
-const sql = 'CREATE VIRTUAL TABLE t USING fts5(x); INSERT INTO t VALUES (\'hello world\'); SELECT count(*) AS n FROM t WHERE t MATCH \'hello\'';
 async function check(name, fn) {
   try { console.log(name, 'FTS5 =', await fn()); } catch (e) { console.log(name, 'FTS5 = no/err:', e.message.split('\n')[0]); }
 }

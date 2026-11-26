@@ -165,7 +165,7 @@ for (const [path, content] of outputs) {
   let current = null;
   try {
     current = readFileSync(path, "utf8");
-  } catch {}
+  } catch { /* file not written yet */ }
   const name = path.slice(designDir.length + 1);
   if (current === content) {
     console.log(`up to date  design/${name}`);

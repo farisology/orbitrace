@@ -123,11 +123,11 @@ if (option === 'node-sqlite') {
   const offsets = new Float64Array(records.length + 1);
   const lengths = new Uint32Array(records.length + 1);
   const index = new Map();
-  let pos = 0, n = 0;
+  let pos = 0;
   while (pos < buf.length) {
     let end = buf.indexOf(10, pos); if (end < 0) end = buf.length;
     const rec = JSON.parse(buf.toString('utf8', pos, end));
-    offsets[rec.id] = pos; lengths[rec.id] = end - pos; texts[rec.id] = rec.text; n++;
+    offsets[rec.id] = pos; lengths[rec.id] = end - pos; texts[rec.id] = rec.text;
     for (const term of new Set(rec.text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean))) {
       let p = index.get(term); if (!p) index.set(term, (p = [])); p.push(rec.id);
     }
