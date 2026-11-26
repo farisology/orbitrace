@@ -1,0 +1,9 @@
+{
+  "agentType": "test-writer",
+  "model": "claude-sonnet-5-5",
+  "toolUseId": "toolu_01SYNTHMiKCP7O1f6TFz1IhC",
+  "spawnDepth": 1,
+  "description": "Synthetic task: label the windmills",
+  "isBuiltIn": false,
+  "finished": true
+}

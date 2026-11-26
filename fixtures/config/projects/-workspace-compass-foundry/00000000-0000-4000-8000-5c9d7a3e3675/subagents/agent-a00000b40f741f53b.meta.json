@@ -1,0 +1,9 @@
+{
+  "agentType": "Explore",
+  "model": "claude-haiku-5-5",
+  "toolUseId": "toolu_01SYNTHCUMryLAG67IRMF18C",
+  "spawnDepth": 2,
+  "description": "Synthetic task: sort the tidepools",
+  "isBuiltIn": true,
+  "finished": true
+}

@@ -1,0 +1,9 @@
+{
+  "agentType": "general-purpose",
+  "model": "claude-haiku-5-5",
+  "toolUseId": "toolu_01SYNTHcxptcr4jFU736CcOj",
+  "spawnDepth": 1,
+  "description": "Synthetic task: recount the teacups",
+  "isBuiltIn": true,
+  "finished": false
+}

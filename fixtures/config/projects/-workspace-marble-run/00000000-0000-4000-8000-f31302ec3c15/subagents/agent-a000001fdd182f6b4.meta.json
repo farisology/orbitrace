@@ -1,0 +1,9 @@
+{
+  "agentType": "test-runner",
+  "model": "claude-sonnet-5-5",
+  "toolUseId": "toolu_01SYNTHgUVQjjPvTTa0QL5QZ",
+  "spawnDepth": 1,
+  "description": "Synthetic task: sort the pebbles",
+  "isBuiltIn": false,
+  "finished": true
+}

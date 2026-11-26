@@ -1,0 +1,7 @@
+{
+  "agentType": "Explore",
+  "model": "claude-haiku-5-5",
+  "toolUseId": "toolu_01SYNTHvVcWcfiCr1sKLscpQ",
+  "spawnDepth": 2,
+  "description": "Synthetic task: polish the marbles"
+}

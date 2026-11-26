@@ -1,0 +1,9 @@
+{
+  "agentType": "code-reviewer",
+  "model": "claude-opus-5-5",
+  "toolUseId": "toolu_01SYNTH4qkl8C8fo7uHGVBn4",
+  "spawnDepth": 1,
+  "description": "Synthetic task: untangle the thimbles",
+  "isBuiltIn": false,
+  "finished": true
+}

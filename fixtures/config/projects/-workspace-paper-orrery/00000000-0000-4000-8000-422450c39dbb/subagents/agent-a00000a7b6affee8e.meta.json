@@ -1,0 +1,9 @@
+{
+  "agentType": "code-reviewer",
+  "model": "claude-opus-5-5",
+  "toolUseId": "toolu_01SYNTHEo2w5IqhEmyFwm5zy",
+  "spawnDepth": 1,
+  "description": "Synthetic task: sort the kazoos",
+  "isBuiltIn": false,
+  "finished": true
+}
