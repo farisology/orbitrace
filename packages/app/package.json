@@ -5,13 +5,19 @@
   "description": "Orbitrace app: React and Vite shell that will host the renderer. Placeholder page only.",
   "license": "MIT",
   "type": "module",
+  "exports": {
+    "./transport": {
+      "types": "./dist/types/transport.d.ts"
+    }
+  },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && tsc -p tsconfig.types.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
+    "@orbitrace/core": "0.0.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

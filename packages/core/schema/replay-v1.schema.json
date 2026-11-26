@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/farisology/orbitrace/blob/dev/packages/core/schema/replay-v1.schema.json",
+  "title": "Orbitrace replay, format version 1",
+  "description": "Structure-only replay of one agent session. Times are seconds from the session start on the compressed timeline. No text, tool inputs or outputs, paths, command lines, working directory, branch, title, session id or subagent description. Every object rejects properties it does not list.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["formatVersion", "agents", "warps", "totals"],
+  "properties": {
+    "formatVersion": { "const": 1 },
+    "agents": {
+      "description": "Main agent first, then subagents in id order (a1, a2, ...).",
+      "type": "array",
+      "minItems": 1,
+      "prefixItems": [{ "$ref": "#/$defs/mainAgent" }],
+      "items": { "$ref": "#/$defs/subagent" }
+    },
+    "warps": {
+      "description": "Idle gaps removed from the timeline, in 'at' order.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/warp" }
+    },
+    "totals": { "$ref": "#/$defs/sessionTotals" }
+  },
+  "$defs": {
+    "seconds": {
+      "description": "Seconds from session start on the compressed timeline.",
+      "type": "number",
+      "minimum": 0
+    },
+    "secondsOrNull": {
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "agentRef": {
+      "type": "string",
+      "pattern": "^(main|a[1-9][0-9]{0,5})$"
+    },
+    "agentName": {
+      "description": "Agent type, such as code-reviewer. An identifier: no spaces.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+    },
+    "callsign": {
+      "description": "Agent name, plus #n when the name repeats.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}(#[1-9][0-9]{0,5})?$"
+    },
+    "model": {
+      "description": "Model id, such as claude-opus-5-5, or null when unknown.",
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "family": {
+      "description": "Model family, an open lower-case identifier derived from the model id (for Claude, the word after claude-). Known to the renderer: fable, opus, sonnet, haiku, unknown. A renderer draws any other value as unknown.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,31}$"
+    },
+    "effort": {
+      "enum": ["low", "medium", "high", "xhigh", "max", null]
+    },
+    "toolName": {
+      "description": "Runtime tool name for display, or mcp:<server> for an MCP tool. The raw mcp__<server>__<tool> form is rejected.",
+      "type": "string",
+      "pattern": "^(mcp:[A-Za-z0-9][A-Za-z0-9._-]{0,63}|[A-Za-z][A-Za-z0-9_]{0,63})$",
+      "not": { "pattern": "^mcp__" }
+    },
+    "toolKind": {
+      "description": "What the call does, independent of the runtime. Renderers decide colour and behaviour from this field only; name is a label.",
+      "enum": ["shell", "read", "edit", "agent", "mcp", "other"]
+    },
+    "toolCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "start", "end", "failed"],
+      "properties": {
+        "name": { "$ref": "#/$defs/toolName" },
+        "kind": { "$ref": "#/$defs/toolKind" },
+        "start": { "$ref": "#/$defs/seconds" },
+        "end": { "$ref": "#/$defs/secondsOrNull" },
+        "failed": { "type": "boolean" }
+      },
+      "description": "kind is mcp exactly when name starts with mcp:.",
+      "if": { "properties": { "name": { "type": "string", "pattern": "^mcp:" } } },
+      "then": { "properties": { "kind": { "const": "mcp" } } },
+      "else": { "properties": { "kind": { "not": { "const": "mcp" } } } }
+    },
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["t", "inputTokens", "outputTokens", "cacheReadTokens", "cacheCreationTokens"],
+      "properties": {
+        "t": { "$ref": "#/$defs/seconds" },
+        "inputTokens": { "$ref": "#/$defs/count" },
+        "outputTokens": { "$ref": "#/$defs/count" },
+        "cacheReadTokens": { "$ref": "#/$defs/count" },
+        "cacheCreationTokens": { "$ref": "#/$defs/count" }
+      }
+    },
+    "agentTotals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "toolCalls",
+        "failedToolCalls",
+        "replies",
+        "inputTokens",
+        "outputTokens",
+        "cacheReadTokens",
+        "cacheCreationTokens"
+      ],
+      "properties": {
+        "toolCalls": { "$ref": "#/$defs/count" },
+        "failedToolCalls": { "$ref": "#/$defs/count" },
+        "replies": { "$ref": "#/$defs/count" },
+        "inputTokens": { "$ref": "#/$defs/count" },
+        "outputTokens": { "$ref": "#/$defs/count" },
+        "cacheReadTokens": { "$ref": "#/$defs/count" },
+        "cacheCreationTokens": { "$ref": "#/$defs/count" }
+      }
+    },
+    "sessionTotals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agents",
+        "toolCalls",
+        "failedToolCalls",
+        "replies",
+        "inputTokens",
+        "outputTokens",
+        "cacheReadTokens",
+        "cacheCreationTokens",
+        "duration",
+        "realDuration"
+      ],
+      "properties": {
+        "agents": { "$ref": "#/$defs/count" },
+        "toolCalls": { "$ref": "#/$defs/count" },
+        "failedToolCalls": { "$ref": "#/$defs/count" },
+        "replies": { "$ref": "#/$defs/count" },
+        "inputTokens": { "$ref": "#/$defs/count" },
+        "outputTokens": { "$ref": "#/$defs/count" },
+        "cacheReadTokens": { "$ref": "#/$defs/count" },
+        "cacheCreationTokens": { "$ref": "#/$defs/count" },
+        "duration": { "$ref": "#/$defs/seconds" },
+        "realDuration": { "type": "number", "minimum": 0 }
+      }
+    },
+    "mainAgent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "callsign",
+        "model",
+        "family",
+        "effort",
+        "parent",
+        "wave",
+        "start",
+        "end",
+        "tools",
+        "replies",
+        "totals"
+      ],
+      "properties": {
+        "id": { "const": "main" },
+        "name": { "const": "main" },
+        "callsign": { "const": "main" },
+        "model": { "$ref": "#/$defs/model" },
+        "family": { "$ref": "#/$defs/family" },
+        "effort": { "$ref": "#/$defs/effort" },
+        "parent": { "type": "null" },
+        "wave": { "type": "null" },
+        "start": { "$ref": "#/$defs/seconds" },
+        "end": { "$ref": "#/$defs/secondsOrNull" },
+        "tools": { "type": "array", "items": { "$ref": "#/$defs/toolCall" } },
+        "replies": { "type": "array", "items": { "$ref": "#/$defs/reply" } },
+        "totals": { "$ref": "#/$defs/agentTotals" }
+      }
+    },
+    "subagent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "callsign",
+        "model",
+        "family",
+        "effort",
+        "parent",
+        "wave",
+        "start",
+        "end",
+        "tools",
+        "replies",
+        "totals"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^a[1-9][0-9]{0,5}$" },
+        "name": { "$ref": "#/$defs/agentName" },
+        "callsign": { "$ref": "#/$defs/callsign" },
+        "model": { "$ref": "#/$defs/model" },
+        "family": { "$ref": "#/$defs/family" },
+        "effort": { "$ref": "#/$defs/effort" },
+        "parent": { "$ref": "#/$defs/agentRef" },
+        "wave": { "$ref": "#/$defs/count" },
+        "start": { "$ref": "#/$defs/seconds" },
+        "end": { "$ref": "#/$defs/secondsOrNull" },
+        "tools": { "type": "array", "items": { "$ref": "#/$defs/toolCall" } },
+        "replies": { "type": "array", "items": { "$ref": "#/$defs/reply" } },
+        "totals": { "$ref": "#/$defs/agentTotals" }
+      }
+    },
+    "warp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at", "skipped"],
+      "properties": {
+        "at": { "$ref": "#/$defs/seconds" },
+        "skipped": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}
