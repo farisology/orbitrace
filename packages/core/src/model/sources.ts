@@ -17,8 +17,14 @@
 
 import type { SessionInput } from "./raw.js";
 
-/** Agent runtimes with an adapter. Widened when an adapter is added. */
-export type RuntimeId = "claude-code";
+/**
+ * Every agent runtime with an adapter (#94). Add an adapter's id here; `RuntimeId` follows, and a
+ * consumer that checks against this list (the app's session decoder) needs no change.
+ */
+export const RUNTIME_IDS = ["claude-code"] as const;
+
+/** Agent runtimes with an adapter. Derived from `RUNTIME_IDS`. */
+export type RuntimeId = (typeof RUNTIME_IDS)[number];
 
 /**
  * How a source root was found. Listed in resolution order: an explicit user setting first,

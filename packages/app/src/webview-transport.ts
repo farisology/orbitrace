@@ -146,7 +146,9 @@ export function createWebviewTransport({ api, events }: WebviewTransportOptions)
 
   return {
     kind: "editor",
-    canOpenInBrowser: true,
+    // The editor extension answers every `openInBrowser` with `unsupported` until it can start
+    // the loopback server (issue 100), so the flag says no. A vscode test checks the two agree.
+    canOpenInBrowser: false,
     async listSessions(options?: ListSessionsOptions): Promise<readonly SessionSummary[]> {
       const result = await request({
         method: "listSessions",

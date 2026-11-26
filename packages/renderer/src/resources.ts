@@ -140,7 +140,9 @@ export function createResources(
     starCount: STAR_COUNT,
     gradients: { width: -1, height: -1, nebula: [null, null, null], vignette: null, sweep: null },
     seconds: new IntLabelCache(FONTS.small, (n) => `${n}s`),
-    durations: new IntLabelCache(FONTS.small, formatDuration),
+    // Round down before the cache sees the value, as core's duration formatters do, so an
+    // agent's run time on the canvas matches the app's "Ran for" (#86).
+    durations: new IntLabelCache(FONTS.small, formatDuration, undefined, Math.floor),
     calls: new IntLabelCache(FONTS.small, (n) => (n === 1 ? "1 call" : `${n} calls`)),
     failures: new IntLabelCache(FONTS.small, (n) => `${n} failed`),
     separator: new Label(" · ", FONTS.small),

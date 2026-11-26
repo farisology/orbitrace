@@ -18,11 +18,17 @@ import {
 } from "@orbitrace/core";
 import type { CreateOrrery, OrreryHandle } from "@orbitrace/renderer";
 import type {
+  LiveRequest as CoreLiveRequest,
+  TransportMessage as CoreTransportMessage,
+  TransportRequest as CoreTransportRequest,
+} from "@orbitrace/core";
+import type {
   HostTransport,
   LiveUpdate,
   TransportMessage,
   TransportRequest,
 } from "@orbitrace/app/transport";
+import type { LiveRequest } from "../src/server/rpc.js";
 
 describe("contract imports", () => {
   it("exposes the core runtime constants", () => {
@@ -67,5 +73,11 @@ describe("contract imports", () => {
     expectTypeOf<
       Extract<TransportMessage, { kind: "live" }>["subscriptionId"]
     >().toEqualTypeOf<number>();
+  });
+
+  it("types the server's messages from core, the same types the app re-exports (#96)", () => {
+    expectTypeOf<CoreTransportRequest>().toEqualTypeOf<TransportRequest>();
+    expectTypeOf<CoreTransportMessage>().toEqualTypeOf<TransportMessage>();
+    expectTypeOf<LiveRequest>().toEqualTypeOf<CoreLiveRequest>();
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as core from "@orbitrace/core";
 import {
   formatAgo,
   formatClock,
@@ -34,6 +35,15 @@ describe("format", () => {
     expect(formatTokens(2_517_192)).toBe("2.52M");
     expect(formatTokens(250_000_000)).toBe("250M");
     expect(formatTokens(-1)).toBe("0");
+  });
+
+  it("uses core's formatters, so the panels match the canvas (#86)", () => {
+    expect(formatClock).toBe(core.formatClock);
+    expect(formatDuration).toBe(core.formatDuration);
+    expect(formatTokens).toBe(core.formatTokens);
+    // The inspector's length and the timeline's end reading of one session agree.
+    expect(formatDuration(1067.7)).toBe("17 min 47 s");
+    expect(formatClock(1067.7)).toBe("17:47");
   });
 
   it("formats counts with separators", () => {

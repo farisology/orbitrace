@@ -14,6 +14,7 @@ import {
 import { basename, dirname, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import type { SessionReplayer } from "@orbitrace/core/node";
+import * as core from "@orbitrace/core";
 import { SessionReplayError } from "@orbitrace/core";
 import {
   allowedHosts,
@@ -41,6 +42,7 @@ import {
   SERVER_MESSAGES,
 } from "../src/server/rpc.js";
 import { buildLink, encodeFragmentValue } from "../src/server/link.js";
+import { LIVE_PATH, RPC_PATH } from "../src/server/server.js";
 import {
   browserCommand,
   isOpenableFile,
@@ -207,6 +209,15 @@ describe("static files", () => {
 });
 
 describe("request parsing", () => {
+  it("uses core's one request check and routes (#92)", () => {
+    expect(parseRpcRequest).toBe(core.parseTransportRequest);
+    expect(parseLiveRequest).toBe(core.parseLiveRequest);
+    expect(MAX_KEY_LENGTH).toBe(core.MAX_SESSION_KEY_LENGTH);
+    expect(RPC_PATH).toBe(core.RPC_PATH);
+    expect(LIVE_PATH).toBe(core.LIVE_PATH);
+    expect(encodeFragmentValue).toBe(core.encodeFragmentValue);
+  });
+
   it("parseRpcRequest accepts the TransportRequest shapes", () => {
     expect(parseRpcRequest({ id: 1, method: "listSessions", params: {} })).toEqual({
       id: 1,
@@ -259,6 +270,8 @@ describe("request parsing", () => {
       { id: 1, method: "unsubscribe", params: { subscriptionId: -1 } },
       { id: 1, method: "openInBrowser", params: { key: 3 } },
       { id: 1, method: "toString", params: {} },
+      { id: 1, method: "listSessions", params: { options: { since: -1 } } },
+      { id: 1, method: "openInBrowser" },
     ]) {
       expect(parseRpcRequest(body)).toBeNull();
     }

@@ -89,57 +89,9 @@ export interface HostTransport {
 }
 
 /**
- * Message shapes for the editor host, where calls travel as messages between the app
- * (webview) and the extension. Each request carries an `id`, unique per app session; the
- * reply echoes it.
- *
- * Subscriptions are keyed by subscription id, not by session key. The `id` of a `subscribe`
- * request is the subscription id. The host replies with a `result` (value `null`) to that id,
- * then sends `live` messages carrying the same `subscriptionId`, the first being the current
- * state. `unsubscribe` names the subscription id and ends that subscription only; the host
- * sends no `live` message for it afterwards. After an `ended` or `error` update the host
- * forgets the subscription; a later `unsubscribe` for it still gets a `result`.
+ * Message shapes for the editor host and the loopback server, defined once in core
+ * (`model/transport.ts`, #96) and re-exported here so existing imports keep working. Each
+ * request carries an `id`, unique per app session; the reply echoes it. A `subscribe` request's
+ * `id` is the subscription id that its `live` messages carry; see core for the whole protocol.
  */
-export type TransportRequest =
-  | {
-      readonly id: number;
-      readonly method: "listSessions";
-      readonly params: { readonly options?: ListSessionsOptions };
-    }
-  | {
-      readonly id: number;
-      readonly method: "loadReplay";
-      readonly params: { readonly key: string };
-    }
-  | {
-      /** Also the subscription id. */
-      readonly id: number;
-      readonly method: "subscribe";
-      readonly params: { readonly key: string };
-    }
-  | {
-      readonly id: number;
-      readonly method: "unsubscribe";
-      /** The `id` of the `subscribe` request that started the subscription. */
-      readonly params: { readonly subscriptionId: number };
-    }
-  | {
-      readonly id: number;
-      readonly method: "openInBrowser";
-      readonly params: { readonly key?: string };
-    };
-
-export type TransportMethod = TransportRequest["method"];
-
-/** Messages from the host to the app: a reply to a request, or a pushed live update. */
-export type TransportMessage =
-  | { readonly kind: "result"; readonly id: number; readonly result: unknown }
-  | { readonly kind: "error"; readonly id: number; readonly error: TransportError }
-  | {
-      readonly kind: "live";
-      /** The subscription this update belongs to. Route by this, not by `key`. */
-      readonly subscriptionId: number;
-      /** Session key, for logging and display only. */
-      readonly key: string;
-      readonly update: LiveUpdate;
-    };
+export type { TransportMessage, TransportMethod, TransportRequest } from "@orbitrace/core";

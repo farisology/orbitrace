@@ -18,13 +18,15 @@
 import type { ReplayAgentId, ReplayModel } from "@orbitrace/core";
 import type {
   CreateOrrery,
+  CreateOrreryWithEnvironment,
+  OrreryEnvironment,
   OrreryEventName,
   OrreryEvents,
   OrreryHandle,
   OrreryListener,
   OrreryOptions,
 } from "./api.js";
-import type { DrawContext, OrreryEnvironment, SpriteSurface } from "./context.js";
+import type { DrawContext, SpriteSurface } from "./context.js";
 import { drawFrame, type ViewState } from "./draw.js";
 import { hitTestAgents } from "./hit.js";
 import { computeLayout, createLayout, type Layout } from "./layout.js";
@@ -71,12 +73,15 @@ function finitePositive(value: number, name: string): number {
 
 const EMPTY_SCENE_SHAPE = { agents: [], totalTools: 0 } as const;
 
-/** `createOrrery` with an explicit environment, for tests and hosts with their own scheduler. */
-export function createOrreryWithEnvironment(
+/**
+ * `createOrrery` with an explicit environment, for tests and hosts with their own scheduler.
+ * Typed with the contract's `CreateOrreryWithEnvironment` (#70).
+ */
+export const createOrreryWithEnvironment: CreateOrreryWithEnvironment = (
   canvas: HTMLCanvasElement,
   options: OrreryOptions = {},
   env: OrreryEnvironment,
-): OrreryHandle {
+): OrreryHandle => {
   const context = canvas.getContext("2d");
   if (context === null) throw new Error("the canvas has no 2D context");
   const ctx: DrawContext = context;
@@ -284,7 +289,7 @@ export function createOrreryWithEnvironment(
     },
   };
   return handleApi;
-}
+};
 
 /** Create a renderer on a canvas, using the browser's environment. */
 export const createOrrery: CreateOrrery = (canvas, options) =>

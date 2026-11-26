@@ -9,10 +9,12 @@
 
 import {
   LIVE_STATUSES,
+  RUNTIME_IDS,
   describeReplayProblems,
   validateReplay,
   type LiveStatus,
   type ReplayModel,
+  type RuntimeId,
   type SessionSummary,
 } from "@orbitrace/core";
 import { isTransportError, transportError } from "./protocol";
@@ -28,13 +30,18 @@ function isLiveStatus(value: unknown): value is LiveStatus {
   return typeof value === "string" && (LIVE_STATUSES as readonly string[]).includes(value);
 }
 
+/** A runtime core has an adapter for (`RUNTIME_IDS`, #94), so a new adapter needs no change here. */
+function isRuntimeId(value: unknown): value is RuntimeId {
+  return typeof value === "string" && (RUNTIME_IDS as readonly string[]).includes(value);
+}
+
 /** One session summary, copied field by field, or `null` when a field is missing or wrong. */
 export function decodeSessionSummary(value: unknown): SessionSummary | null {
   if (typeof value !== "object" || value === null) return null;
   const record = value as Record<string, unknown>;
   const { key, runtime, projectLabel, sessionId, lastActivity, live, subagentCount } = record;
   if (typeof key !== "string" || key === "") return null;
-  if (runtime !== "claude-code") return null;
+  if (!isRuntimeId(runtime)) return null;
   if (typeof projectLabel !== "string" || typeof sessionId !== "string") return null;
   if (typeof lastActivity !== "number" || !Number.isFinite(lastActivity)) return null;
   if (!isLiveStatus(live)) return null;

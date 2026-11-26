@@ -53,16 +53,8 @@ export interface SpriteSurface {
   readonly context: DrawContext;
 }
 
-/** Everything the engine takes from its environment. `createOrrery` uses the browser's. */
-export interface OrreryEnvironment {
-  /** Schedule one frame. Default `requestAnimationFrame`. */
-  requestFrame(callback: (now: number) => void): number;
-  /** Cancel a scheduled frame. Default `cancelAnimationFrame`. */
-  cancelFrame(handle: number): void;
-  /** The user's reduced-motion preference, read once at creation. */
-  prefersReducedMotion(): boolean;
-  /** Default device pixel ratio. */
-  devicePixelRatio(): number;
-  /** A small offscreen surface for a glow sprite, or `null` to draw without sprites. */
-  createSurface(width: number, height: number): SpriteSurface | null;
-}
+/**
+ * Everything the engine takes from its environment. Declared in the contract (`api.ts`, #70) and
+ * re-exported here so existing imports keep working.
+ */
+export type { OrreryEnvironment } from "./api.js";
