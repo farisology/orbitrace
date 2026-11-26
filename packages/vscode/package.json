@@ -1,22 +1,137 @@
 {
   "name": "orbitrace-vscode",
-  "displayName": "Orbitrace",
-  "description": "Replay Claude Code agent sessions as an orrery. Stub: activates and does nothing yet.",
+  "displayName": "Orbitrace: Agent Session Visualizer",
+  "description": "Replays Claude Code agent sessions as an orrery in an editor tab. Orbitrace is an independent project. It is not affiliated with or endorsed by Anthropic.",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
-  "main": "./dist/index.js",
-  "engines": {
-    "vscode": "^1.146.0"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/farisology/orbitrace.git",
+    "directory": "packages/vscode"
   },
-  "activationEvents": [],
-  "contributes": {},
+  "bugs": {
+    "url": "https://github.com/farisology/orbitrace/issues"
+  },
+  "homepage": "https://github.com/farisology/orbitrace#readme",
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "agent",
+    "replay",
+    "orrery",
+    "visualizer"
+  ],
+  "main": "./dist/extension.js",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Orbitrace reads session transcripts from the file system of the machine the workspace is on."
+    }
+  },
+  "activationEvents": [
+    "onView:orbitrace.sessions",
+    "onCommand:orbitrace.visualiseCurrent",
+    "onCommand:orbitrace.visualiseSession",
+    "onCommand:orbitrace.openDemo",
+    "onCommand:orbitrace.refreshSessions"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "orbitrace",
+          "title": "Orbitrace",
+          "icon": "media/activity-bar.svg"
+        }
+      ]
+    },
+    "views": {
+      "orbitrace": [
+        {
+          "id": "orbitrace.sessions",
+          "name": "Sessions",
+          "icon": "media/activity-bar.svg",
+          "contextualTitle": "Orbitrace"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "orbitrace.sessions",
+        "contents": "No Claude Code sessions were found on this machine.\n[Open demo](command:orbitrace.openDemo)\n[Refresh](command:orbitrace.refreshSessions)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "orbitrace.visualiseCurrent",
+        "title": "Visualise current session",
+        "category": "Orbitrace",
+        "icon": "$(play)"
+      },
+      {
+        "command": "orbitrace.visualiseSession",
+        "title": "Visualise session...",
+        "category": "Orbitrace"
+      },
+      {
+        "command": "orbitrace.openDemo",
+        "title": "Open demo",
+        "category": "Orbitrace"
+      },
+      {
+        "command": "orbitrace.refreshSessions",
+        "title": "Refresh sessions",
+        "category": "Orbitrace",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "orbitrace.visualiseCurrent",
+          "when": "view == orbitrace.sessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "orbitrace.refreshSessions",
+          "when": "view == orbitrace.sessions",
+          "group": "navigation@2"
+        }
+      ]
+    }
+  },
   "files": [
-    "dist"
+    "dist/extension.js",
+    "dist/app",
+    "media",
+    "LICENSE",
+    "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync": "node scripts/sync-assets.mjs",
+    "sync:check": "node scripts/sync-assets.mjs --check"
+  },
+  "devDependencies": {
+    "@orbitrace/app": "0.0.0",
+    "@orbitrace/core": "0.0.0",
+    "@orbitrace/fixtures": "0.0.0",
+    "@types/node": "^20.19.43",
+    "@types/vscode": "1.96.0",
+    "esbuild": "^0.28.2"
   }
 }

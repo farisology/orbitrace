@@ -1,8 +1,15 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // Type checking only. esbuild bundles src/extension.ts and @orbitrace/core (ESM only) into
+    // one CommonJS file for the extension host (scripts/build.mjs), so resolve imports the way
+    // a bundler does instead of as Node's CommonJS loader would.
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "types": ["node"],
     "noEmit": true,
-    "verbatimModuleSyntax": false
+    "allowJs": true,
+    "checkJs": true
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "scripts", "vitest.config.mts"]
 }
