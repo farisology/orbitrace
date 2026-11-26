@@ -12,6 +12,10 @@
  *
  * Reads only, never writes. Every read failure is treated as "not there".
  *
+ * `watchSession` (ticket #74) watches the main transcript, the `subagents/` folder and the live
+ * registry folder with `watchSessionFiles` (see `watch.ts` for events, polling and debounce) and
+ * hands the listener a fresh `SessionRef` for each change.
+ *
  * Node only. Exported from `@orbitrace/core/node`.
  */
 
@@ -25,10 +29,12 @@ import type {
 import type {
   ListSessionsOptions,
   ResolveRootsContext,
+  SessionChangeListener,
   SessionRef,
   SourceAdapter,
   SourceResolution,
   SourceRoot,
+  Unsubscribe,
 } from "../../model/sources.js";
 import { compareSessionsNewestFirst, normalizeListOptions } from "../index.js";
 import { createNodeFileSystem, type SourceDirEntry, type SourceFileSystem } from "./fs.js";
@@ -54,6 +60,12 @@ import {
   type LiveRegistry,
   type ProcessAliveCheck,
 } from "./registry.js";
+import {
+  watchSessionFiles,
+  type SessionFilesChange,
+  type SessionFilesWatcher,
+  type SessionWatchOptions,
+} from "./watch.js";
 
 export interface ClaudeCodeAdapterOptions {
   /** File access. Default: Node's file system. */
@@ -66,6 +78,13 @@ export interface ClaudeCodeAdapterOptions {
   readonly extraRootScanDepth?: number;
   /** Bytes read from the start of a transcript to find its working directory. Default 65536. */
   readonly headBytes?: number;
+  /** Events or polling, debounce and intervals for `watchSession`. Default: see `watch.ts`. */
+  readonly watch?: SessionWatchOptions;
+  /**
+   * The file watcher behind `watchSession`. Default `watchSessionFiles`, which watches the real
+   * file system; replace it together with `fs`.
+   */
+  readonly watchFiles?: SessionFilesWatcher;
 }
 
 export const CLAUDE_CODE_RUNTIME = "claude-code" as const;
@@ -155,6 +174,12 @@ interface Candidate {
   readonly mayBeProjectsFolder: boolean;
 }
 
+/** Newest write time and subagent count of one session, from its files and the registry. */
+interface SessionActivity {
+  readonly lastActivity: number;
+  readonly subagentCount: number;
+}
+
 interface PendingSession {
   readonly projectFolder: string;
   readonly projectDir: string;
@@ -171,6 +196,8 @@ export function createClaudeCodeAdapter(options: ClaudeCodeAdapterOptions = {}):
   const scanLimit = options.extraRootScanLimit ?? 2000;
   const scanDepth = options.extraRootScanDepth ?? 6;
   const headBytes = options.headBytes ?? 65536;
+  const watchFiles = options.watchFiles ?? watchSessionFiles;
+  const watchOptions = options.watch;
 
   async function isReadableDir(dir: string): Promise<boolean> {
     return (await tryReadDir(fs, dir)) !== null;
@@ -261,6 +288,32 @@ export function createClaudeCodeAdapter(options: ClaudeCodeAdapterOptions = {}):
     return roots;
   }
 
+  /**
+   * Last activity and subagent count of one session: the newest of its transcript, its subagent
+   * transcripts and its registry entry. Null when the main transcript is missing or unreadable.
+   */
+  async function sessionActivity(
+    p: PathApi,
+    locator: string,
+    sessionId: string,
+    registry: LiveRegistry,
+  ): Promise<SessionActivity | null> {
+    const mainTime = await tryMtime(fs, locator);
+    if (mainTime === null) return null;
+    let lastActivity = mainTime;
+    let subagentCount = 0;
+    const subagentDir = p.join(p.dirname(locator), sessionId, "subagents");
+    for (const entry of (await tryReadDir(fs, subagentDir)) ?? []) {
+      if (!entry.isFile || !SUBAGENT_FILE.test(entry.name)) continue;
+      subagentCount += 1;
+      const time = await tryMtime(fs, p.join(subagentDir, entry.name));
+      if (time !== null && time > lastActivity) lastActivity = time;
+    }
+    const registryTime = registry.bySessionId.get(sessionId)?.updatedAt ?? null;
+    if (registryTime !== null && registryTime > lastActivity) lastActivity = registryTime;
+    return { lastActivity, subagentCount };
+  }
+
   async function findSessions(
     p: PathApi,
     projectsDir: string,
@@ -279,27 +332,9 @@ export function createClaudeCodeAdapter(options: ClaudeCodeAdapterOptions = {}):
         const sessionId = file.name.slice(0, -TRANSCRIPT_SUFFIX.length);
         if (sessionId === "") continue;
         const locator = p.join(projectDir, file.name);
-        const mainTime = await tryMtime(fs, locator);
-        if (mainTime === null) continue;
-        let lastActivity = mainTime;
-        let subagentCount = 0;
-        const subagentDir = p.join(projectDir, sessionId, "subagents");
-        for (const entry of (await tryReadDir(fs, subagentDir)) ?? []) {
-          if (!entry.isFile || !SUBAGENT_FILE.test(entry.name)) continue;
-          subagentCount += 1;
-          const time = await tryMtime(fs, p.join(subagentDir, entry.name));
-          if (time !== null && time > lastActivity) lastActivity = time;
-        }
-        const registryTime = registry.bySessionId.get(sessionId)?.updatedAt ?? null;
-        if (registryTime !== null && registryTime > lastActivity) lastActivity = registryTime;
-        pending.push({
-          projectFolder: project.name,
-          projectDir,
-          sessionId,
-          locator,
-          lastActivity,
-          subagentCount,
-        });
+        const activity = await sessionActivity(p, locator, sessionId, registry);
+        if (activity === null) continue;
+        pending.push({ projectFolder: project.name, projectDir, sessionId, locator, ...activity });
       }
     }
     return pending;
@@ -402,12 +437,96 @@ export function createClaudeCodeAdapter(options: ClaudeCodeAdapterOptions = {}):
     return { main: lazyLines(fs, ref.locator), subagents };
   }
 
+  /**
+   * The ref with its live status, last activity and subagent count read again. Null when the
+   * main transcript is missing (for example between a delete and a re-create).
+   */
+  async function refreshRef(ref: SessionRef): Promise<SessionRef | null> {
+    const p = pathApiForPath(ref.locator);
+    const registry = await readLiveRegistry(fs, p, p.join(ref.source.root, "sessions"), alive);
+    const activity = await sessionActivity(p, ref.locator, ref.sessionId, registry);
+    if (activity === null) return null;
+    return { ...ref, ...activity, live: liveStatusOf(registry, ref.sessionId) };
+  }
+
+  /**
+   * Watch one session. Each change to its transcript, a subagent transcript or a meta file
+   * (appended lines, a new subagent, a replaced file) calls the listener once per burst with a
+   * fresh `SessionRef`: live status, last activity and subagent count read at that moment, every
+   * other field as passed in. A change to the live registry alone calls it only when the
+   * session's live status changed. Calls never overlap and come in order; none follows `stop`.
+   * While the main transcript is missing no call is made; it is reported when it comes back.
+   */
+  function watchSession(ref: SessionRef, listener: SessionChangeListener): Unsubscribe {
+    const p = pathApiForPath(ref.locator);
+    const sessionDir = p.join(p.dirname(ref.locator), ref.sessionId);
+    let active = true;
+    let lastLive = ref.live;
+    let refreshing = false;
+    let queued: SessionFilesChange | null = null;
+
+    const refresh = async (): Promise<void> => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        while (active && queued !== null) {
+          const change = queued;
+          queued = null;
+          let fresh: SessionRef | null;
+          try {
+            fresh = await refreshRef(ref);
+          } catch {
+            fresh = null;
+          }
+          if (!active) return;
+          if (fresh === null) continue;
+          if (!change.files && fresh.live === lastLive) continue;
+          lastLive = fresh.live;
+          try {
+            listener(fresh);
+          } catch (error) {
+            // A throwing listener must not stop the watch; its error is not swallowed either.
+            void Promise.reject(error);
+          }
+        }
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    const stopFiles = watchFiles(
+      {
+        transcript: ref.locator,
+        sessionDir,
+        subagentsDir: p.join(sessionDir, "subagents"),
+        registryDir: p.join(ref.source.root, "sessions"),
+      },
+      (change) => {
+        if (!active) return;
+        queued = {
+          files: change.files || (queued?.files ?? false),
+          registry: change.registry || (queued?.registry ?? false),
+        };
+        void refresh();
+      },
+      watchOptions,
+    );
+
+    return () => {
+      if (!active) return;
+      active = false;
+      queued = null;
+      stopFiles();
+    };
+  }
+
   return {
     runtime: CLAUDE_CODE_RUNTIME,
     displayName: "Claude Code",
     resolveRoots,
     listSessions,
     openSession,
+    watchSession,
   };
 }
 
