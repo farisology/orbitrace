@@ -1,5 +1,6 @@
 /**
- * Public API of @orbitrace/renderer, as types. Not implemented yet (ticket #10).
+ * Public API of @orbitrace/renderer, as types. Implemented by ticket #10 (`createOrrery` and
+ * `createOrreryWithEnvironment` in orrery.ts).
  *
  * The renderer draws one ReplayModel on a canvas. It does not own the replay clock: the host
  * (the app's timeline, a test, an export step) calls `setTime` whenever the time changes,
@@ -12,9 +13,10 @@
  */
 
 import type { ReplayAgentId, ReplayModel, ReplaySeconds } from "@orbitrace/core";
+import type { OrreryEnvironment } from "./context.js";
 
 /**
- * Colours the renderer uses. Defaults come from the prototype's CSS `:root` block.
+ * Colours the renderer uses. Defaults come from design/tokens.json (see `DEFAULT_THEME`).
  * A tool call's colour comes from its `kind` (`ToolKind` in core), never from its `name`.
  */
 export interface OrreryTheme {
@@ -97,3 +99,17 @@ export interface OrreryHandle {
 
 /** Create a renderer on a canvas. Ticket #10 exports `createOrrery` with this type. */
 export type CreateOrrery = (canvas: HTMLCanvasElement, options?: OrreryOptions) => OrreryHandle;
+
+/**
+ * `CreateOrrery` with an explicit environment: the frame scheduler, the reduced-motion and
+ * device-pixel-ratio defaults, and offscreen sprite surfaces. For tests and for hosts with their
+ * own scheduler, such as an editor webview (#12) or the app (#11). Part of the contract since
+ * #70, because `OrreryOptions` has no way to inject a scheduler. `OrreryEnvironment` is declared
+ * in context.ts and exported from the package entry. Ticket #10 exports
+ * `createOrreryWithEnvironment` with this type.
+ */
+export type CreateOrreryWithEnvironment = (
+  canvas: HTMLCanvasElement,
+  options: OrreryOptions | undefined,
+  environment: OrreryEnvironment,
+) => OrreryHandle;

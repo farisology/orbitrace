@@ -8,6 +8,17 @@
  * leaving them out here means the replay builder cannot copy them by mistake.
  *
  * Times are Unix epoch milliseconds (UTC), taken from line timestamps.
+ *
+ * Missing timestamps (decided in #66). `ParsedReply.firstAt`, `ParsedReply.lastAt` and
+ * `ParsedToolCall.startedAt` are always numbers. When the line they come from has no readable
+ * `timestamp`, the parser uses, in order: the last readable timestamp on an earlier line of the
+ * same transcript (any line type); else the first readable timestamp of that transcript, which
+ * is on a later line; else `0`. So `0` means "this transcript has no readable timestamp at all", and that case is
+ * exactly `ParsedRun.startedAt === null` for the run that holds the reply or call: check that,
+ * not the value `0`, to tell a fallback from a real time. The same chain gives a result line's
+ * time for `ParsedToolCall.endedAt`. Why not `EpochMs | null`: the fields were merged as numbers
+ * and the parser and builder rely on that; a nullable type would change both for a case the run
+ * already reports.
  */
 
 import type { KnownEffortLevel } from "./raw.js";
@@ -29,15 +40,19 @@ export interface TokenUsage {
  * One assistant reply, merged from every line that shares `message.id`.
  */
 export interface ParsedReply {
-  /** `message.id`. Local only. */
+  /**
+   * `message.id`. Local only. When an assistant line has no `message.id`, the parser uses the
+   * line's `uuid`, and failing that `line-<n>`, where `<n>` counts such lines in the transcript
+   * from 1. A reply keyed by a fallback is not merged with other lines unless they share it.
+   */
   readonly messageId: string;
   /** Model id as written, for example `claude-opus-5-5`. `null` when missing. */
   readonly model: string | null;
   /** `null` when the line had no effort or an unrecognised value. */
   readonly effort: KnownEffortLevel | null;
-  /** Timestamp of the first line of the reply. */
+  /** Timestamp of the first line of the reply. Missing timestamps: see the file header. */
   readonly firstAt: EpochMs;
-  /** Timestamp of the last line of the reply. */
+  /** Timestamp of the last line of the reply. Missing timestamps: see the file header. */
   readonly lastAt: EpochMs;
   readonly usage: TokenUsage;
   /** Ids of the tool_use blocks in this reply: the union by block id across its lines. */
@@ -68,8 +83,12 @@ export interface ParsedToolCall {
   readonly kind: ToolKind;
   /** The reply that made the call. */
   readonly messageId: string;
+  /** Timestamp of the line with the tool_use block. Missing timestamps: see the file header. */
   readonly startedAt: EpochMs;
-  /** Result line timestamp, or `null` when no result was seen. */
+  /**
+   * Result line timestamp, or `null` when no result was seen. Never before `startedAt`: a result
+   * stamped earlier than its call is treated as ending at the call's start.
+   */
   readonly endedAt: EpochMs | null;
   /** `is_error` of the result, or `null` when no result was seen. */
   readonly isError: boolean | null;
@@ -116,7 +135,10 @@ export interface ParsedSubagentRun extends ParsedRun {
 
 /** Lines the parser did not use. Each count is a number of lines. */
 export interface LineCounts {
-  /** Every line read, across all transcripts of the session. */
+  /**
+   * Every line read, across all transcripts of the session. Blank and whitespace-only lines are
+   * not counted, so a trailing newline is not a line.
+   */
   readonly total: number;
   /** Lines whose `type` the parser does not know, keyed by that type. A missing type is keyed `""`. */
   readonly unknownByType: Readonly<Record<string, number>>;

@@ -97,7 +97,8 @@ describe.each([false, true])("hot path with reducedMotion=%s", (reduced) => {
     expect(flightsSeen()).toBeGreaterThan(0);
 
     const byFile = await sampledBytes(run);
-    const inSrc = bytesIn(byFile, "/packages/renderer/src/");
+    // Core code on the hot path (toRealSeconds) counts against the same budget.
+    const inSrc = bytesIn(byFile, "/packages/renderer/src/") + bytesIn(byFile, "/packages/core/");
     console.log(
       `reducedMotion=${reduced}: ${inSrc} bytes sampled in src over ${FRAMES} frames ` +
         `(${(inSrc / FRAMES).toFixed(3)} bytes/frame)`,

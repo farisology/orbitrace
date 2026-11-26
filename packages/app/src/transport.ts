@@ -23,25 +23,17 @@ import type {
   LiveStatus,
   ReplayModel,
   SessionSummary,
+  TransportErrorCode,
   Unsubscribe,
 } from "@orbitrace/core";
 
-export type HostKind = "editor" | "browser";
+/**
+ * Why a request failed. Defined once in core (`model/errors.ts`), so the hosts and core's
+ * session-to-replay helper use the same codes as the app.
+ */
+export type { TransportErrorCode } from "@orbitrace/core";
 
-/** Why a request failed. */
-export type TransportErrorCode =
-  /** No session with that key. */
-  | "not-found"
-  /** The transcript could not be read. */
-  | "unreadable"
-  /** The result did not validate against the replay schema. */
-  | "invalid"
-  /** The host does not support this request (for example `openInBrowser` in a browser). */
-  | "unsupported"
-  /** The browser host rejected the token or the Host header. */
-  | "unauthorized"
-  /** Anything else. */
-  | "internal";
+export type HostKind = "editor" | "browser";
 
 /** Error a transport method rejects with. `message` is for display and holds no file paths. */
 export interface TransportError {

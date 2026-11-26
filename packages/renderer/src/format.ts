@@ -1,6 +1,7 @@
-/** Small formatting helpers for canvas labels. Called when a label changes, not every frame. */
-
-import type { ReplaySeconds, ReplayWarp } from "@orbitrace/core";
+/**
+ * Small formatting helpers for canvas labels. Called when a label changes, not every frame.
+ * Compressed-to-real time is `toRealSeconds` from @orbitrace/core.
+ */
 
 /** Token count in short form: `950`, `12.3k`, `4.1M`, `1.25B`. */
 export function formatTokens(n: number): string {
@@ -19,17 +20,4 @@ export function formatDuration(seconds: number): string {
   if (m >= 60) return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
   if (m > 0) return `${m}m${String(x).padStart(2, "0")}s`;
   return `${x}s`;
-}
-
-/**
- * Real seconds from the session start for compressed time `t`: `t` plus `skipped` of every
- * warp whose `at` is less than `t` (the rule in core's `ReplayWarp`).
- */
-export function realSeconds(warps: readonly ReplayWarp[], t: ReplaySeconds): number {
-  let real = t;
-  for (let i = 0; i < warps.length; i++) {
-    const warp = warps[i]!;
-    if (warp.at < t) real += warp.skipped;
-  }
-  return real;
 }

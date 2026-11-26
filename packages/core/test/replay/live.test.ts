@@ -18,7 +18,8 @@ function expectAppendStable(before: ReplayModel, after: ReplayModel): void {
       agent.wave,
       agent.start,
     ]);
-    if (agent.end !== null) expect(later.end).not.toBeNull();
+    // A subagent's end only fills in; the main agent's may go back to null (#67).
+    if (agent.end !== null && agent.id !== "main") expect(later.end).not.toBeNull();
     if (agent.model !== null) expect(later.model).toBe(agent.model);
     if (agent.family !== "unknown") expect(later.family).toBe(agent.family);
     if (agent.effort !== null) expect(later.effort).toBe(agent.effort);
@@ -392,5 +393,44 @@ describe("buildReplay live: a subagent seen before its first line", () => {
       shown.agents.map((a) => [a.id, a.name, a.start]),
     );
     expect(second.agents[1]?.replies).toHaveLength(3);
+  });
+});
+
+describe("buildReplay live: the main agent's end (#67)", () => {
+  /**
+   * Main replies at 0 s and 5 s, then (in a later poll) calls a tool at 20 s that returns at
+   * 30 s. Each snapshot holds only the lines written so far, as a watched transcript does.
+   */
+  const upTo = (seconds: number): ParsedSession => {
+    const replies = [reply({ id: "msg-1", t: 0 }), reply({ id: "msg-2", t: 5 })];
+    const calls: ReturnType<typeof call>[] = [];
+    if (seconds >= 20) {
+      replies.push(reply({ id: "msg-3", t: 20, calls: ["toolu-1"] }));
+      calls.push(
+        call({
+          id: "toolu-1",
+          name: "Bash",
+          kind: "shell",
+          msg: "msg-3",
+          t: 20,
+          end: seconds >= 30 ? 30 : null,
+        }),
+      );
+    }
+    return session(run(replies, calls));
+  };
+
+  it("switches from a number back to null when a new call opens, and back again", () => {
+    const idle = buildReplay(upTo(5), { now: at(5) });
+    expect(idle.agents[0].end).toBe(5);
+    const busy = buildReplay(upTo(20), { now: at(20), previous: idle });
+    expectValidReplay(busy);
+    expectAppendStable(idle, busy);
+    expect(busy.agents[0].end).toBeNull();
+    const done = buildReplay(upTo(30), { now: at(30), previous: busy });
+    expectValidReplay(done);
+    expectAppendStable(busy, done);
+    expect(done.agents[0].end).toBe(30);
+    expect(done).toEqual(buildReplay(upTo(30)));
   });
 });

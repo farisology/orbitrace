@@ -25,8 +25,11 @@
  * (d) existing warps never move and none is added before them; only the last warp's
  *     `skipped` may grow, and new warps are appended.
  *
- * Values that only grow or fill in may change: an agent's `end` (from `null`), `model`,
+ * Values that only grow or fill in may change: a subagent's `end` (from `null`), `model`,
  * `family` and `effort` (from `null` or `unknown`), totals, `duration` and `realDuration`.
+ * The main agent's `end` is the one value that may also go back: it is `null` while anything
+ * in the session is open and may switch between a number and `null` from one snapshot to the
+ * next (see `ReplayMainAgent`).
  * A renderer can therefore keep selection and per-agent state keyed by agent id across
  * snapshots (see `OrreryHandle.updateModel` in @orbitrace/renderer).
  */
@@ -146,7 +149,10 @@ interface ReplayAgentBase {
   readonly family: ModelFamily;
   readonly effort: EffortLevel | null;
   readonly start: ReplaySeconds;
-  /** `null` while the agent is still running (live view). */
+  /**
+   * `null` while the agent is still running (live view). A subagent's `end` only changes from
+   * `null` to a number; the main agent's may also go back to `null` (see `ReplayMainAgent`).
+   */
   readonly end: ReplaySeconds | null;
   /** In start order. */
   readonly tools: readonly ReplayToolCall[];
@@ -155,7 +161,17 @@ interface ReplayAgentBase {
   readonly totals: ReplayTotals;
 }
 
-/** The main agent. It is always `agents[0]`. */
+/**
+ * The main agent. It is always `agents[0]`.
+ *
+ * `end` (decided in #67): `null` while anything in the session is still open at the snapshot
+ * time (one of its own calls, a subagent, or lines after `now`); otherwise the time of its last
+ * line seen. In a live view the main agent often closes every call and later starts a new one,
+ * so between snapshots its `end` may switch from a number back to `null`, and back again. Treat
+ * a number as "idle at this snapshot", not as final. Why: a main agent with a number while its
+ * subagents still run would be drawn as finished; keeping the merged builder's rule breaks no
+ * consumer, and the renderer rebuilds its scene from each model.
+ */
 export interface ReplayMainAgent extends ReplayAgentBase {
   readonly id: "main";
   readonly name: "main";
@@ -175,6 +191,10 @@ export interface ReplaySubagent extends ReplayAgentBase {
    * current wave. A wave depends only on agents with smaller ids, so appending an agent never
    * changes an existing wave. When id order matches start order (the usual case) this is the
    * prototype's rule: sort by start, new wave after a gap.
+   *
+   * The starts compared are the compressed `start` values written in the model, not wall-clock
+   * times. The default idle cut (gaps over 45 s become 8 s) is below the default wave gap, so
+   * two subagents with a long idle stretch between them can still land in the same wave.
    */
   readonly wave: number;
 }
@@ -185,7 +205,8 @@ export type ReplayAgent = ReplayMainAgent | ReplaySubagent;
  * An idle gap removed from the timeline. In a live build, warps from `previous` are kept as
  * they are; a time that falls inside a gap an earlier snapshot already cut is placed at that
  * warp's `at`. To map a compressed time `t` to real seconds from
- * the session start, add `skipped` of every warp whose `at` is less than `t`.
+ * the session start, add `skipped` of every warp whose `at` is less than `t`; `toRealSeconds`
+ * does this.
  */
 export interface ReplayWarp {
   /** Compressed time at which the cut sits. */
