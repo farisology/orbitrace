@@ -1,0 +1,46 @@
+/* Orbitrace design tokens. Generated from design/tokens.json by design/scripts/build-tokens.mjs. Do not edit by hand. */
+:root {
+  color-scheme: dark;
+  /* ground */
+  --void: #060714;
+  --deck: #0C0E22;
+  --panel: #111431;
+  --rim: #23284F;
+  /* line */
+  --rim-hi: #343B72;
+  /* text */
+  --text: #E4E7FA;
+  --dim: #9BA1C9;
+  --faint: #8890BE;
+  /* brand */
+  --ion: #6E95FF;
+  /* dimension */
+  --bench: #3EE0C0;
+  --wire: #B48CFF;
+  --pulse: #FFC65A;
+  --tape: #FF72A6;
+  --ledger: #FF8C4E;
+  --rig: #7FD8FF;
+  /* status */
+  --fault: #FF5A6E;
+  --ok: #5BE39A;
+  /* font */
+  --font-display: "Chakra Petch", "Eurostile", "Bank Gothic", "Avenir Next Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Helvetica Neue", "Arial", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Menlo", monospace;
+  /* space */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  /* radius */
+  --radius-none: 0px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-round: 9999px;
+}
