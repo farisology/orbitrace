@@ -1,0 +1,32 @@
+# Dependabot keeps the SHA-pinned actions in .github/workflows and the npm dependencies
+# current. Pull requests target dev, the integration branch, and run CI like any other.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    # Wait a week after a release before proposing it, so a compromised release has time
+    # to be noticed and pulled.
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: npm
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: deps

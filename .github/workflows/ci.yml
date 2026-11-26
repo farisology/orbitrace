@@ -1,0 +1,115 @@
+# CI: every pull request into dev or main, and every push to dev, is built, linted,
+# type-checked, tested on Node 20 and 22, and scanned by the privacy check.
+#
+# Each step calls an npm script from the root package.json, so the commands here are the
+# same ones a contributor runs locally:
+#   npm ci && npm run build && npm run lint && npm run typecheck && npm test
+#   npm run privacy                                  (the files in the tree)
+#   npm run privacy -- --range <base>..<head>        (what the new commits add)
+#
+# Security: the token is read-only, no secrets are used, pull_request_target is never used,
+# checkout does not keep the token on disk, and third-party actions are pinned to a full
+# commit SHA (the version is in the comment; Dependabot updates both).
+
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  # A new push to a pull request replaces the run in progress. Runs on dev always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  privacy:
+    name: Privacy check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The commit scan needs the base commit and every commit of the pull request.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          # The privacy check uses Node built-ins only; nothing is installed.
+          package-manager-cache: false
+
+      # On a pull request the checkout is the merge result, so this scans what would land.
+      - name: Scan the files in the tree
+        run: npm run privacy
+
+      # A value added by one commit and removed by a later one is gone from the tree but
+      # still in the history that the merge publishes.
+      - name: Scan the commits of the pull request
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: npm run privacy -- --range "${BASE_SHA}..${HEAD_SHA}"
+
+      - name: Scan the pushed commits
+        if: github.event_name == 'push'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          # A new branch has no earlier commit, and a force push may point at one that is
+          # gone. The tree scan above still covers the pushed content in both cases.
+          if ! git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            echo "::notice::No earlier commit to compare with; the tree scan covers this push."
+            exit 0
+          fi
+          npm run privacy -- --range "${BEFORE_SHA}..${AFTER_SHA}"
+
+  build:
+    name: Build and test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    # The whole run is meant to take well under 5 minutes; this only stops a hung job.
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node ${{ matrix.node }} with the npm cache
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # --ignore-scripts: no dependency runs code at install time. Today the only package
+      # with an install script is fsevents, which is macOS-only. If a future dependency
+      # needs its install script, run it explicitly (npm rebuild <name>) in a step here.
+      - name: Install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
