@@ -17,6 +17,9 @@ npm run build
 node packages/cli/dist/index.js --help
 ```
 
+[getting-started.md](getting-started.md#run-the-orbitrace-command) shows how to try the commands
+on the repository's synthetic sessions without reading your own.
+
 ## Commands
 
 | Command                      | What it does                                               |

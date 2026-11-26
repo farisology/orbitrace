@@ -19,23 +19,27 @@ Use this line in the docs and in every listing (npm, VS Code Marketplace, Open V
 
 ### What the Anthropic guidelines say
 
-Source: [Anthropic Trademark Guidelines](https://www.anthropic.com/legal/trademark-guidelines). Read on 26 Nov 2026. The page gives an effective date of 1 August 2024 and shows no later update date. Quoted from the page:
+Source: [Anthropic Trademark Guidelines](https://www.anthropic.com/legal/trademark-guidelines). First read on 26 Nov 2026, checked again on 27 Nov 2026 (issue #52). The page gives an effective date of 1 August 2024 and shows no later update date. Quoted from the page:
 
 - "Our trademarks include our names, logos, brand elements, and anything we use to identify our goods and services."
 - "You may only use our trademarks as specifically permitted by us and only in materials we approve beforehand."
-- "You may not use our trademarks in a manner that implies Anthropic's sponsorship or endorsement," (the sentence continues; the rest was cut off in the check and is not quoted here)
-- "You may not use our trademarks in any manner that could diminish or damage the reputation of Anthropic [...]"
+- "You may not use our trademarks in a manner that implies Anthropic's sponsorship or endorsement" (the sentence continues; the rest is not quoted here, see the last open point)
+- "You may not use our trademarks in any manner that could diminish or damage the reputation of Anthropic" (the sentence continues)
 - "No alterations of our trademarks (changes to color, font, proportion, or otherwise) are permitted."
 - "Do not use a trademark symbol with the trademarks."
+- "Your use must comply with the most current version of these guidelines, which we may update from time to time."
+- "We may terminate permission to use our trademarks at any time."
 
 Rules 2, 4 and 5 are the maintainers' reading of these quotes and the cautious choice for this project. Rules 1, 3 and 6 are also the maintainers' reading. None of this is a statement from Anthropic.
 
+What the page does not say: it lists no specific word marks. It does not name "Claude" or "Claude Code" as trademarks; it refers to Anthropic's trademarks only in general terms ("our names, logos, brand elements"). So the earlier README line ""Claude" and "Claude Code" are trademarks of Anthropic" was not supported by this page. The README now says only that Orbitrace is independent and not affiliated with or endorsed by Anthropic, and that the names are used to say which tool Orbitrace works with. Whether either name is a registered mark was not checked in a trademark register.
+
 Open points:
 
-- The page does not mention Claude Code. "Claude" appears only in navigation and link text ("Try Claude", "Claude.ai", "Claude console"), not in any sentence about trademarks.
+- The page does not mention Claude Code. "Claude" appears only in navigation and link text, not in any sentence about trademarks.
 - The page says marks may be used only as permitted and in materials Anthropic approves beforehand. This project has no such approval. Plain descriptive use of the product name, kept to what Orbitrace reads, is a judgement by the maintainers, not a statement from Anthropic.
 - The page gives a permission contact for businesses that already have a relationship with Anthropic. This project has none.
-- Unverified: the quotes were taken through an automated page fetch, not read in a browser. Re-read the page and check each quote before the first public listing.
+- Unverified: both checks used an automated page fetch that returns quotes of a limited length, not a reading of the whole page in a browser. The 27 Nov check found the quotes above on the page and reported the page text as complete, but the two sentences marked "continues" could not be read to the end, and the rest of the page could not be compared word for word. Read the page in a browser and check each quote before the first public listing.
 
 ## Spelling in listings
 

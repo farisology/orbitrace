@@ -21,7 +21,12 @@ node design/scripts/build-tokens.mjs --check   # exit 1 if anything is stale or 
 
 The script has no dependencies and needs Node 20 or later.
 
-Nothing in the repository uses these tokens yet. The renderer and app packages are later tickets.
+Two packages use these files. Neither imports from `design/` at run time:
+
+- The renderer generates `packages/renderer/src/generated/design.ts` from `tokens.json` and `model-shapes.json` (`npm run generate` in `packages/renderer`). `packages/renderer/test/design.test.ts` fails when the generated file is out of date.
+- The app copies `tokens.css`, `icons/favicon.svg` and `icons/orbitrace-mark.svg` into its package with `packages/app/scripts/sync-assets.mjs` (`npm run sync` in `packages/app`). `packages/app/test/sync-assets.test.ts` fails when a copy is out of date.
+
+The editor extension also copies `icons/activity-bar.svg` into `packages/vscode/media/` with its own sync script, which runs as part of its build.
 
 ## Theme
 

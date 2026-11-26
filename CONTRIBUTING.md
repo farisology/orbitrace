@@ -2,7 +2,7 @@
 
 Orbitrace replays Claude Code agent sessions as an orrery: the main agent in the centre, subagents in orbit, each tool call a flare. It is MIT licensed. It is an independent project and is not affiliated with Anthropic.
 
-**Status: nothing is released yet.** There is no install step for users. The workspace scaffold (issue #1) is being built, so the commands below are the standard commands the scaffold adds. Some of them do not run yet.
+**Status: nothing is released yet.** Nothing is on npm or an extension marketplace, so there is no install step for users. To build and try what exists, see [docs/getting-started.md](docs/getting-started.md).
 
 ## Start here
 
@@ -29,17 +29,32 @@ Coding agents: read [AGENTS.md](AGENTS.md) as well. It has the same rules in mor
 
 ## Setup
 
-You need Node.js 20 or later and npm. The repository uses npm workspaces with these packages:
+You need npm and a Node.js version that matches `engines` in the root `package.json`: `^20.19.0 || ^22.13.0 || >=24`, that is Node 20.19 or a later 20.x, Node 22.13 or a later 22.x, or Node 24 or later. `.nvmrc` names `20.19`, the lowest supported line. CI builds and tests on Node 20 and 22.
+
+The floor comes from the `engines` fields of the build tools (checked on 27 Nov 2026 against the installed versions):
+
+| Package | Version | `engines.node` |
+| --- | --- | --- |
+| `vite` | 8.3.8 | `^20.19.0 \|\| >=22.12.0` |
+| `@vitejs/plugin-react` | 6.3.0 | `^20.19.0 \|\| >=22.12.0` |
+| `eslint` | 10.15.0 | `^20.19.0 \|\| ^22.13.0 \|\| >=24` |
+| `vitest` | 4.1.12 | `^20.0.0 \|\| ^22.0.0 \|\| >=24.0.0` |
+| `typescript-eslint` | 8.74.0 | `^18.18.0 \|\| ^20.9.0 \|\| >=21.1.0` |
+
+The root range is where all five overlap. Two exceptions: `npm run bench:browser` in `packages/renderer` needs Node 22 or later, and `@vitest/eslint-plugin` 1.6.28 (a lint plugin) declares `>=22`, so npm may print an engine warning for it on Node 20. CI runs the lint step on Node 20 as well as 22. The `orbitrace` command in `packages/cli` keeps its own `engines` field (`>=20`), which is about running the built command, not building it.
+
+The repository uses npm workspaces with these packages:
 
 | Package | Purpose |
 | --- | --- |
-| `core` | Transcript parser, source resolution, replay model builder and export. No editor dependency. |
+| `core` | Transcript parser, source resolution, replay model builder and export. No editor dependency. Node-only parts are on `@orbitrace/core/node`. |
 | `renderer` | Framework-free Canvas 2D engine that draws a replay model. |
 | `app` | React and Vite shell that hosts the renderer and talks to its host through a transport interface. |
+| `fixtures` | Seeded generator of synthetic transcripts and the golden replay files. For tests and the demo; private. |
 | `vscode` | VS Code extension. |
-| `cli` | Command-line entry. |
+| `cli` | Command-line entry: `orbitrace list`, `export` and `open`. |
 
-A `plugin` package for Claude Code is planned for later. The folder layout is set by the scaffold ticket (#1).
+A `plugin` package for Claude Code is planned for later. How the packages fit together is in [docs/architecture.md](docs/architecture.md).
 
 Install every package's dependencies from the repository root:
 
@@ -60,8 +75,9 @@ npm run typecheck   # check TypeScript types (strict mode)
 npm run privacy     # fail if forbidden strings appear
 ```
 
-- These scripts are added by the scaffold ticket (#1), which is not merged yet. The CI pipeline (#3, not built yet) will run them on Node 20 and 22 for every pull request. Until then, run what exists and work through the privacy checklist in the pull request template by hand.
-- Paste the real result of each command into the pull request. If a command fails or does not exist yet, say so. Do not leave it out.
+- CI (`.github/workflows/ci.yml`) runs the same commands on Node 20 and 22 for every pull request into `dev` or `main` and every push to `dev`. It also runs `npm run privacy -- --range <base>..<head>`, which checks every line the new commits add and every commit message. Run that yourself before you push, with `dev` as the base.
+- Passing `npm run privacy` does not prove a change is clean: it only catches known patterns. Also work through the privacy checklist in the pull request template.
+- Paste the real result of each command into the pull request. If a command fails, say so. Do not leave it out.
 
 ## Keep changes inside one package
 
