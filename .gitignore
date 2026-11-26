@@ -1,0 +1,21 @@
+# dependencies and builds
+node_modules/
+dist/
+out/
+*.vsix
+*.tsbuildinfo
+
+# local data: never commit real session transcripts or recorder databases
+*.jsonl
+# synthetic fixtures are the only transcripts allowed in the repo
+!fixtures/**/*.jsonl
+!**/test/fixtures/**/*.jsonl
+*.db
+*.sqlite
+replays/private/
+
+# environment and editor
+.env
+.env.*
+.DS_Store
+.vscode-test/
