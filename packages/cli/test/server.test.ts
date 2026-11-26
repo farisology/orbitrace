@@ -29,15 +29,18 @@ import { removeTempDirs } from "./helpers.js";
 import {
   OUTSIDE_SECRET,
   apiHeaders,
+  appendToolCall,
   connectionRefused,
   eventually,
   fixtureSessions,
+  fixtureTranscript,
   makeAppFolder,
   openLive,
   rawExchange,
   rpc,
   send,
   watchingReplayer,
+  withoutWatch,
   type AppFolder,
   type FixtureSessions,
   type Reply,
@@ -611,16 +614,59 @@ describe("POST /api/rpc", () => {
   });
 });
 
+type LiveLine = Extract<TransportMessage, { kind: "live" }>;
+type ReplayUpdate = Extract<LiveLine["update"], { type: "replay" }>;
+
+/** `promise`, or a rejection after `ms`. */
+async function within<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`not done within ${ms} ms`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The replay update of a live line, or a test failure. */
+function replayOf(line: unknown): ReplayUpdate {
+  const update = (line as LiveLine).update;
+  if (update.type !== "replay") throw new Error(`expected a replay update, got ${update.type}`);
+  return update;
+}
+
 describe("POST /api/live", () => {
-  it("streams a session of the synthetic config tree end to end: current state, then ended", async () => {
+  it("streams a session of the synthetic config tree end to end: the current state, then stays open while watched", async () => {
     const server = await start();
     const key = (summaries[0] as SessionSummary).key;
     const live = await openLive(server.port, server.token, { id: 11, key });
+    try {
+      expect(live.status).toBe(200);
+      expect(live.headers["content-type"]).toBe(LIVE_CONTENT_TYPE);
+      expect(live.headers["cache-control"]).toBe("no-store");
+      const [first] = (await live.lines(1)) as LiveLine[];
+      expect(first).toMatchObject({ kind: "live", subscriptionId: 11, key });
+      expect(validateReplay(replayOf(first).replay)).toBe(true);
+      // The Claude Code adapter watches the session, so the stream is not ended.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(server.liveStreamCount()).toBe(1);
+    } finally {
+      // Aborting the request is the unsubscribe.
+      live.abort();
+    }
+    await eventually(() => server.liveStreamCount() === 0);
+  });
+
+  it("streams the current state, then ended, when the adapter cannot watch", async () => {
+    const server = await start(createReplayer(fixtures.roots, [withoutWatch(claudeCodeAdapter)]));
+    const key = (summaries[0] as SessionSummary).key;
+    const live = await openLive(server.port, server.token, { id: 11, key });
     expect(live.status).toBe(200);
-    expect(live.headers["content-type"]).toBe(LIVE_CONTENT_TYPE);
-    expect(live.headers["cache-control"]).toBe("no-store");
     const lines = (await live.ended()) as TransportMessage[];
-    // The Claude Code adapter cannot watch yet, so the current state is followed by `ended`.
     expect(lines).toHaveLength(2);
     const [first, last] = lines as [
       Extract<TransportMessage, { kind: "live" }>,
@@ -634,6 +680,36 @@ describe("POST /api/live", () => {
     expect(last).toEqual({ kind: "live", subscriptionId: 11, key, update: { type: "ended" } });
     await eventually(() => server.liveStreamCount() === 0);
   });
+
+  it(
+    "sends a second update when a line is appended to a watched synthetic transcript",
+    { timeout: 30_000 },
+    async () => {
+      // A fresh copy of the fixture tree: this test writes to it.
+      const own = await fixtureSessions();
+      const server = await start(createReplayer(own.roots));
+      const [summary] = (await listSessions(own.roots, [claudeCodeAdapter])).map(toSessionSummary);
+      const { key, sessionId } = summary as SessionSummary;
+      const transcript = fixtureTranscript(own.machine, sessionId);
+      const live = await openLive(server.port, server.token, { id: 41, key });
+      try {
+        const [first] = (await live.lines(1)) as LiveLine[];
+        const before = replayOf(first).replay.totals.toolCalls;
+        appendToolCall(transcript);
+        // Real file watching with the command's default options: events, a settle check after
+        // the watchers open and a backstop poll. Generous, for a loaded machine.
+        const lines = (await within(live.lines(2), 20_000)) as LiveLine[];
+        expect(lines).toHaveLength(2);
+        const second = replayOf(lines[1]);
+        expect(validateReplay(second.replay)).toBe(true);
+        expect(second.replay.totals.toolCalls).toBe(before + 1);
+        expect(JSON.stringify(lines)).not.toContain(own.machine.root);
+      } finally {
+        live.abort();
+      }
+      await eventually(() => server.liveStreamCount() === 0);
+    },
+  );
 
   it("sends an error update for an unknown key and ends the stream", async () => {
     const server = await start();

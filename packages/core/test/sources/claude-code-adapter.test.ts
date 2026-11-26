@@ -334,10 +334,10 @@ describe("Claude Code adapter on Linux paths", () => {
     });
   });
 
-  it("has a runtime id and a display name", () => {
+  it("has a runtime id, a display name and live support (#74)", () => {
     const adapter = createClaudeCodeAdapter({ fs: createMemFs("posix") });
     expect(adapter.runtime).toBe("claude-code");
     expect(adapter.displayName).toBe("Claude Code");
-    expect(adapter.watchSession).toBeUndefined();
+    expect(adapter.watchSession).toBeTypeOf("function");
   });
 });

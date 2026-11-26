@@ -2,7 +2,8 @@
 /**
  * `@orbitrace/core/node`: the parts of core that read files or the process, for hosts only.
  *
- * - The Claude Code adapter and its file access (ticket #7).
+ * - The Claude Code adapter and its file access (ticket #7), and the session file watcher behind
+ *   its `watchSession` (ticket #74).
  * - The session-to-replay helper (ticket #75): `createSessionReplayer` over any adapters and
  *   roots, and `createNodeSessionReplayer`, which fills in the Claude Code adapter and this
  *   process's roots.
@@ -26,6 +27,7 @@ export * from "./claude-code/adapter.js";
 export * from "./claude-code/fs.js";
 export * from "./claude-code/paths.js";
 export * from "./claude-code/registry.js";
+export * from "./claude-code/watch.js";
 export * from "../host/session-replayer.js";
 // Also on the main entry; repeated here so a host gets the replayer and its errors in one import.
 export * from "../host/errors.js";
