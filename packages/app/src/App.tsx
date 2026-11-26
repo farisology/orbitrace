@@ -1,19 +1,28 @@
 /**
  * The Orbitrace app: the orrery, the inspector, the timeline, the controls and the event feed.
  *
- * It talks to its host only through `HostTransport`: it lists sessions, follows one with
- * `subscribe` (the first update goes to `setModel`, later ones to `updateModel`) and shows the
- * errors the host reports. A file dropped or picked by the user is read in the page with core
+ * It talks to its host only through `HostTransport`. A live session (or one whose status it does
+ * not know) is followed with `subscribe`: the first update goes to `setModel`, later ones to
+ * `updateModel`, so selection and time are kept. A session listed as ended is read once with
+ * `loadReplay`. Errors the host reports are shown. With a session list (from `Root`), a picker
+ * in the header switches sessions. A file dropped or picked by the user is read in the page with core
  * and never goes through the transport.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { LiveStatus, ReplayAgentId, ReplayModel, Unsubscribe } from "@orbitrace/core";
+import type {
+  LiveStatus,
+  ReplayAgentId,
+  ReplayModel,
+  SessionSummary,
+  Unsubscribe,
+} from "@orbitrace/core";
 import { createClock, type Clock } from "./clock";
 import { Controls } from "./components/Controls";
 import { EventFeed } from "./components/EventFeed";
 import { Inspector } from "./components/Inspector";
 import { OrreryView } from "./components/OrreryView";
+import { isLiveStatus, SessionPicker } from "./components/SessionPicker";
 import { Timeline } from "./components/Timeline";
 import { keyAction, targetHandlesKey } from "./keyboard";
 import { loadFile, type DroppedKind, type FileLoadError } from "./load-file";
@@ -76,6 +85,15 @@ export interface AppProps {
   readonly transport: HostTransport;
   /** Open this session. Default: the first session the host lists. */
   readonly sessionKey?: string;
+  /**
+   * The host's sessions. When given with `onSessionChange`, the header shows a session picker,
+   * and the summary of `sessionKey` sets its label and whether it is followed live.
+   */
+  readonly sessions?: readonly SessionSummary[];
+  /** Called with the key the user picked. The parent passes it back as `sessionKey`. */
+  readonly onSessionChange?: (key: string) => void;
+  /** A short note shown in the header, for example why the demo is shown. */
+  readonly notice?: string | null;
   /** Applied to the first replay shown (from the URL in the browser). */
   readonly startOptions?: StartOptions;
   /** Frame scheduler for the clock. Default `requestAnimationFrame`. */
@@ -85,6 +103,9 @@ export interface AppProps {
 export function App({
   transport,
   sessionKey,
+  sessions,
+  onSessionChange,
+  notice = null,
   startOptions = NO_START_OPTIONS,
   frames = browserFrames,
 }: AppProps) {
@@ -104,6 +125,13 @@ export function App({
   const reducedRef = useRef(reducedMotion);
   const stopHostRef = useRef<Unsubscribe | null>(null);
   const dragDepth = useRef(0);
+  /** Bumped to open the same session again (after a dropped file replaced it). */
+  const [reopen, setReopen] = useState(0);
+
+  const openSummary =
+    sessionKey === undefined ? undefined : sessions?.find((entry) => entry.key === sessionKey);
+  const openLabel = openSummary?.projectLabel ?? "Session";
+  const openLive: LiveStatus | null = openSummary?.live ?? null;
 
   useEffect(() => {
     reducedRef.current = reducedMotion;
@@ -145,7 +173,7 @@ export function App({
     [clock],
   );
 
-  // Follow a host session.
+  // Show a host session: follow it when it is (or may be) live, read it once when it ended.
   useEffect(() => {
     let cancelled = false;
     let stop: Unsubscribe | null = null;
@@ -175,16 +203,41 @@ export function App({
       stopHostRef.current = () => stop?.();
     };
 
+    const load = (key: string, label: string): void => {
+      let stopped = false;
+      stop = () => {
+        stopped = true;
+      };
+      stopHostRef.current = stop;
+      transport.loadReplay(key).then(
+        (model) => {
+          if (cancelled || stopped) return;
+          replaceModel(model, { kind: "host", label, live: "ended" });
+          setHostError(null);
+        },
+        (error: unknown) => {
+          if (cancelled || stopped) return;
+          setHostError(asTransportError(error));
+          setStage("error");
+        },
+      );
+    };
+
+    const open = (key: string, label: string, live: LiveStatus | null): void => {
+      if (live === "ended") load(key, label);
+      else follow(key, label);
+    };
+
     setStage("loading");
     if (sessionKey !== undefined) {
-      follow(sessionKey, "Session");
+      open(sessionKey, openLabel, openLive);
     } else {
       transport.listSessions({ limit: 1 }).then(
-        (sessions) => {
+        (listed) => {
           if (cancelled) return;
-          const first = sessions[0];
+          const first = listed[0];
           if (first === undefined) setStage("empty");
-          else follow(first.key, first.projectLabel);
+          else open(first.key, first.projectLabel, first.live);
         },
         (error: unknown) => {
           if (cancelled) return;
@@ -198,7 +251,16 @@ export function App({
       stop?.();
       stopHostRef.current = null;
     };
-  }, [transport, sessionKey, replaceModel, updateModel]);
+  }, [transport, sessionKey, openLabel, openLive, reopen, replaceModel, updateModel]);
+
+  const pickSession = useCallback(
+    (key: string) => {
+      setFileError(null);
+      if (key === sessionKey) setReopen((count) => count + 1);
+      else onSessionChange?.(key);
+    },
+    [sessionKey, onSessionChange],
+  );
 
   const openFile = useCallback(
     async (file: File) => {
@@ -272,6 +334,7 @@ export function App({
 
   const source = view?.source;
   const badge = source?.kind === "host" ? liveLabel(source.live) : null;
+  const live = source?.kind === "host" && isLiveStatus(source.live);
 
   return (
     <ClockContext.Provider value={clock}>
@@ -288,11 +351,25 @@ export function App({
           {source !== undefined ? (
             <p className="app-source">
               <span>{sourceLabel(source)}</span>
-              {badge !== null ? <span className="badge">{badge}</span> : null}
+              {badge !== null ? (
+                <span className={live ? "badge badge-live" : "badge"}>{badge}</span>
+              ) : null}
               {source.kind === "file" && source.fileKind === "transcript" ? (
                 <span className="muted">{APP_MESSAGES.transcriptNote}</span>
               ) : null}
             </p>
+          ) : null}
+          {notice !== null ? (
+            <p className="app-notice muted" role="status">
+              {notice}
+            </p>
+          ) : null}
+          {sessions !== undefined && sessions.length > 0 && onSessionChange !== undefined ? (
+            <SessionPicker
+              sessions={sessions}
+              currentKey={source?.kind === "host" ? sessionKey : undefined}
+              onSelect={pickSession}
+            />
           ) : null}
           <button
             type="button"

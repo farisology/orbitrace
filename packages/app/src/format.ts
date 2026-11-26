@@ -44,3 +44,17 @@ export function formatCount(count: number): string {
 export function plural(count: number, one: string, many: string = `${one}s`): string {
   return `${count} ${count === 1 ? one : many}`;
 }
+
+/**
+ * How long ago something happened, in words and the same in every locale: `just now`,
+ * `12 min ago`, `3 h ago`, `2 days ago`. `at` and `now` are Unix epoch milliseconds.
+ */
+export function formatAgo(at: number, now: number): string {
+  const seconds = Number.isFinite(at) && Number.isFinite(now) ? (now - at) / 1000 : 0;
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return `${plural(Math.floor(hours / 24), "day")} ago`;
+}

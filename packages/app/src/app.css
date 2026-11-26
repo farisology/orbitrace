@@ -148,6 +148,103 @@ kbd {
   flex: none;
 }
 
+/* Live marker: a dot before the badge text while the session's process runs. */
+.badge-live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.badge-live::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.app-notice {
+  margin: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- session picker ---------------------------------------------------------------------- */
+
+.session-picker {
+  position: relative;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.session-picker > summary {
+  cursor: pointer;
+  list-style: none;
+  border: 1px solid var(--rim-hi);
+  padding: var(--space-1) var(--space-3);
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  background: var(--panel);
+}
+
+.session-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.session-picker > summary:hover {
+  border-color: var(--ion);
+}
+
+.session-list {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  min-width: 20rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  background: var(--deck);
+  border: 1px solid var(--rim-hi);
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+}
+
+.session-item[aria-current="true"] {
+  border-color: var(--ion);
+  background: var(--panel);
+}
+
+.session-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.session-current {
+  flex: none;
+  color: var(--ion);
+}
+
 .app-footer {
   display: flex;
   flex-wrap: wrap;

@@ -13,7 +13,11 @@ import {
   type ReplayModel,
   type SessionSummary,
 } from "@orbitrace/core";
-import type { HostTransport, LiveUpdateListener, TransportError } from "./transport";
+import { isTransportError, transportError } from "./protocol";
+import type { HostTransport, LiveUpdateListener } from "./transport";
+
+// Defined once in `protocol.ts`; re-exported here, where the app first used them.
+export { isTransportError, transportError };
 
 /** One replay the no-host transport can serve. */
 export interface BundledSession {
@@ -28,18 +32,6 @@ export const NO_HOST_MESSAGES = {
   unreadable: "The bundled replay could not be loaded.",
   unsupported: "Opening in a browser needs the editor extension.",
 } as const;
-
-/** A `TransportError` value. Plain object, as a host would send it. */
-export function transportError(code: TransportError["code"], message: string): TransportError {
-  return { code, message };
-}
-
-/** True when `value` has the `{ code, message }` shape of a `TransportError`. */
-export function isTransportError(value: unknown): value is TransportError {
-  if (typeof value !== "object" || value === null) return false;
-  const record = value as Record<string, unknown>;
-  return typeof record.code === "string" && typeof record.message === "string";
-}
 
 /** Create the no-host transport over the given bundled sessions, listed in the order given. */
 export function createNoHostTransport(sessions: readonly BundledSession[]): HostTransport {

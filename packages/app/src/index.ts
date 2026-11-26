@@ -1,12 +1,14 @@
-/** Entry of @orbitrace/app for code that embeds the app (the editor tab, #12; the browser host, #16). */
-export { App, APP_MESSAGES, liveLabel, sourceLabel, type AppProps, type ReplaySource } from "./App";
-export { OrreryFactoryContext, type OrreryFactory } from "./components/OrreryView";
-export { createDemoTransport, DEMO_SESSION, DEMO_SESSION_KEY } from "./demo-session";
-export {
-  createNoHostTransport,
-  isTransportError,
-  transportError,
-  type BundledSession,
-} from "./no-host-transport";
-export { parseStartOptions, type StartOptions } from "./url-state";
-export type * from "./transport";
+/**
+ * Entry of @orbitrace/app for the hosts: the editor tab (#12) and the loopback server (#17).
+ *
+ * Hosts serve the built bundle (`@orbitrace/app/dist/*`, decision on #76); they do not import
+ * the React app. What they import from here is the wire layout both sides share: the meta tag
+ * names, the fragment parameters, the loopback routes, the request and message checks
+ * (`protocol.ts`) and the transport types (`transport.ts`, also `@orbitrace/app/transport`).
+ *
+ * Built by `tsc -p tsconfig.types.json` into `dist/types` (JavaScript and declarations), which
+ * the CLI leaves out when it copies the bundle it serves.
+ */
+
+export * from "./protocol.js";
+export type * from "./transport.js";

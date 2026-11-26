@@ -37,10 +37,40 @@ The page URL takes `?t=<seconds>` (compressed timeline), `?select=<agent id>`,
 ## Hosts
 
 The app talks to its host only through `HostTransport` (`src/transport.ts`, exported as
-`@orbitrace/app/transport`). `App` takes a `transport` and an optional `sessionKey`; without a key
-it opens the first session the host lists and follows it with `subscribe`. The package ships the
-no-host transport (`createNoHostTransport`, `createDemoTransport`); the editor tab (#12) and the
-browser host (#16) provide their own.
+`@orbitrace/app/transport`). Hosts serve the built bundle (`@orbitrace/app/dist/*`); they do not
+import the React app. The wire layout both sides share (meta tag names, fragment parameters,
+routes, request and message checks) is in `src/protocol.ts`, built as plain JavaScript and
+exported as `@orbitrace/app`.
+
+**Start-up selection** (`src/startup.ts`, run by `src/main.tsx` before React renders):
+
+1. `<meta name="orbitrace-host" content="editor">` selects the editor webview transport
+   (`src/webview-transport.ts`): requests go out with `acquireVsCodeApi().postMessage`, replies
+   and live updates come back as window `message` events. An optional
+   `<meta name="orbitrace-session" content="<session key>">` preselects a session.
+2. Otherwise a token in the page fragment, `#t=<token>&key=<session key>`, selects the loopback
+   HTTP transport (`src/http-transport.ts`). The fragment is removed from the address bar with
+   `history.replaceState` before any request. Every request sends `Authorization: Bearer
+<token>` and no cookies: `POST /api/rpc` for one request and reply, `POST /api/live` for a
+   subscription answered as newline-delimited JSON (aborting the request unsubscribes). URLs are
+   origin-relative. The token is never put in a URL, in storage or in a log, so reloading the
+   page starts the demo; open the link again.
+3. Otherwise the bundled demo.
+
+When a host lists no sessions the app shows the demo and says so. When the host refuses the
+token, or the session list cannot be read, the app shows a plain error page instead.
+
+With a host, the header has a session picker: the host's sessions (path-free summaries, newest
+first) with the shown one marked. A session listed as live (or with an unknown status) is
+followed with `subscribe`; later snapshots go to the renderer's `updateModel`, so the selection
+and time are kept, and the header shows a Live marker. A session listed as ended is read once
+with `loadReplay`. The picker is hidden in demo mode.
+
+**Serving the bundle.** Every asset URL in `dist/` is relative (Vite `base: "./"`), chunks load
+relative to the script, and there is no inline script, style or event handler, so a
+Content-Security-Policy with `script-src` limited to the bundle works. In an editor webview, put
+a `<base href>` pointing at the bundle folder's webview URI into `index.html`, with the meta
+tags. `test/bundle.test.ts` checks the built output.
 
 ## Copied assets
 
