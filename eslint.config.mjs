@@ -27,7 +27,11 @@ export default defineConfig(
   {
     files: ["packages/*/test/**/*.{ts,tsx}", "scripts/**/*.test.mjs"],
     plugins: { vitest },
-    rules: vitest.configs.recommended.rules,
+    rules: {
+      ...vitest.configs.recommended.rules,
+      // Type-level tests assert with expectTypeOf; tsc checks them under `npm run typecheck`.
+      "vitest/expect-expect": ["error", { assertFunctionNames: ["expect", "expectTypeOf"] }],
+    },
   },
   prettier,
 );

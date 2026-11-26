@@ -21,6 +21,8 @@
     "@orbitrace/core": "0.0.0"
   },
   "devDependencies": {
+    "@orbitrace/app": "0.0.0",
+    "@orbitrace/renderer": "0.0.0",
     "@types/node": "^20.19.43"
   }
 }
