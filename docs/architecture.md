@@ -23,8 +23,9 @@ Rules:
   so a dropped file in a browser and a file read in Node go through the same parser.
 - `renderer` has no framework dependency. It reads nothing but the replay model it is given.
 - `app` never reads files. It talks to its host only through `HostTransport`.
-- Only a `ReplayModel` and `SessionSummary` values cross from a host to the app. Raw lines,
-  parsed sessions, paths and locators stay on the host side.
+- Only a `ReplayModel`, `SessionSummary` values and path-free `{ code, message }` errors cross
+  from a host to the app. Raw lines, parsed sessions, paths and locators stay on the host side,
+  inside the session replayer from `@orbitrace/core/node` (#75).
 
 ## Data flow
 
@@ -59,7 +60,8 @@ can be linked, but no text, inputs, outputs, paths, branch, title or subagent de
 ## Interfaces and who implements them
 
 All core interfaces are exported from `@orbitrace/core`. Renderer types are exported from
-`@orbitrace/renderer`. Transport types are exported from `@orbitrace/app/transport`.
+`@orbitrace/renderer`. Transport types are exported from `@orbitrace/app/transport`;
+`TransportErrorCode` is defined in core (`core/src/model/errors.ts`) and re-exported there.
 
 | Ticket | Implements                                                                                  | Against                                                                                            | File                                                    |
 | ------ | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
@@ -100,8 +102,11 @@ Notes for implementers:
   each change; pass the first model to `setModel` and later ones to `updateModel`.
 - #12 and #16: each `subscribe` call is its own subscription. In editor messages the `subscribe`
   request's `id` is the subscription id; `unsubscribe` takes `{ subscriptionId }`, and every `live`
-  message carries `subscriptionId` as well as `key`. Keep the last model built for each watched session
-  and pass it to `buildReplay` as `previous`.
+  message carries `subscriptionId` as well as `key`. Build replays with the session replayer from
+  `@orbitrace/core/node` (`createNodeSessionReplayer`, #75): `list` gives the session summaries,
+  `load` a one-off replay, and `follow` the snapshots of a watched session, each built with the
+  last one as `previous`. Its updates have the shape of `LiveUpdate`, and its errors carry a
+  `TransportErrorCode` with a path-free message.
 - #12 and #16: the HTTP route layout for the browser host is not defined yet. It is for #16 to
   define, carrying the same request and reply shapes as the editor messages.
 - #18: Ajv is a dev dependency of core today (used only by the schema test). Export will need a

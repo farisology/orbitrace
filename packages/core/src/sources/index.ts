@@ -4,7 +4,7 @@
  * `@orbitrace/core/node` subpath instead, so the browser bundle of core never pulls in Node.
  */
 
-import type { ListSessions, ResolveSources } from "../api.js";
+import type { FindSessionByKey, ListSessions, ResolveSources } from "../api.js";
 import {
   SOURCE_RESOLUTIONS,
   type ListSessionsOptions,
@@ -121,6 +121,16 @@ export const listSessions: ListSessions = async (roots, adapters, options = {}) 
   }
   sessions.sort(compareSessionsNewestFirst);
   return limit === undefined ? sessions : sessions.slice(0, limit);
+};
+
+/**
+ * The session with this key under the given roots, or `null` (ticket #75). See
+ * `FindSessionByKey` in `api.ts`. An empty or non-string key finds nothing and lists nothing.
+ */
+export const findSessionByKey: FindSessionByKey = async (roots, adapters, key) => {
+  if (typeof key !== "string" || key === "") return null;
+  const sessions = await listSessions(roots, adapters);
+  return sessions.find((ref) => ref.key === key) ?? null;
 };
 
 /**

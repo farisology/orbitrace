@@ -57,4 +57,15 @@ describe("entry points", () => {
     expect(nodeEntry.claudeCodeAdapter.runtime).toBe("claude-code");
     expect(typeof nodeEntry.createClaudeCodeAdapter).toBe("function");
   });
+
+  it("exports the session replayer from ./node only, and its errors from both", () => {
+    expect(typeof nodeEntry.createSessionReplayer).toBe("function");
+    expect(typeof nodeEntry.createNodeSessionReplayer).toBe("function");
+    expect("createSessionReplayer" in core).toBe(false);
+    expect("createNodeSessionReplayer" in core).toBe(false);
+    expect(typeof core.findSessionByKey).toBe("function");
+    expect(typeof core.toRealSeconds).toBe("function");
+    expect(core.SessionReplayError).toBe(nodeEntry.SessionReplayError);
+    expect(core.TRANSPORT_ERROR_CODES).toContain("not-found");
+  });
 });

@@ -1,6 +1,6 @@
-import { TOOL_KINDS } from "@orbitrace/core";
+import { TOOL_KINDS, toRealSeconds } from "@orbitrace/core";
 import { describe, expect, it } from "vitest";
-import { formatDuration, formatTokens, realSeconds } from "../src/format.js";
+import { formatDuration, formatTokens } from "../src/format.js";
 import { DESIGN_COLORS, FAMILY_SHAPES } from "../src/generated/design.js";
 import { FONTS, IntLabelCache, Label, measureLabel } from "../src/labels.js";
 import { effortFill, innerScale, shapeForFamily, traceShape } from "../src/shapes.js";
@@ -112,15 +112,15 @@ describe("format", () => {
     expect(formatDuration(-3)).toBe("0s");
   });
 
-  it("maps compressed time to real time through the warps", () => {
+  it("maps compressed time to real time through core's toRealSeconds", () => {
     const warps = [
       { at: 10, skipped: 100 },
       { at: 20, skipped: 50 },
     ];
-    expect(realSeconds(warps, 5)).toBe(5);
-    expect(realSeconds(warps, 10)).toBe(10);
-    expect(realSeconds(warps, 15)).toBe(115);
-    expect(realSeconds(warps, 25)).toBe(175);
+    expect(toRealSeconds(warps, 5)).toBe(5);
+    expect(toRealSeconds(warps, 10)).toBe(10);
+    expect(toRealSeconds(warps, 15)).toBe(115);
+    expect(toRealSeconds(warps, 25)).toBe(175);
   });
 });
 

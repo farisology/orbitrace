@@ -48,7 +48,7 @@ gap longer than 45 s down to 8 s; record each cut as a warp. These are the defau
 to ticket #8.
 
 To turn a compressed time `t` into real seconds from the session start, add `skipped` of every
-warp whose `at` is less than `t`.
+warp whose `at` is less than `t`. `toRealSeconds(warps, t)` from `@orbitrace/core` does this.
 
 ## Shape
 
@@ -73,7 +73,7 @@ ReplayModel
 | `parent`   | agent id or `null`                                | `null` only for the main agent.                                 |
 | `wave`     | integer from 0, or `null`                         | `null` only for the main agent.                                 |
 | `start`    | seconds                                           |                                                                 |
-| `end`      | seconds or `null`                                 | `null` while the agent is still running.                        |
+| `end`      | seconds or `null`                                 | `null` while the agent is still running. See [End](#end).       |
 | `tools`    | tool calls                                        | In start order.                                                 |
 | `replies`  | replies                                           | In time order.                                                  |
 | `totals`   | agent totals                                      | Sums over `tools` and `replies`.                                |
@@ -92,6 +92,15 @@ The main agent is always `agents[0]`. The schema enforces this with `prefixItems
 
 Callsigns number repeated names (`#1`, `#2`, ...) in id order, so they are stable too.
 
+#### End
+
+A subagent's `end` is `null` while it runs and then becomes a number; it does not go back. The
+main agent's `end` is `null` while anything in the session is open at the snapshot time (one of
+its own calls, a subagent, or lines after `now`) and otherwise the time of its last line. In a
+live view the main agent often closes every call and later starts a new one, so its `end` may
+switch from a number back to `null` between snapshots. A number on the main agent means "idle at
+this snapshot", not "finished".
+
 #### Waves
 
 Walk subagents in id order. `a1` is in wave 0. Each next subagent opens a new wave (current wave
@@ -99,6 +108,10 @@ plus 1) when it starts more than 60 s (`waveGapSeconds`) after the latest start 
 smaller ids; otherwise it joins the current wave. A wave depends only on agents with smaller ids,
 so appending an agent never changes an existing wave. When id order matches start order, which is
 the usual case, this equals the prototype's rule: sort by start, new wave after a gap.
+
+Waves compare the compressed `start` values written in the replay, not wall-clock times. The
+default idle cut (gaps over 45 s become 8 s) is below the default wave gap (60 s), so two
+subagents with a long idle stretch between them can still be in the same wave.
 
 #### Model family
 
@@ -183,8 +196,9 @@ the builder guarantees:
    grow; new warps are appended. A time that falls inside a gap an earlier snapshot already cut is
    placed at that warp's `at`.
 
-Values that only grow or fill in may change: an agent's `end` (from `null`), `model`, `family`
-and `effort` (from `null` or `unknown`), totals, `duration` and `realDuration`.
+Values that only grow or fill in may change: a subagent's `end` (from `null`), `model`, `family`
+and `effort` (from `null` or `unknown`), totals, `duration` and `realDuration`. The main agent's
+`end` may also go back to `null` (see [End](#end)).
 
 A renderer can therefore keep the selection and per-agent animation state keyed by agent id:
 `OrreryHandle.updateModel` does that, while `setModel` loads a different replay. If the session no

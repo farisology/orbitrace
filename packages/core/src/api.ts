@@ -1,7 +1,8 @@
 /**
- * Function signatures of @orbitrace/core. Signatures only: no function here is implemented
- * yet. Each implementing ticket exports a value of the matching type, for example
- * `export const parseSession: ParseSession = async (input) => { ... }`.
+ * Function signatures of @orbitrace/core. Signatures only: each implementing ticket exports a
+ * value of the matching type from the package entry, for example
+ * `export const parseSession: ParseSession = async (input) => { ... }`. Every function listed in
+ * `CoreApi` is implemented and exported from `@orbitrace/core`.
  *
  * Data flow: SourceAdapter -> SessionInput -> parseSession -> ParsedSession
  * -> buildReplay -> ReplayModel -> renderer / exportReplay.
@@ -13,7 +14,7 @@
 
 import type { ParsedSession } from "./model/parsed.js";
 import type { SessionInput } from "./model/raw.js";
-import type { ReplayModel } from "./model/replay.js";
+import type { ReplayModel, ReplaySeconds, ReplayWarp } from "./model/replay.js";
 import type {
   ListSessionsOptions,
   ResolveRootsContext,
@@ -115,8 +116,10 @@ export interface ExportResult {
 }
 
 /**
- * Ticket #18. Serialise a replay for sharing. Must validate the model against the schema
- * first and throw when it does not validate, so no extra field can leave the machine.
+ * Ticket #18. Serialise a replay for sharing. Builds the output from an allow-list of
+ * ReplayModel fields, so extra input properties are dropped; validates that output against the
+ * schema and throws `ReplayValidationError` when it does not validate. So no extra field can
+ * leave the machine.
  */
 export type ExportReplay = (model: ReplayModel, options?: ExportOptions) => ExportResult;
 
@@ -126,12 +129,53 @@ export type ExportReplay = (model: ReplayModel, options?: ExportOptions) => Expo
  */
 export type ValidateReplay = (value: unknown) => value is ReplayModel;
 
-/** The whole public surface of core once every ticket has landed. */
+/**
+ * Ticket #18 (contract since #69). Why an unknown value is not a valid replay v1: one line per
+ * problem (`<JSON pointer>: <rule>`), or an empty list when it is valid. Never quotes a value from
+ * the input, so a line can be shown or logged. Use it where `ValidateReplay` is not enough because
+ * the user must be told why a file was rejected.
+ */
+export type DescribeReplayProblems = (value: unknown) => readonly string[];
+
+/**
+ * Ticket #18 (contract since #69). Like `ValidateReplay`, but throws `ReplayValidationError`
+ * (its `problems` are the lines of `DescribeReplayProblems`) when the value is not a valid
+ * replay v1.
+ */
+export type AssertReplay = (value: unknown) => asserts value is ReplayModel;
+
+/**
+ * Ticket #71. Real seconds from the session start for compressed time `t`, by the rule in
+ * `ReplayWarp`: `t` plus `skipped` of every warp whose `at` is less than `t`. The renderer and
+ * the app use this one implementation.
+ */
+export type ToRealSeconds = (warps: readonly ReplayWarp[], t: ReplaySeconds) => number;
+
+/**
+ * Ticket #75. The session with this key under the given roots, or `null` when no root has it.
+ * Lists the sessions with `ListSessions` (no `since`, no `limit`) and picks the one whose `key`
+ * matches; a key is opaque, so there is no faster lookup that works for every adapter.
+ */
+export type FindSessionByKey = (
+  roots: readonly SourceRoot[],
+  adapters: readonly SourceAdapter[],
+  key: string,
+) => Promise<SessionRef | null>;
+
+/**
+ * The functions of the browser-safe entry, `@orbitrace/core`. The Node-only parts (the Claude
+ * Code adapter and the session-to-replay helpers `createSessionReplayer` and
+ * `createNodeSessionReplayer`) are exported from `@orbitrace/core/node` and are not listed here.
+ */
 export interface CoreApi {
   readonly parseSession: ParseSession;
   readonly buildReplay: BuildReplay;
   readonly resolveSources: ResolveSources;
   readonly listSessions: ListSessions;
+  readonly findSessionByKey: FindSessionByKey;
   readonly exportReplay: ExportReplay;
   readonly validateReplay: ValidateReplay;
+  readonly describeReplayProblems: DescribeReplayProblems;
+  readonly assertReplay: AssertReplay;
+  readonly toRealSeconds: ToRealSeconds;
 }

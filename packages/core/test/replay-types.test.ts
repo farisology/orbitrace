@@ -1,9 +1,14 @@
 // Type-level tests. They run under `npm run typecheck` (tsc includes test/); the runtime
 // assertions only make vitest report them.
 import { describe, expect, expectTypeOf, it } from "vitest";
+import * as core from "../src/index.js";
 import type {
+  AssertReplay,
   BuildReplay,
   CoreApi,
+  DescribeReplayProblems,
+  FindSessionByKey,
+  ToRealSeconds,
   ExportReplay,
   ForbiddenReplayKey,
   KnownModelFamily,
@@ -133,6 +138,28 @@ describe("api signatures", () => {
     expectTypeOf<ReturnType<ListSessions>>().toEqualTypeOf<Promise<readonly SessionRef[]>>();
     expectTypeOf<CoreApi["resolveSources"]>().toEqualTypeOf<ResolveSources>();
     expectTypeOf<CoreApi["validateReplay"]>().toEqualTypeOf<ValidateReplay>();
+    expectTypeOf<CoreApi["describeReplayProblems"]>().toEqualTypeOf<DescribeReplayProblems>();
+    expectTypeOf<CoreApi["assertReplay"]>().toEqualTypeOf<AssertReplay>();
+    expectTypeOf<CoreApi["toRealSeconds"]>().toEqualTypeOf<ToRealSeconds>();
+    expectTypeOf<CoreApi["findSessionByKey"]>().toEqualTypeOf<FindSessionByKey>();
+  });
+
+  it("are all implemented by the package entry", () => {
+    // Fails to type-check when an export does not match its signature in CoreApi.
+    const api: CoreApi = core;
+    const names: (keyof CoreApi)[] = [
+      "parseSession",
+      "buildReplay",
+      "resolveSources",
+      "listSessions",
+      "findSessionByKey",
+      "exportReplay",
+      "validateReplay",
+      "describeReplayProblems",
+      "assertReplay",
+      "toRealSeconds",
+    ];
+    for (const name of names) expect(typeof api[name]).toBe("function");
   });
 
   it("keep paths and locators out of a session summary", () => {

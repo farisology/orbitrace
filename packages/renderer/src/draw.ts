@@ -4,8 +4,8 @@
  * array is preallocated, every label is cached, every gradient and sprite is reused.
  */
 
+import { toRealSeconds } from "@orbitrace/core";
 import type { DrawContext } from "./context.js";
-import { realSeconds } from "./format.js";
 import { WHITE_CORE } from "./generated/design.js";
 import { measureLabel, type Label } from "./labels.js";
 import type { Layout } from "./layout.js";
@@ -521,7 +521,7 @@ function drawAgent(
     const end = Math.min(t, a.end);
     const warps = scene.model.warps;
     const elapsed =
-      phase === PHASE_QUEUED ? 0 : realSeconds(warps, end) - realSeconds(warps, a.start);
+      phase === PHASE_QUEUED ? 0 : toRealSeconds(warps, end) - toRealSeconds(warps, a.start);
     const failed = frame.failed[i]!;
     drawTagRow(
       ctx,
