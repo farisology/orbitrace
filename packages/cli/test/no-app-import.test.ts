@@ -32,11 +32,14 @@ describe("the CLI and @orbitrace/app", () => {
     expect(importing).toEqual([]);
   });
 
-  it("names nothing from the app in its emitted declarations", () => {
-    // `npm test` builds first; a bare `vitest run` in a fresh clone has no dist yet.
-    const naming = filesUnder(join(packageDir, "dist"), ".d.ts").filter((file) =>
-      readFileSync(file, "utf8").includes("@orbitrace/app"),
-    );
+  it("names nothing from the app in its built files", () => {
+    // `npm test` builds first; a bare `vitest run` in a fresh clone has no dist yet. The build
+    // writes one bundle and no declarations (#120); dist/app is the copied app itself.
+    const built = [
+      ...filesUnder(join(packageDir, "dist"), ".js"),
+      ...filesUnder(join(packageDir, "dist"), ".d.ts"),
+    ].filter((file) => !file.startsWith(join(packageDir, "dist", "app")));
+    const naming = built.filter((file) => readFileSync(file, "utf8").includes("@orbitrace/app"));
     expect(naming).toEqual([]);
   });
 });

@@ -18,6 +18,7 @@ Extensions view finds nothing; a `.vsix` you install by hand shows under **Insta
 | `scripts/release/preflight.mjs`     | First step of a run: checks the inputs, the versions, the changelog and, for a real release, the tag.           |
 | `scripts/release/pack-release.mjs`  | Packs the three npm tarballs and the `.vsix`, checks each one, writes `SHA256SUMS` and `release-manifest.json`. |
 | `scripts/release/check-package.mjs` | Packs core, renderer and cli into a temporary folder and checks each tarball against its allow-list.            |
+| `scripts/release/install-check.mjs` | Installs the CLI tarball alone into an empty project and runs it against synthetic sessions.                    |
 | `scripts/release/version.mjs`       | Reads, checks and bumps the one shared version.                                                                 |
 | `scripts/release/changelog.mjs`     | Checks `CHANGELOG.md`, prints the notes of one version, and moves Unreleased into a new version.                |
 | `scripts/release/sync-licenses.mjs` | Copies the root `LICENSE` into core, renderer and cli.                                                          |
@@ -26,7 +27,8 @@ Extensions view finds nothing; a `.vsix` you install by hand shows under **Insta
 
 The tests next to the scripts run in `npm test` at the root, so CI runs them on every pull request.
 One of them packs the real core, renderer and cli tarballs and checks their contents, so a change
-that ships a test, a fixture, a source map or a local path fails CI.
+that ships a test, a fixture, a source map or a local path fails CI. Another installs the real CLI
+tarball alone and runs it (a few seconds; see [Try the artefacts](#try-the-artefacts)).
 
 ## The release workflow
 
@@ -74,14 +76,14 @@ Jobs:
 `pack-release.mjs` writes these files. Sizes are from a local run on 27 Nov 2026 at version
 `0.0.0`; KiB is 1024 bytes.
 
-| File                         | Packed    | Unpacked  | Files | Contents                                                                                                      |
-| ---------------------------- | --------- | --------- | ----- | ------------------------------------------------------------------------------------------------------------- |
-| `orbitrace-core-<v>.tgz`     | 95.3 KiB  | 420.3 KiB | 76    | `dist/**/*.js`, `dist/**/*.d.ts`, `schema/replay-v1.schema.json`, `README.md`, `LICENSE`, `package.json`      |
-| `orbitrace-renderer-<v>.tgz` | 31.6 KiB  | 104.6 KiB | 33    | `dist/**/*.js`, `dist/**/*.d.ts`, `README.md`, `LICENSE`, `package.json`                                      |
-| `orbitrace-<v>.tgz` (CLI)    | 179.4 KiB | 662.6 KiB | 89    | `dist/` with source maps and the web app in `dist/app`, `src/**/*.ts`, `README.md`, `LICENSE`, `package.json` |
-| `orbitrace-vscode-<v>.vsix`  | 151.1 KiB | 600.9 KiB | 13    | `extension/dist/extension.js` (core bundled in), `extension/dist/app`, the icon, readme, licence              |
-| `SHA256SUMS`                 |           |           |       | One `<sha256>  <file>` line per artefact. `sha256sum -c SHA256SUMS` (or `shasum -a 256 -c`) checks them.      |
-| `release-manifest.json`      |           |           |       | The version, the commit, and each artefact's size, SHA-256, file list, warnings and errors.                   |
+| File                         | Packed    | Unpacked  | Files | Contents                                                                                                 |
+| ---------------------------- | --------- | --------- | ----- | -------------------------------------------------------------------------------------------------------- |
+| `orbitrace-core-<v>.tgz`     | 95.3 KiB  | 420.3 KiB | 76    | `dist/**/*.js`, `dist/**/*.d.ts`, `schema/replay-v1.schema.json`, `README.md`, `LICENSE`, `package.json` |
+| `orbitrace-renderer-<v>.tgz` | 31.6 KiB  | 104.6 KiB | 33    | `dist/**/*.js`, `dist/**/*.d.ts`, `README.md`, `LICENSE`, `package.json`                                 |
+| `orbitrace-<v>.tgz` (CLI)    | 158.0 KiB | 633.9 KiB | 10    | `dist/index.js` (core bundled in), the web app in `dist/app`, `README.md`, `LICENSE`, `package.json`     |
+| `orbitrace-vscode-<v>.vsix`  | 151.1 KiB | 600.9 KiB | 13    | `extension/dist/extension.js` (core bundled in), `extension/dist/app`, the icon, readme, licence         |
+| `SHA256SUMS`                 |           |           |       | One `<sha256>  <file>` line per artefact. `sha256sum -c SHA256SUMS` (or `shasum -a 256 -c`) checks them. |
+| `release-manifest.json`      |           |           |       | The version, the commit, and each artefact's size, SHA-256, file list, warnings and errors.              |
 
 Each tarball is checked for:
 
@@ -93,11 +95,17 @@ Each tarball is checked for:
   in `package.json`, and workspace dependencies at the same version and not private;
 - source maps: every map's sources are in the tarball (or embedded), and every
   `sourceMappingURL` comment points at a shipped map;
+- every `bin` file starts with `#!/usr/bin/env node` and is executable;
+- for the CLI (`selfContained` in `lib.mjs`): no `dependencies`, `peerDependencies` or
+  `optionalDependencies`, and `dist/index.js` imports only Node.js built-ins and shipped files;
 - the privacy rules of `scripts/privacy-check.mjs`, and the build machine's repository and home
   folder paths, in every text file. A finding names the file and the rule, never the text.
 
 The `.vsix` gets the same checks with its own allow-list, plus its identity: a missing publisher
 is a warning in a dry run and an error in a real release.
+
+`pack-release.mjs` then installs the CLI tarball alone with `scripts/release/install-check.mjs`
+(see [Try the artefacts](#try-the-artefacts)); a failure there is an error of that artefact.
 
 ### Source maps
 
@@ -111,10 +119,14 @@ maps but not for the declaration maps, and would have roughly doubled the tarbal
 Inside the repository, go to definition on an `@orbitrace/core` import now lands in the `.d.ts`
 file instead of the `.ts` source.
 
-The CLI still builds with maps (its `tsconfig.build.json` belongs to the CLI ticket), so its
-tarball ships `src/**/*.ts` beside them and every map resolves inside the tarball. When the CLI
-turns its maps off or bundles core (see below), drop `src` from its `files` list and from its
-allow-list.
+The CLI ships no source maps either, and no `src/` (#120). `packages/cli/scripts/build.mjs`
+bundles the command and `@orbitrace/core` (both its main and its `/node` entry) with esbuild into
+one ES module, `dist/index.js`, for Node.js 20 or later, with Node built-ins left external and no
+map. It writes no type declarations: they would import `@orbitrace/core`, which is not installed
+with the CLI. The build fails if code from a third-party package ends up in the bundle, so a new
+bundled dependency cannot ship before its licence is noted in `NOTICE`; today the bundle holds
+only Orbitrace's own code. The CLI tarball went from 183.6 KiB packed, 675.9 KiB unpacked and
+89 files to 158.0 KiB, 633.9 KiB and 10 files (local runs on 27 Nov 2026).
 
 ## Try the artefacts
 
@@ -125,16 +137,24 @@ it into a folder outside the repository, and check the sums:
 sha256sum -c SHA256SUMS        # macOS: shasum -a 256 -c SHA256SUMS
 ```
 
-**The command line.** Install the core and CLI tarballs together into an empty project:
+**The command line.** The CLI tarball installs on its own: core is bundled into it, so it has no
+dependencies and npm fetches nothing.
 
 ```sh
 mkdir try-orbitrace && cd try-orbitrace && npm init -y
-npm install <folder>/orbitrace-core-<v>.tgz <folder>/orbitrace-<v>.tgz
+npm install <folder>/orbitrace-<v>.tgz
 npx orbitrace --version
 ```
 
-Installing the CLI tarball alone fails with `E404 ... '@orbitrace/core@<v>' could not be found`:
-the CLI depends on `@orbitrace/core`, which is not on npm. See [Known gaps](#known-gaps).
+`scripts/release/install-check.mjs` does the same automatically: it installs the tarball alone
+with `npm install --offline` into an empty temporary project, checks that nothing else was
+installed, and runs `orbitrace --version`, `--help`, `list --json`, `export --latest -o <file>`
+and `open --no-browser --json` through the installed bin link. HOME, `CLAUDE_CONFIG_DIR` and
+npm's cache point into the temporary folder before the first command, and the config folder holds
+only sessions from the fixtures generator, so your own sessions are never read. Run it with
+`node scripts/release/install-check.mjs` after `npm run build` (it packs `packages/cli` itself,
+or takes `--tarball <file>`); `npm test` runs it through `scripts/release/install-check.test.mjs`,
+and `pack-release.mjs` runs it on the tarball it writes.
 
 **The extension.**
 
@@ -220,8 +240,9 @@ None of these can be done from the repository. Each is a one-time step.
    - npm: the unscoped name `orbitrace`, and the `@orbitrace` scope, by creating an npm
      organisation named `orbitrace`. Do the scope first: the registry answered "Scope not
      found" for `@orbitrace` on 27 Nov 2026, so until it is held anyone can claim it and publish
-     `@orbitrace/core`, and an installed CLI tarball would pull that package in (it asks the
-     registry for `@orbitrace/core` today, see [Known gaps](#known-gaps)).
+     `@orbitrace/core`, and anything that installs `@orbitrace/renderer` from npm would pull
+     that package in. The CLI no longer asks the registry for it: core is bundled into the CLI
+     (#120).
    - VS Code Marketplace: create the publisher (an Azure DevOps organisation is needed for the
      token).
    - Open VSX: sign in at open-vsx.org, accept the Eclipse Foundation publisher agreement, and
@@ -231,10 +252,10 @@ None of these can be done from the repository. Each is a one-time step.
 2. **Set the publisher (#98)** in `packages/vscode/package.json`. Until then the `.vsix` installs
    as `undefined_publisher.orbitrace-vscode`, and changing it later breaks updates for anyone who
    installed the first one.
-3. **Decide how the CLI gets core** and then remove `private: true` from `packages/cli` (#16).
-   Today the CLI depends on `@orbitrace/core` at run time. Either publish core (it is already not
-   private, and the renderer needs it published anyway) or bundle core into the CLI's `dist` with
-   esbuild, as the extension does.
+3. **Remove `private: true` from `packages/cli`** (#16) when the CLI is to be published. How
+   the CLI gets core is decided: it is bundled into the CLI's `dist/index.js` with esbuild, as
+   the extension does (#120), so publishing the CLI does not need core on npm. The renderer
+   still imports core at run time, so core must be published before the renderer is.
 4. **Create three GitHub environments** in Settings > Environments: `npm`,
    `vscode-marketplace` and `open-vsx`. In each, add yourself as a required reviewer and limit
    deployments to tags matching `v*`. Put each secret in its environment, not in the repository
@@ -269,11 +290,6 @@ after a partial publish finishes the rest.
 
 ## Known gaps
 
-- **The CLI tarball does not install on its own.** `npm install orbitrace-<v>.tgz` in a clean
-  project fails with `E404` for `@orbitrace/core@<v>`, because core is not on npm. With the core
-  tarball installed alongside, `orbitrace --version`, `--help`, `list`, `export` and `open` work
-  (checked on 27 Nov 2026 against a synthetic config folder from the fixtures generator). Fixed by
-  owner step 3.
 - **No extension publisher** (#98): see owner step 2.
 - **`scripts/release/tools/package-lock.json` is not watched by Dependabot**, whose npm entry
   covers the root only.

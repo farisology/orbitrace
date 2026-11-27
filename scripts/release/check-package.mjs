@@ -12,7 +12,8 @@
 // .vsix. A finding never prints the text it matched, only the file and the rule, so a failing
 // check cannot leak a value into a log.
 
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { builtinModules } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { join, posix, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -179,6 +180,103 @@ export function checkSourceMaps(root, paths) {
   return errors;
 }
 
+/** A bare module specifier that names an npm package (with an optional subpath). */
+const PACKAGE_SPECIFIER = /^(?:@[a-z0-9][\w.~-]*\/)?[a-z0-9][\w.~-]*(?:\/[\w.~-]+)*$/i;
+
+/**
+ * Every module specifier a JavaScript text imports: static `import`/`export ... from`,
+ * side-effect `import "x"`, dynamic `import("x")` and `require("x")`. A static import must
+ * start a line, as bundler and compiler output writes it.
+ * @param {string} text
+ * @returns {string[]} specifiers in the order found, with duplicates
+ */
+export function moduleSpecifiers(text) {
+  const patterns = [
+    /^[ \t]*(?:import|export)\b[^"'`;]*?\bfrom\s*["']([^"'\n]+)["']/gm,
+    /^[ \t]*import\s*["']([^"'\n]+)["']/gm,
+    /\bimport\(\s*["']([^"'\n]+)["']\s*\)/g,
+    /(?<![\w$.])require\(\s*["']([^"'\n]+)["']\s*\)/g,
+  ];
+  /** @type {{ index: number, specifier: string }[]} */
+  const found = [];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      found.push({ index: match.index ?? 0, specifier: match[1] });
+    }
+  }
+  return found.sort((a, b) => a.index - b.index).map((entry) => entry.specifier);
+}
+
+/**
+ * Check that a package installs alone: its manifest declares no dependencies, and each file
+ * matching `globs` imports only Node.js built-ins and files shipped in the artefact. A finding
+ * names a package specifier, but never a path-like one.
+ * @param {string} root the unpacked artefact
+ * @param {ReadonlySet<string>} paths
+ * @param {readonly string[]} globs the files that run in Node
+ * @param {Record<string, any>} manifest the shipped package.json
+ * @returns {string[]} errors
+ */
+export function checkSelfContained(root, paths, globs, manifest) {
+  const errors = [];
+  for (const field of ["dependencies", "optionalDependencies", "peerDependencies"]) {
+    const count = Object.keys(manifest[field] ?? {}).length;
+    if (count > 0) {
+      errors.push(
+        `package.json: declares ${count} ${field}; a self-contained package installs with none`,
+      );
+    }
+  }
+  const builtins = new Set(builtinModules);
+  const patterns = globs.map(globToRegExp);
+  const files = [...paths].filter((path) => patterns.some((pattern) => pattern.test(path)));
+  if (files.length === 0) errors.push("no file matches the self-contained globs");
+  for (const path of files) {
+    const seen = new Set();
+    for (const specifier of moduleSpecifiers(readFileSync(join(root, path), "utf8"))) {
+      if (seen.has(specifier)) continue;
+      seen.add(specifier);
+      if (specifier.startsWith("node:") || builtins.has(specifier)) continue;
+      if (specifier.startsWith("./") || specifier.startsWith("../")) {
+        const target = posix.normalize(posix.join(posix.dirname(path), specifier));
+        if (!paths.has(target)) errors.push(`${path}: imports ${target}, which is not shipped`);
+      } else if (PACKAGE_SPECIFIER.test(specifier)) {
+        errors.push(`${path}: imports ${specifier}, which is not inside the tarball`);
+      } else {
+        errors.push(`${path}: imports a module that is neither a Node.js built-in nor shipped`);
+      }
+    }
+  }
+  return errors;
+}
+
+/**
+ * Check every file the manifest's `bin` names: it starts with `#!/usr/bin/env node`, and, where
+ * the platform has file modes, it is executable.
+ * @param {string} root the unpacked artefact
+ * @param {Record<string, any>} manifest
+ * @param {NodeJS.Platform} [platform]
+ * @returns {string[]} errors
+ */
+export function checkBins(root, manifest, platform = process.platform) {
+  const bin = manifest.bin;
+  const targets =
+    typeof bin === "string" ? [bin] : bin && typeof bin === "object" ? Object.values(bin) : [];
+  const errors = [];
+  for (const target of new Set(targets.filter((value) => typeof value === "string"))) {
+    const path = posix.normalize(target);
+    const full = join(root, path);
+    if (!existsSync(full)) continue; // reported as a missing entry point
+    if (!readFileSync(full, "utf8").startsWith("#!/usr/bin/env node\n")) {
+      errors.push(`${path}: a bin file must start with #!/usr/bin/env node`);
+    }
+    if (platform !== "win32" && (statSync(full).mode & 0o111) === 0) {
+      errors.push(`${path}: a bin file must be executable`);
+    }
+  }
+  return errors;
+}
+
 /**
  * Scan the text files of an artefact with the repository's privacy rules, plus the build
  * machine's own folders as literal strings. Findings name the file, line and rule only.
@@ -257,7 +355,7 @@ export function buildMachineLiterals(root = REPO_ROOT) {
 
 /**
  * Pack one npm package into `destDir`, unpack it into `workDir`, and check it.
- * @param {{ dir: string, name: string, allow: readonly string[], require: readonly string[] }} spec
+ * @param {{ dir: string, name: string, allow: readonly string[], require: readonly string[], selfContained?: readonly string[] }} spec
  * @param {{ root?: string, destDir: string, workDir: string, workspaces?: Map<string, { version: string, private: boolean }> }} options
  */
 export function packAndCheck(spec, options) {
@@ -279,6 +377,11 @@ export function packAndCheck(spec, options) {
     literals: buildMachineLiterals(root),
     extraRequired: entryPoints(manifest),
   });
+  errors.push(...checkBins(unpacked, shipped));
+  if (spec.selfContained) {
+    const paths = new Set(files.map((file) => file.path));
+    errors.push(...checkSelfContained(unpacked, paths, spec.selfContained, shipped));
+  }
   return {
     kind: "npm",
     name: spec.name,

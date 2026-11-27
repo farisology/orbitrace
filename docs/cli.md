@@ -211,7 +211,10 @@ with `?` before it is printed.
 
 ## The bundled web app
 
-The build copies the built web app (`packages/app/dist`, without its type declarations) into
-`packages/cli/dist/app`, so the package carries it for the browser view. See the decision on #76
+The build bundles the command and `@orbitrace/core` into one file, `packages/cli/dist/index.js`
+(#120), and copies the built web app (`packages/app/dist`, without its type declarations) into
+`packages/cli/dist/app`, so the package carries it for the browser view. The package needs no
+other package at run time: its tarball installs on its own (see
+[releasing.md](releasing.md#try-the-artefacts)). See the decision on #76
 in [architecture.md](architecture.md#how-the-cli-ships-the-web-app-76). `orbitrace open` serves
 it; run from the sources (without a build) the command fails with `app-missing`.

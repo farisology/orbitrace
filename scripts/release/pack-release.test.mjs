@@ -7,12 +7,14 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { NPM_PACKAGES, REPO_ROOT, TOOLS_DIR, sha256File } from "./lib.mjs";
 import {
+  INSTALL_CHECK_SCRIPT,
   checksumsText,
   markdownSummary,
   outputFolderProblem,
   packAndCheckVsix,
   packRelease,
   parseArgs,
+  runInstallCheckChild,
   vsixIdentity,
 } from "./pack-release.mjs";
 import { annotations, inputFromEnvironment, preflight } from "./preflight.mjs";
@@ -224,6 +226,51 @@ describe("pack-release helpers", () => {
     expect(text).toContain("| `a.tgz` | 2.0 KiB | 2 | `ab` | ok, with warnings |");
     expect(text).toContain("| `b.tgz` | 10 B | 1 | `cd` | 1 error(s) |");
     expect(text).toContain("- b: error: e");
+  });
+});
+
+describe("runInstallCheckChild", () => {
+  /** A stand-in for install-check.mjs that prints `stdout` and exits with `code`. */
+  function fakeCheck(stdout, code) {
+    const file = join(dir, "fake-install-check.mjs");
+    writeFileSync(
+      file,
+      `process.stdout.write(${JSON.stringify(stdout)});\nprocess.exit(${code});\n`,
+    );
+    return file;
+  }
+
+  it("runs install-check.mjs, which installs only the CLI tarball", () => {
+    expect(existsSync(INSTALL_CHECK_SCRIPT)).toBe(true);
+    expect(NPM_PACKAGES.filter((spec) => spec.installCheck).map((spec) => spec.name)).toEqual([
+      "orbitrace",
+    ]);
+  });
+
+  it("passes the tarball and returns no errors when the check reports none", () => {
+    const file = join(dir, "args-check.mjs");
+    writeFileSync(
+      file,
+      'const ok = process.argv[2] === "--tarball" && process.argv[3] === "x.tgz" && process.argv[4] === "--json";\nprocess.stdout.write(JSON.stringify({ steps: [], errors: ok ? [] : ["bad arguments"] }) + "\\n");\n',
+    );
+    expect(runInstallCheckChild("x.tgz", file)).toEqual([]);
+  });
+
+  it("prefixes the reported errors", () => {
+    const file = fakeCheck(
+      `${JSON.stringify({ steps: [], errors: ["list: exited with 1"] })}\n`,
+      1,
+    );
+    expect(runInstallCheckChild("x.tgz", file)).toEqual(["install: list: exited with 1"]);
+  });
+
+  it("reports a check that fails without reporting, or exits non-zero with no errors", () => {
+    expect(runInstallCheckChild("x.tgz", fakeCheck("", 1))).toEqual([
+      "install: the install check failed before it reported (exit 1)",
+    ]);
+    expect(runInstallCheckChild("x.tgz", fakeCheck('{"steps":[],"errors":[]}\n', 3))).toEqual([
+      "install: the install check exited with 3",
+    ]);
   });
 });
 

@@ -37,14 +37,17 @@ describe("appBundleDir", () => {
 });
 
 describe("the built CLI", () => {
-  const builtModule = new URL("../dist/app-bundle.js", import.meta.url);
+  // #120: the build bundles every module into dist/index.js, so `appBundleDir` runs from there
+  // and the app folder is dist/app beside it. Importing the bundle runs no command.
+  const builtModule = new URL("../dist/index.js", import.meta.url);
   const distDir = dirname(fileURLToPath(builtModule));
 
-  it("finds index.html of the web app it was built with", async () => {
-    const built = (await import(builtModule.href)) as typeof import("../src/app-bundle.js");
+  it("finds index.html of the web app it was built with, from the bundled layout", async () => {
+    const built = (await import(builtModule.href)) as typeof import("../src/index.js");
     const dir = built.appBundleDir();
     expect(dir).toBe(join(distDir, "app"));
     expect(existsSync(join(dir as string, "index.html"))).toBe(true);
+    expect(existsSync(join(distDir, "app-bundle.js"))).toBe(false);
   });
 
   it("carries the app's files but not its type declarations", () => {
