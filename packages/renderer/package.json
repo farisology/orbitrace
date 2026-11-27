@@ -3,6 +3,22 @@
   "version": "0.0.0",
   "description": "Orbitrace renderer: a framework-free Canvas 2D engine that draws a replay model.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/farisology/orbitrace.git",
+    "directory": "packages/renderer"
+  },
+  "homepage": "https://github.com/farisology/orbitrace/tree/main/packages/renderer#readme",
+  "bugs": {
+    "url": "https://github.com/farisology/orbitrace/issues"
+  },
+  "keywords": [
+    "agent",
+    "replay",
+    "orrery",
+    "canvas",
+    "visualizer"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,8 +29,13 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.map"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",

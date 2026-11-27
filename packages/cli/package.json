@@ -2,8 +2,24 @@
   "name": "orbitrace",
   "version": "0.0.0",
   "private": true,
-  "description": "Orbitrace command line: list Claude Code sessions and export structure-only replays. Not affiliated with Anthropic.",
+  "description": "Orbitrace command line: list Claude Code sessions, open one in the browser and export structure-only replays. Orbitrace is an independent project. It is not affiliated with or endorsed by Anthropic.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/farisology/orbitrace.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/farisology/orbitrace/tree/main/packages/cli#readme",
+  "bugs": {
+    "url": "https://github.com/farisology/orbitrace/issues"
+  },
+  "keywords": [
+    "agent",
+    "replay",
+    "orrery",
+    "visualizer",
+    "cli"
+  ],
   "type": "module",
   "bin": {
     "orbitrace": "./dist/index.js"
@@ -11,8 +27,13 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
     "node": ">=20"
   },
