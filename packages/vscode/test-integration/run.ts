@@ -1,7 +1,8 @@
 /**
  * Launcher of the integration suite (`npm run test:integration -w orbitrace-vscode`).
  *
- * 1. Checks that the extension is built (`dist/extension.js` and the app in `dist/app`).
+ * 1. Checks that the extension is built (`dist/extension.js`, the history worker beside it and the
+ *    app in `dist/app`).
  * 2. Creates a sandbox (`sandbox.ts`): synthetic config tree, empty home, workspace, profile.
  * 3. Downloads VS Code once into `node_modules/.cache/vscode-test/` of this package (see
  *    `downloadCacheDir`; `ensureDownloadCacheDir` creates the folder first, #125) with
@@ -42,6 +43,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync } from "node:fs"
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { APP_BUNDLE_SEGMENTS, APP_INDEX_FILE } from "../src/app-bundle.js";
+import { HISTORY_WORKER_FILE } from "../src/history.js";
 import {
   createSandbox,
   editorArguments,
@@ -139,6 +141,8 @@ export function suiteBundlePath(packageDir: string): string {
 export function missingBuildOutputs(packageDir: string): string[] {
   const needed = [
     join("dist", "extension.js"),
+    // Core's history worker beside the bundle (#211): the history steps run it from there.
+    join("dist", HISTORY_WORKER_FILE),
     join(...APP_BUNDLE_SEGMENTS, APP_INDEX_FILE),
     join("test-integration", "dist", "suite.cjs"),
   ];

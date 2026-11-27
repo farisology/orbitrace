@@ -1,15 +1,21 @@
 /**
  * What the history commands (#195) share: where the store is for this host, whether this Node
- * can run it, the worker file, and what the command takes from the process (the runtime).
+ * can run it, the worker file, and what the command takes from the process (the runtime). The
+ * timings and the store facts are core's since #211, shared with the editor extension.
  *
  * Every location comes from the `HostContext` (its environment and home folder), never from
  * `process.env`, so tests and the doctor read the same folders the command would.
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
+  HISTORY_ENDED_AFTER_MS,
+  HISTORY_RECORD_DEBOUNCE_MS,
   historyCapability,
+  historyStoreBytes,
+  historyStoreExists,
+  isHistorySessionEnded,
   resolveHistoryLocation,
   withoutSqliteWarning,
   type HistoryCapability,
@@ -23,11 +29,11 @@ import type { HostContext } from "../sessions.js";
 /** The worker file the build writes beside `dist/index.js` (#188). */
 export const HISTORY_WORKER_FILE = "history-worker.js";
 
-/** How long after its last activity an ended session's unfinished last line is taken. */
-export const ENDED_AFTER_MS = 60_000;
+/** How long after its last activity an ended session's unfinished last line is taken (core's). */
+export const ENDED_AFTER_MS = HISTORY_ENDED_AFTER_MS;
 
-/** How long `open` waits after a session change before it copies the session. */
-export const RECORD_DEBOUNCE_MS = 2000;
+/** How long `open` waits after a session change before it copies the session (core's). */
+export const RECORD_DEBOUNCE_MS = HISTORY_RECORD_DEBOUNCE_MS;
 
 /** What the history commands take from the process. Every field has a default; tests replace them. */
 export interface HistoryRuntime {
@@ -67,9 +73,9 @@ export function tryHistoryLocation(host: HostContext): HistoryLocation | null {
   }
 }
 
-/** Whether the store's database file exists. Reads only. */
+/** Whether the store's database file exists. Reads only. Core's `historyStoreExists`. */
 export function storeExists(location: HistoryLocation): boolean {
-  return existsSync(location.dbFile);
+  return historyStoreExists(location);
 }
 
 /**
@@ -103,17 +109,9 @@ export function showLocalPath(path: string, host: HostContext): string {
   return showPath(path, host.homeDir, host.platform);
 }
 
-/** The bytes of the database and the files SQLite keeps beside it; 0 for a missing file. */
+/** The bytes of the database and the files SQLite keeps beside it. Core's `historyStoreBytes`. */
 export function storeBytes(location: HistoryLocation): number {
-  let total = 0;
-  for (const file of [location.dbFile, `${location.dbFile}-wal`, `${location.dbFile}-shm`]) {
-    try {
-      total += statSync(file).size;
-    } catch {
-      // Not there.
-    }
-  }
-  return total;
+  return historyStoreBytes(location);
 }
 
 /**
@@ -121,5 +119,5 @@ export function storeBytes(location: HistoryLocation): number {
  * `endedSessionKeys`): its live status says ended and nothing was written to it for a minute.
  */
 export function isEndedSession(ref: SessionRef, now: number): boolean {
-  return ref.live === "ended" && now - ref.lastActivity >= ENDED_AFTER_MS;
+  return isHistorySessionEnded(ref, now);
 }

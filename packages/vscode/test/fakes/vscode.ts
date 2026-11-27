@@ -176,6 +176,41 @@ export interface SaveDialogOptions {
 
 type SaveDialogAnswer = (options: SaveDialogOptions) => Uri | undefined;
 
+/** One call of `window.showWarningMessage` or `showInformationMessage` with its options and buttons. */
+export interface MessageCall {
+  readonly message: string;
+  readonly options?: { modal?: boolean; detail?: string };
+  readonly items: readonly string[];
+}
+
+type MessageAnswer = (call: MessageCall) => string | undefined;
+
+/** A fake output channel: its lines are kept. */
+export class FakeOutputChannel {
+  readonly lines: string[] = [];
+  disposed = false;
+  constructor(readonly name: string) {}
+  appendLine(line: string): void {
+    this.lines.push(line);
+  }
+  dispose(): void {
+    this.disposed = true;
+  }
+}
+
+/** Split `(message, options?, ...items)` as the editor API takes them. */
+function messageCall(message: string, rest: unknown[]): MessageCall {
+  const [first, ...others] = rest;
+  if (typeof first === "object" && first !== null) {
+    return {
+      message,
+      options: first as MessageCall["options"] & object,
+      items: others as string[],
+    };
+  }
+  return { message, items: rest as string[] };
+}
+
 /** What the extension did, and how prompts are answered. */
 export const fake = {
   panels: [] as FakeWebviewPanel[],
@@ -192,7 +227,19 @@ export const fake = {
   written: new Map<string, Uint8Array>(),
   /** Makes `workspace.fs.writeFile` reject with this error. */
   writeError: null as Error | null,
+  warnings: [] as string[],
+  /** Every information and warning message, with its options and buttons. */
+  messageCalls: [] as MessageCall[],
+  /** How a message with buttons is answered. Default: dismissed (`undefined`). */
+  answer: (() => undefined) as MessageAnswer,
+  outputChannels: [] as FakeOutputChannel[],
+  clipboard: "",
   reset(): void {
+    fake.warnings.length = 0;
+    fake.messageCalls.length = 0;
+    fake.answer = () => undefined;
+    fake.outputChannels.length = 0;
+    fake.clipboard = "";
     fake.panels.length = 0;
     fake.treeViews.length = 0;
     fake.commands.clear();
@@ -231,9 +278,22 @@ export const window = {
     fake.quickPickCalls.push({ items, options });
     return fake.quickPick(items, options);
   },
-  async showInformationMessage(message: string): Promise<undefined> {
+  async showInformationMessage(message: string, ...rest: unknown[]): Promise<string | undefined> {
     fake.infos.push(message);
-    return undefined;
+    const call = messageCall(message, rest);
+    fake.messageCalls.push(call);
+    return call.items.length === 0 ? undefined : fake.answer(call);
+  },
+  async showWarningMessage(message: string, ...rest: unknown[]): Promise<string | undefined> {
+    fake.warnings.push(message);
+    const call = messageCall(message, rest);
+    fake.messageCalls.push(call);
+    return call.items.length === 0 ? undefined : fake.answer(call);
+  },
+  createOutputChannel(name: string): FakeOutputChannel {
+    const channel = new FakeOutputChannel(name);
+    fake.outputChannels.push(channel);
+    return channel;
   },
   async showErrorMessage(message: string): Promise<undefined> {
     fake.errors.push(message);
@@ -255,6 +315,16 @@ export const commands = {
     const callback = fake.commands.get(id);
     if (callback === undefined) throw new Error(`command not found: ${id}`);
     return callback(...args);
+  },
+};
+
+export const env = {
+  /** Undefined for a local window, as in VS Code. */
+  remoteName: undefined as string | undefined,
+  clipboard: {
+    async writeText(text: string): Promise<void> {
+      fake.clipboard = text;
+    },
   },
 };
 

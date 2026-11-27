@@ -1,6 +1,8 @@
 /**
  * The Sessions view (vscode glue). Rows come from the session catalog; their text from
- * `session-labels.ts`. Clicking a row runs "Visualise session..." with that row.
+ * `session-labels.ts`. Clicking a row runs "Visualise session..." with that row. A session kept
+ * only in the history store (#211) is marked `history`, with the archive icon, and opens the same
+ * way.
  */
 
 import * as vscode from "vscode";
@@ -14,6 +16,9 @@ import {
   type SessionTreeNode,
 } from "./session-catalog.js";
 import { describeSession } from "./session-labels.js";
+
+/** `contextValue` of a row for a session kept only in the history store (#211). */
+export const HISTORY_SESSION_CONTEXT = "orbitrace.session.history";
 
 /** Shown in the view when the session folders cannot be read. */
 export const LIST_FAILED_MESSAGE = "The Claude Code session folders could not be read.";
@@ -66,13 +71,17 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<SessionTreeN
       item.contextValue = `orbitrace.group.${node.group}`;
       return item;
     }
-    const text = describeSession(node.entry.summary, (this.options.now ?? Date.now)());
+    const fromHistory = node.entry.fromHistory === true;
+    const text = describeSession(node.entry.summary, (this.options.now ?? Date.now)(), {
+      fromHistory,
+    });
     const item = new vscode.TreeItem(text.label, vscode.TreeItemCollapsibleState.None);
     item.description = text.description;
     item.tooltip = text.tooltip;
     const live = node.entry.summary.live === "busy" || node.entry.summary.live === "idle";
-    item.iconPath = new vscode.ThemeIcon(live ? "pulse" : "history");
-    item.contextValue = "orbitrace.session";
+    // A session kept only in the history store (#211) is marked with the archive icon.
+    item.iconPath = new vscode.ThemeIcon(fromHistory ? "archive" : live ? "pulse" : "history");
+    item.contextValue = fromHistory ? HISTORY_SESSION_CONTEXT : "orbitrace.session";
     item.command = {
       command: COMMANDS.visualiseSession,
       title: "Visualise",

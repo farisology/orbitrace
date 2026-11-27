@@ -1,5 +1,6 @@
 /**
- * The integration suite (ticket #102; the history store steps, `history-steps.ts`, ticket #196).
+ * The integration suite (ticket #102; the history store steps, `history-steps.ts`, ticket #196;
+ * the extension's own history commands, `buildEditorHistorySteps` below, ticket #211).
  * Runs inside a real VS Code extension host, launched by
  * `run.ts` with the built extension from this package, a temporary workspace, profile and
  * extensions folder, and `CLAUDE_CONFIG_DIR` / `HOME` pointing at a synthetic config tree
@@ -13,7 +14,7 @@
  * suite waits for.
  */
 
-import { appendFileSync, existsSync, realpathSync, renameSync } from "node:fs";
+import { appendFileSync, existsSync, realpathSync, renameSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import * as vscode from "vscode";
@@ -23,14 +24,34 @@ import {
   validateReplay,
   type SessionSummary,
 } from "@orbitrace/core";
+import {
+  HISTORY_DEFAULT_FOLDER,
+  HISTORY_LOCK_FILE,
+  historyCapability,
+  historySettingsFile,
+  openHistoryStore,
+  readHistorySettings,
+  resolveHistoryLocation,
+  withoutSqliteWarning,
+  type HistoryCapability,
+} from "@orbitrace/core/node";
 import { APP_BUNDLE_SEGMENTS } from "../src/app-bundle.js";
 import { COMMANDS } from "../src/commands.js";
+import { HISTORY_WORKER_FILE, OUTPUT_CHANNEL } from "../src/history.js";
+import {
+  HISTORY_BUTTONS,
+  HISTORY_COMMANDS,
+  HISTORY_MESSAGES,
+  unavailableMessage,
+  type StoredSessionItem,
+} from "../src/history-commands.js";
 import { PANEL_VIEW_TYPE } from "../src/panels.js";
 import { GROUP_TITLES, type SessionTreeNode } from "../src/session-catalog.js";
 import { panelTitle } from "../src/session-labels.js";
-import { LIST_FAILED_MESSAGE } from "../src/session-tree.js";
-import { buildHistorySteps } from "./history-steps.js";
+import { HISTORY_SESSION_CONTEXT, LIST_FAILED_MESSAGE } from "../src/session-tree.js";
+import { buildHistorySteps, countTranscripts } from "./history-steps.js";
 import { pathInsideBase, policyProblems, readPage } from "./html-checks.js";
+import { installPromptSpies, type PromptSpies, type PromptWindowLike } from "./prompt-spies.js";
 import {
   appendSuiteLog,
   readSandbox,
@@ -79,6 +100,7 @@ const IDS = {
   unknownKey: 90_004,
   subscribe: 90_010,
   afterClose: 90_020,
+  historyLoad: 90_030,
 } as const;
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -201,6 +223,12 @@ interface Context {
   /** `fs.watch` handles open in the extension host before any panel was opened. */
   watchersBaseline?: number;
   projectsHidden?: boolean;
+  /** The dialogs of the history commands, answered by the suite (#211). */
+  prompts?: PromptSpies;
+  /** What `historyCapability()` reports in this extension host. */
+  historyCapability?: HistoryCapability;
+  /** The session whose transcript the history steps delete. */
+  historyVictim?: string;
 }
 
 function spiesOf(context: Context): ApiSpies {
@@ -613,6 +641,263 @@ function buildSteps(context: Context): Step[] {
   ];
 }
 
+function promptsOf(context: Context): PromptSpies {
+  assert(context.prompts !== undefined, "the dialog spies are not installed");
+  return context.prompts;
+}
+
+/** The history steps that need the store run only where `historyCapability()` says available. */
+function historyUnavailable(context: Context): string | undefined {
+  const capability = context.historyCapability;
+  if (capability === undefined) return "the capability was not checked";
+  return capability.available ? undefined : capability.reason;
+}
+
+/** The settings file of the sandbox's data folder, as core reads it. */
+function sandboxSwitch(): ReturnType<typeof readHistorySettings> {
+  return readHistorySettings(historySettingsFile(resolveHistoryLocation()));
+}
+
+/** The keys of the session rows of one listing of the Sessions view, groups opened. */
+async function listedRows(context: Context): Promise<SessionTreeNode[]> {
+  const tree = treeOf(context);
+  const loadsBefore = tree.loads.length;
+  await vscode.commands.executeCommand(COMMANDS.refreshSessions);
+  const load = await waitFor(() => tree.loads[loadsBefore], {
+    label: "the Sessions view to list again",
+    timeoutMs: 10_000,
+  });
+  const rows: SessionTreeNode[] = [];
+  for (const node of load.nodes as SessionTreeNode[]) {
+    if (node.kind === "session") rows.push(node);
+    else rows.push(...((await tree.provider.getChildren(node)) as SessionTreeNode[]));
+  }
+  return rows;
+}
+
+/** Stored sessions in the sandbox's store, read with a fresh reader. */
+async function storedKeys(): Promise<string[]> {
+  const reader = await withoutSqliteWarning(() => openHistoryStore({ mode: "read" }));
+  try {
+    return reader.listSessions().map((session) => session.key);
+  } finally {
+    reader.close();
+  }
+}
+
+/**
+ * History through the extension's own commands (#211), after the extension's story: recording off
+ * created nothing; where history is unavailable every command says why; the command turns it on
+ * and the shared settings file says so; the extension ingests through its worker
+ * (`dist/history-worker.js`); a session whose files were deleted still lists, marked, and opens;
+ * delete one and delete all work. The dialogs are answered by the prompt spies.
+ */
+function buildEditorHistorySteps(context: Context): Step[] {
+  const { sandbox } = context;
+  const sessionCount = sandbox.otherSessions.length + 1;
+  const skip = (): string | undefined => historyUnavailable(context);
+  const orbitraceFiles = (): boolean =>
+    existsSync(sandbox.historyDataDir) || existsSync(join(sandbox.homeDir, HISTORY_DEFAULT_FOLDER));
+
+  return [
+    {
+      name: "history (editor): with recording off the extension created nothing on disk",
+      async run() {
+        context.historyCapability = await withoutSqliteWarning(historyCapability);
+        assert(!orbitraceFiles(), "the extension's story created the history folder");
+        context.prompts = installPromptSpies(vscode.window as unknown as PromptWindowLike);
+        const prompts = context.prompts;
+        await vscode.commands.executeCommand(HISTORY_COMMANDS.status);
+        await vscode.commands.executeCommand(HISTORY_COMMANDS.showLocation);
+        await vscode.commands.executeCommand(HISTORY_COMMANDS.turnOff);
+        const shown = prompts.calls.map((call) => call.message);
+        if (context.historyCapability.available) {
+          assert(
+            shown[0]?.startsWith("History recording is off.") === true,
+            `status said: ${shown[0] ?? "nothing"}`,
+          );
+          assertEqual(shown[2], HISTORY_MESSAGES.alreadyOff, "Turn off with recording off");
+        }
+        assert(!orbitraceFiles(), "a history command created the history folder");
+        assertEqual(sandboxSwitch().state, "missing", "settings file");
+      },
+    },
+    {
+      name: "history (editor): where history is unavailable every command says why and changes nothing",
+      skip: () =>
+        context.historyCapability?.available === true ? "history is available here" : undefined,
+      async run() {
+        const capability = context.historyCapability;
+        assert(capability !== undefined && !capability.available, "capability");
+        const prompts = promptsOf(context);
+        const before = prompts.calls.length;
+        for (const id of Object.values(HISTORY_COMMANDS)) await vscode.commands.executeCommand(id);
+        const calls = prompts.calls.slice(before);
+        assertEqual(calls.length, Object.values(HISTORY_COMMANDS).length, "messages shown");
+        for (const call of calls) {
+          assertEqual(call.kind, "error", "message kind");
+          assertEqual(call.message, unavailableMessage(capability.reason), "message");
+        }
+        assert(!orbitraceFiles(), "an unavailable command created the history folder");
+        log(context, `            every history command said: ${capability.reason}`);
+      },
+    },
+    {
+      name: "history (editor): Turn history recording on asks first, then the shared settings file says on",
+      skip,
+      async run() {
+        // The transcripts come back, so there is something to record.
+        if (context.projectsHidden === true) {
+          renameSync(
+            join(sandbox.configDir, "projects-hidden"),
+            join(sandbox.configDir, "projects"),
+          );
+          context.projectsHidden = false;
+        }
+        const prompts = promptsOf(context);
+        prompts.answer = (call) => (call.modal ? HISTORY_BUTTONS.turnOn : undefined);
+        const before = prompts.calls.length;
+        await vscode.commands.executeCommand(HISTORY_COMMANDS.turnOn);
+        const modal = prompts.calls.slice(before).find((call) => call.modal);
+        assert(modal !== undefined, "Turn on did not ask in a modal dialog");
+        assertEqual(modal.message, HISTORY_MESSAGES.turnOnQuestion, "question");
+        assert(modal.detail?.includes("redaction is best effort") === true, "detail: best effort");
+        assert(modal.detail?.includes("prompts") === true, "detail: what is stored");
+        assertEqual(modal.items.join(","), HISTORY_BUTTONS.turnOn, "buttons");
+        const settings = sandboxSwitch();
+        assertEqual(settings.state, "ok", "settings file state");
+        assertEqual(settings.recording, true, "recording in the settings file");
+        if (process.platform !== "win32") {
+          const mode = statSync(historySettingsFile(resolveHistoryLocation())).mode & 0o777;
+          assertEqual(mode.toString(8), "600", "settings file mode");
+        }
+      },
+    },
+    {
+      name: "history (editor): the extension copies every session through its own worker file",
+      skip,
+      timeoutMs: 60_000,
+      async run() {
+        const worker = join(PACKAGE_DIR, "dist", HISTORY_WORKER_FILE);
+        assert(existsSync(worker), "dist/history-worker.js is missing");
+        const prompts = promptsOf(context);
+        const line = await waitFor(
+          () => prompts.output.get(OUTPUT_CHANNEL)?.find((entry) => entry.includes("copied")),
+          { label: "the extension's log line after its first copy", timeoutMs: 45_000 },
+        );
+        assert(line.includes("in the background worker"), `log line: ${line}`);
+        const expected = countTranscripts(sandbox.configDir);
+        const reader = await withoutSqliteWarning(() => openHistoryStore({ mode: "read" }));
+        try {
+          const totals = reader.totals();
+          assertEqual(totals.sessions, sessionCount, "stored sessions");
+          assertEqual(totals.files, expected.files, "stored files");
+          assertEqual(totals.lines, expected.lines, "stored lines");
+        } finally {
+          reader.close();
+        }
+        assert(
+          !existsSync(join(sandbox.historyDataDir, HISTORY_LOCK_FILE)),
+          "the worker left its lock behind",
+        );
+        log(context, `            extension log: ${line}`);
+      },
+    },
+    {
+      name: "history (editor): a session whose transcript was deleted still lists, marked history, and opens",
+      skip,
+      async run() {
+        const victim = sandbox.otherSessions[0];
+        assert(victim !== undefined, "no other session in the sandbox");
+        context.historyVictim = victim.key;
+        rmSync(victim.transcript);
+        rmSync(victim.transcript.replace(/\.jsonl$/, ""), { recursive: true, force: true });
+        assert(!existsSync(victim.transcript), "the transcript is still there");
+
+        const rows = await listedRows(context);
+        const row = rows.find(
+          (node) => node.kind === "session" && node.entry.summary.key === victim.key,
+        );
+        assert(row !== undefined, "the deleted session is no longer listed");
+        assertEqual(rows.length, sessionCount, "rows in the Sessions view");
+        const item = treeOf(context).provider.getTreeItem(row) as vscode.TreeItem;
+        assertEqual(item.contextValue, HISTORY_SESSION_CONTEXT, "row context");
+        assert(
+          String(item.description).includes("history"),
+          `row description: ${String(item.description)}`,
+        );
+
+        const before = spiesOf(context).panels.length;
+        await vscode.commands.executeCommand(COMMANDS.visualiseSession, row);
+        const record = await nextPanel(context, before);
+        assertEqual(record.panel.title, panelTitle({ projectLabel: victim.projectLabel }), "title");
+        record.inject({ id: IDS.historyLoad, method: "loadReplay", params: { key: victim.key } });
+        const replay = resultOf(await replyTo(record, IDS.historyLoad), "loadReplay from history");
+        assert(validateReplay(replay), "the replay from history is not a valid replay");
+        const text = JSON.stringify(replay);
+        assert(!text.includes(sandbox.root), "the replay from history holds a sandbox path");
+        const panel = record.panel as unknown as vscode.WebviewPanel;
+        const tab = tabOf(panel);
+        if (tab !== undefined) await vscode.window.tabGroups.close(tab);
+      },
+    },
+    {
+      name: "history (editor): Delete a session from history removes it from the store and the view",
+      skip,
+      async run() {
+        const key = context.historyVictim;
+        assert(key !== undefined, "no deleted session");
+        const prompts = promptsOf(context);
+        prompts.pick = (items) => (items as StoredSessionItem[]).find((item) => item.key === key);
+        prompts.answer = (call) => (call.modal ? HISTORY_BUTTONS.delete : undefined);
+        const before = prompts.calls.length;
+        await vscode.commands.executeCommand(HISTORY_COMMANDS.deleteSession);
+        const calls = prompts.calls.slice(before);
+        assertEqual(calls[0]?.kind, "quickPick", "first dialog");
+        assertEqual(calls[0]?.items.length, sessionCount, "rows offered");
+        assertEqual(calls[1]?.message, HISTORY_MESSAGES.deleteOneQuestion, "question");
+        assertEqual(calls.at(-1)?.message, HISTORY_MESSAGES.deletedOne, "result");
+        const keys = await storedKeys();
+        assert(!keys.includes(key), "the session is still in the store");
+        assertEqual(keys.length, sessionCount - 1, "stored sessions");
+        const rows = await listedRows(context);
+        assert(
+          rows.every((node) => node.kind !== "session" || node.entry.summary.key !== key),
+          "the deleted session is still listed",
+        );
+      },
+    },
+    {
+      name: "history (editor): Turn off, then Delete all history leaves only the settings file",
+      skip,
+      async run() {
+        const prompts = promptsOf(context);
+        await vscode.commands.executeCommand(HISTORY_COMMANDS.turnOff);
+        assertEqual(sandboxSwitch().recording, false, "recording after Turn off");
+        prompts.answer = (call) => (call.modal ? HISTORY_BUTTONS.deleteAll : undefined);
+        const before = prompts.calls.length;
+        await vscode.commands.executeCommand(HISTORY_COMMANDS.deleteAll);
+        const calls = prompts.calls.slice(before);
+        assertEqual(calls[0]?.message, HISTORY_MESSAGES.deleteAllQuestion, "question");
+        assert(calls[0]?.modal === true, "Delete all did not ask in a modal dialog");
+        assertEqual(
+          calls.at(-1)?.message,
+          `Deleted the history store (${sessionCount - 1} sessions).`,
+          "result",
+        );
+        const location = resolveHistoryLocation();
+        assert(!existsSync(location.dbFile), "the database is still there");
+        assert(existsSync(historySettingsFile(location)), "the settings file was deleted");
+        assert(!existsSync(join(sandbox.homeDir, HISTORY_DEFAULT_FOLDER)), "a home store appeared");
+      },
+    },
+  ];
+}
+
+function log(context: Context, line: string): void {
+  context.log(line);
+}
+
 /** How long each clean-up action may take; the window is closed by the launcher anyway. */
 const CLEAN_UP_TIMEOUT_MS = 3_000;
 
@@ -637,6 +922,7 @@ async function cleanUp(context: Context): Promise<void> {
   } catch (error) {
     context.log(`  clean-up: ${errorMessage(error)}`);
   }
+  context.prompts?.restore();
   context.spies?.restore();
 }
 
@@ -655,7 +941,7 @@ export async function run(): Promise<void> {
   log(`Orbitrace integration suite, VS Code ${vscode.version}, ${process.platform}`);
   let report: StepReport = { results: [], passed: 0, failed: 1, skipped: 0 };
   try {
-    // Two stories, each stopping at its own first failure. The history store first (#196), while
+    // Three stories, each stopping at its own first failure. The history store first (#196), while
     // the transcripts are as the sandbox wrote them; it does not touch the extension.
     log("History store in the extension host:");
     const history = await runSteps(buildHistorySteps({ sandbox, packageDir: PACKAGE_DIR, log }), {
@@ -664,7 +950,14 @@ export async function run(): Promise<void> {
     });
     log("The extension:");
     const extension = await runSteps(buildSteps(context), { timeoutMs: 20_000, log });
-    report = mergeReports([history, extension]);
+    // Third: history through the extension's own commands (#211), once the extension has run its
+    // whole story with recording off.
+    log("History in the extension:");
+    const editorHistory = await runSteps(buildEditorHistorySteps(context), {
+      timeoutMs: 20_000,
+      log,
+    });
+    report = mergeReports([history, extension, editorHistory]);
   } finally {
     await cleanUp(context);
     log(`Orbitrace integration suite: ${summarizeReport(report)}`);

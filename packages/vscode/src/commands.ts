@@ -1,10 +1,12 @@
 /**
- * What the three commands do: Visualise current session, Visualise session..., Open demo.
+ * What the three session commands do: Visualise current session, Visualise session..., Open demo.
+ * The history commands (#211) are in `history-commands.ts`.
  * The editor UI (quick pick, notifications) and opening a panel are passed in, so this module
  * has no vscode dependency and is unit tested; `extension.ts` wires it to the real API.
  */
 
 import type { SessionSummary } from "@orbitrace/core";
+import { HISTORY_COMMANDS } from "./history-commands.js";
 import type { CatalogEntry, SessionCatalog } from "./session-catalog.js";
 
 /** What an editor tab shows. */
@@ -12,12 +14,21 @@ export type PanelTarget =
   | { readonly kind: "session"; readonly key: string; readonly summary: SessionSummary }
   | { readonly kind: "demo" };
 
-/** Command ids, as in package.json `contributes.commands`. */
+/**
+ * Command ids, as in package.json `contributes.commands`: the session commands here and the
+ * history commands of `history-commands.ts` (#211).
+ */
 export const COMMANDS = {
   visualiseCurrent: "orbitrace.visualiseCurrent",
   visualiseSession: "orbitrace.visualiseSession",
   openDemo: "orbitrace.openDemo",
   refreshSessions: "orbitrace.refreshSessions",
+  historyTurnOn: HISTORY_COMMANDS.turnOn,
+  historyTurnOff: HISTORY_COMMANDS.turnOff,
+  historyStatus: HISTORY_COMMANDS.status,
+  historyDeleteSession: HISTORY_COMMANDS.deleteSession,
+  historyDeleteAll: HISTORY_COMMANDS.deleteAll,
+  historyShowLocation: HISTORY_COMMANDS.showLocation,
 } as const;
 
 /** Notification texts. No path, key or session id. */

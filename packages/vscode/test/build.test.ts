@@ -1,20 +1,35 @@
 /**
  * Checks the build output that `npm run build` (run by `npm test` at the root) leaves in dist/:
- * one CommonJS bundle that loads in Node with `vscode` supplied by the host, and the web app
- * copied beside it.
+ * one CommonJS bundle that loads in Node with `vscode` supplied by the host, core's history
+ * worker as its own CommonJS file beside it (#211), and the web app copied beside them.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import Module, { createRequire } from "node:module";
 import { join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { esbuildOptions } from "../scripts/build.mjs";
+import {
+  historyCapability,
+  openHistoryStore,
+  runHistoryIngestWorker,
+  withoutSqliteWarning,
+} from "@orbitrace/core/node";
+import { FIXTURE_CONFIG_DIR } from "@orbitrace/fixtures";
+import {
+  esbuildOptions,
+  resolveWorkerEntry,
+  WORKER_EXPORT,
+  WORKER_FILE,
+  workerEsbuildOptions,
+} from "../scripts/build.mjs";
 import * as vscodeFake from "./fakes/vscode.js";
-import { fakeReplayer, removeTempDirs } from "./helpers.js";
+import { fakeReplayer, makeTempDir, removeTempDirs } from "./helpers.js";
 
 const packageDir = fileURLToPath(new URL("..", import.meta.url));
 const repoDir = join(packageDir, "..", "..");
 const bundle = join(packageDir, "dist", "extension.js");
+const workerBundle = join(packageDir, WORKER_FILE);
+const capability = await withoutSqliteWarning(historyCapability);
 
 afterAll(() => {
   removeTempDirs();
@@ -65,6 +80,74 @@ describe("esbuildOptions", () => {
   });
 });
 
+describe("workerEsbuildOptions and resolveWorkerEntry (#211)", () => {
+  it("bundle core's worker export as its own CommonJS file beside the extension", () => {
+    expect(WORKER_EXPORT).toBe("@orbitrace/core/history-worker");
+    const entry = resolveWorkerEntry(packageDir);
+    expect(realpathSync(entry)).toBe(
+      realpathSync(join(repoDir, "packages", "core", "dist", "history", "worker.js")),
+    );
+    const options = workerEsbuildOptions(packageDir, entry);
+    expect(options).toMatchObject({
+      bundle: true,
+      platform: "node",
+      format: "cjs",
+      target: "node20",
+      sourcemap: false,
+      entryPoints: [entry],
+    });
+    expect(options.outfile).toBe(workerBundle);
+    expect(options.external).toBeUndefined();
+  });
+
+  it("explains a missing core build", () => {
+    expect(() => resolveWorkerEntry(makeTempDir())).toThrow(/Build @orbitrace\/core first/);
+  });
+});
+
+describe("the built history worker (#211)", () => {
+  it("is its own CommonJS file that requires only Node built-ins, and is not inlined", () => {
+    const code = readFileSync(workerBundle, "utf8");
+    expect(code.startsWith('"use strict";')).toBe(true);
+    const required = [...code.matchAll(/require\("([^"]+)"\)/g)].map((match) => match[1]);
+    expect(required.length).toBeGreaterThan(0);
+    expect(required.filter((name) => !name?.startsWith("node:"))).toEqual([]);
+    expect(code).toContain("isMainThread");
+    expect(code).not.toContain(repoDir);
+    expect(code).not.toContain("sourceMappingURL");
+    // The extension starts the worker from that file; its entry code is not in the bundle.
+    expect(readFileSync(bundle, "utf8")).not.toContain("isMainThread");
+  });
+
+  it.skipIf(!capability.available)(
+    "runs as core's ingest worker from that file, over the synthetic fixtures",
+    async () => {
+      const data = join(makeTempDir(), "data");
+      const result = await runHistoryIngestWorker(
+        {
+          roots: [
+            {
+              runtime: "claude-code",
+              root: FIXTURE_CONFIG_DIR,
+              resolvedBy: "user-setting",
+              available: true,
+            },
+          ],
+        },
+        { workerUrl: pathToFileURL(workerBundle), dataDir: data },
+      );
+      expect(result.sessions).toBeGreaterThan(0);
+      expect(result.linesAdded).toBeGreaterThan(0);
+      const reader = await openHistoryStore({ dataDir: data, mode: "read" });
+      try {
+        expect(reader.totals().lines).toBe(result.linesAdded);
+      } finally {
+        reader.close();
+      }
+    },
+  );
+});
+
 describe("the built extension", () => {
   it("is one CommonJS file that requires vscode and nothing from node_modules", () => {
     const code = readFileSync(bundle, "utf8");
@@ -99,6 +182,10 @@ describe("the built extension", () => {
     expect(existsSync(join(appDir, "index.html"))).toBe(true);
     expect(existsSync(join(appDir, "types"))).toBe(false);
     const files = filesBelow(join(packageDir, "dist")).map((file) => relative(packageDir, file));
+    expect(files.filter((file) => !file.startsWith(join("dist", "app"))).sort()).toEqual([
+      join("dist", "extension.js"),
+      join("dist", "history-worker.js"),
+    ]);
     expect(files.filter((file) => file.endsWith(".map"))).toEqual([]);
     expect(files.filter((file) => file.endsWith(".d.ts"))).toEqual([]);
     expect(statSync(bundle).size).toBeLessThan(2_000_000);

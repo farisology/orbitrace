@@ -5,10 +5,14 @@
  * the replayer's memory, no second listing) to tell whether it belongs to the open workspace.
  * What leaves this module is a `SessionSummary` plus that yes/no: no path, no locator. No
  * vscode dependency, so it is unit tested.
+ *
+ * History (#211): a session whose transcripts are gone but which the history store keeps is
+ * listed too (the replayer searches the store after the Claude Code folders); its entry is marked
+ * `fromHistory`, so the Sessions view can say so. It opens like any other.
  */
 
 import type { SessionSummary } from "@orbitrace/core";
-import type { SessionReplayer } from "@orbitrace/core/node";
+import { isHistoryRef, type SessionReplayer } from "@orbitrace/core/node";
 import { sessionInWorkspace } from "./workspace-match.js";
 
 /** One row of the session list. */
@@ -16,6 +20,11 @@ export interface CatalogEntry {
   readonly summary: SessionSummary;
   /** Recorded in one of the open workspace folders. */
   readonly inWorkspace: boolean;
+  /**
+   * Present (true) when the session was found only in the history store: its transcripts are
+   * gone. Left out for a session read from its files.
+   */
+  readonly fromHistory?: true;
 }
 
 /** What "Visualise current session" opens. */
@@ -62,14 +71,16 @@ export function createSessionCatalog(replayer: CatalogReplayer): SessionCatalog 
     const entries = await Promise.all(
       summaries.map(async (summary): Promise<CatalogEntry> => {
         let inWorkspace = false;
-        if (workspacePaths.length > 0) {
-          try {
-            inWorkspace = sessionInWorkspace(await replayer.find(summary.key), workspacePaths);
-          } catch {
-            // A session that vanished between the listing and the lookup is just not matched.
-          }
+        let fromHistory = false;
+        try {
+          // Answered from the replayer's memory of the listing: no second listing.
+          const ref = await replayer.find(summary.key);
+          fromHistory = isHistoryRef(ref);
+          if (workspacePaths.length > 0) inWorkspace = sessionInWorkspace(ref, workspacePaths);
+        } catch {
+          // A session that vanished between the listing and the lookup is just not matched.
         }
-        return { summary, inWorkspace };
+        return fromHistory ? { summary, inWorkspace, fromHistory: true } : { summary, inWorkspace };
       }),
     );
     // The replayer lists newest first; keep that order inside each group.

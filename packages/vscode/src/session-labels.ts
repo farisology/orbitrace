@@ -35,10 +35,27 @@ export function projectText(summary: Pick<SessionSummary, "projectLabel">): stri
   return label === "" ? "(unnamed project)" : label;
 }
 
+/** Shown for a session kept only in the history store (#211). */
+export const HISTORY_TEXT = "history";
+
+/** The hover line of a session kept only in the history store (#211). */
+export const HISTORY_TOOLTIP =
+  "Kept in the Orbitrace history store: its transcript is no longer in the Claude Code folders.";
+
+/** How a session was found. */
+export interface DescribeOptions {
+  /** Found only in the history store: marked `history` instead of its live status. */
+  readonly fromHistory?: boolean;
+}
+
 /** Text for one session at time `now` (Unix epoch milliseconds). */
-export function describeSession(summary: SessionSummary, now: number): SessionText {
+export function describeSession(
+  summary: SessionSummary,
+  now: number,
+  options: DescribeOptions = {},
+): SessionText {
   const parts = [relativeTime(summary.lastActivity, now)];
-  const live = liveText(summary.live);
+  const live = options.fromHistory === true ? HISTORY_TEXT : liveText(summary.live);
   if (live !== null) parts.push(live);
   if (summary.subagentCount !== null && summary.subagentCount > 0) {
     parts.push(summary.subagentCount === 1 ? "1 subagent" : `${summary.subagentCount} subagents`);
@@ -49,6 +66,7 @@ export function describeSession(summary: SessionSummary, now: number): SessionTe
     `Last activity: ${new Date(summary.lastActivity).toISOString().replace("T", " ").slice(0, 16)} UTC`,
     `Status: ${summary.live}`,
     `Subagents: ${summary.subagentCount === null ? "not counted" : String(summary.subagentCount)}`,
+    ...(options.fromHistory === true ? [HISTORY_TOOLTIP] : []),
   ].join("\n");
   return { label, description: parts.join(" · "), tooltip };
 }

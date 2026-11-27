@@ -35,7 +35,7 @@ The extension sends live updates to a tab while it is open. A running session op
 ## What it reads
 
 - The Claude Code config folders: the one named by `CLAUDE_CONFIG_DIR` when the extension host has it set, and `.claude` in the home folder. Both are read when both exist. Inside each, the session transcripts under `projects/`, and the entries under `sessions/` that say which sessions are running.
-- Claude Code's files are only read, never written. The extension stores nothing of its own. The only file it writes is a replay you save with **Export**, where you choose.
+- Claude Code's files are only read, never written. By default the extension stores nothing of its own: the only file it writes is a replay you save with **Export**, where you choose. Only when you turn [history](#history) on does it keep a copy of your sessions.
 - It has no setting, needs no hooks and needs no account.
 
 ## Nothing leaves the machine
@@ -46,6 +46,27 @@ The extension sends live updates to a tab while it is open. A running session op
 - The Sessions view does not show session ids.
 
 What a replay contains is described in [Privacy](https://github.com/farisology/orbitrace/blob/main/docs/privacy.md) and [Replay format](https://github.com/farisology/orbitrace/blob/main/docs/replay-format.md).
+
+## History
+
+Claude Code deletes old transcripts after a while. History keeps a copy of your sessions on this machine so they can still be opened after that. It is **off by default**.
+
+| Command                                     | What it does                                                                                                                                                       |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Orbitrace: Turn history recording on        | Asks first, in a dialog that says what is stored, where, and that redaction of secrets is best effort. Then turns recording on and copies every session once, now. |
+| Orbitrace: Turn history recording off       | Turns recording off. What is already stored stays.                                                                                                                 |
+| Orbitrace: Show history status              | Says whether recording is on, which engine runs it, where the store is, and how many sessions and bytes it holds.                                                  |
+| Orbitrace: Delete a session from history... | Lets you choose a stored session, asks, then deletes its stored copy. Its transcript, if still there, is not touched.                                              |
+| Orbitrace: Delete all history               | Asks, then deletes the whole store. Transcripts are not touched; the on or off switch stays.                                                                       |
+| Orbitrace: Show where history is stored     | Shows the folder, with a button that copies its path.                                                                                                              |
+
+- **One switch for the editor and the command line.** There is no editor setting. The switch is a small file, `settings.json`, in Orbitrace's data folder, the same file `orbitrace history enable` and `orbitrace history disable` write, so `orbitrace history status` and Show history status always agree.
+- **When it copies.** With recording on, while the editor runs: every session once when the extension starts (or when you turn recording on), and a session you have open in a tab again about 2 seconds after it changes. Each copy runs in a background worker thread, one at a time, and adds only the lines written since the last copy. When another program is writing the store (an `orbitrace open` that is recording, or another editor window), the copy steps aside and the next change tries again. Copying stops when the window closes or recording is turned off.
+- **Sessions only history holds.** A session whose transcript Claude Code deleted still appears in the Sessions view, marked `history` with an archive icon, and opens in a tab like any other. Its replay goes through the same export as every session and holds structure only.
+- **Where.** In `ORBITRACE_DATA_DIR` when the extension host has it set (an absolute path), otherwise in `.orbitrace` in your home folder, readable by your account only. Nothing is uploaded. Over Remote SSH, WSL or a dev container the store is on the remote machine, not on your own computer, and the turn-on dialog, Show history status and Show where history is stored name the remote.
+- **What it holds.** The store keeps what the transcripts hold: prompts, replies, tool inputs and outputs, paths and project names, with secrets in known formats redacted first. Redaction is best effort and can miss a secret in an unknown format. Treat the store as being as sensitive as the transcripts. The full list is in [Privacy](https://github.com/farisology/orbitrace/blob/main/docs/privacy.md#history-store-25).
+- **With recording off** the extension creates no folder and no file for history.
+- **Which editors.** History needs `node:sqlite`, which VS Code has from 1.101. On VS Code 1.96 to 1.100 every history command says why history is unavailable, and the rest of the extension works as before; `orbitrace history disable` and `orbitrace history delete --all` in a terminal still turn recording off and delete a store.
 
 ## Remote machines
 
@@ -78,7 +99,7 @@ node scripts/release/pack-release.mjs --out "$out"
 code --install-extension "$out"/orbitrace-vscode-0.0.0.vsix
 ```
 
-`npm run build` bundles the extension and `@orbitrace/core` into one file (`dist/extension.js`) with esbuild and copies the built web app into `dist/app`. `pack-release.mjs` packages the `.vsix` with the copy of `@vscode/vsce` pinned in `scripts/release/tools/`, and also packs and checks the npm tarballs. `--out` must be an empty folder outside the repository. The `.vsix` holds only the bundle, the app, the activity-bar icon, the listing icon, this readme and the licence. The repository's `docs/releasing.md` describes the packaging in full.
+`npm run build` bundles the extension and `@orbitrace/core` into one file (`dist/extension.js`) with esbuild, bundles core's history worker as its own file beside it (`dist/history-worker.js`; a worker thread starts from a file, so it is never inlined), and copies the built web app into `dist/app`. `pack-release.mjs` packages the `.vsix` with the copy of `@vscode/vsce` pinned in `scripts/release/tools/`, and also packs and checks the npm tarballs. `--out` must be an empty folder outside the repository. The `.vsix` holds only the bundle, the history worker, the app, the activity-bar icon, the listing icon, this readme and the licence. The repository's `docs/releasing.md` describes the packaging in full.
 
 ## Integration test
 
@@ -98,7 +119,7 @@ What a run does:
 3. Starts that VS Code with this package as the extension under development, `CLAUDE_CONFIG_DIR` and `HOME` pointing into the throwaway folder, secrets kept in memory instead of the OS keychain, and telemetry, crash reports and update checks off. When you run it from a terminal inside VS Code, that window's `VSCODE_*` and `ELECTRON_*` variables are not passed on. Your own `~/.claude`, VS Code profile, extensions and keychain are not read or changed.
 4. Runs the suite in `test-integration/suite.ts`, prints one line per step, closes the window, kills any editor process that is left, and deletes the throwaway folder. A run takes a few seconds once VS Code is downloaded.
 
-What it checks: the extension activates when the Sessions view opens; its commands are registered; the Sessions view lists the synthetic sessions with the workspace's own first; Visualise current session opens a tab whose page has the Content-Security-Policy, both host meta tags and resource URLs that resolve to files in `dist/app`; the app inside the tab starts under that policy and sends its own `listSessions` and `subscribe` requests, which the extension answers; `listSessions`, `loadReplay` and `subscribe` sent to the tab's message handler get correct replies and live updates; nothing sent to the tab holds a path; closing the tab stops its subscriptions and file watchers; with no sessions, Open demo and Visualise current session show the demo tab.
+What it checks: the extension activates when the Sessions view opens; its commands are registered; the Sessions view lists the synthetic sessions with the workspace's own first; Visualise current session opens a tab whose page has the Content-Security-Policy, both host meta tags and resource URLs that resolve to files in `dist/app`; the app inside the tab starts under that policy and sends its own `listSessions` and `subscribe` requests, which the extension answers; `listSessions`, `loadReplay` and `subscribe` sent to the tab's message handler get correct replies and live updates; nothing sent to the tab holds a path; closing the tab stops its subscriptions and file watchers; with no sessions, Open demo and Visualise current session show the demo tab. Then history (`ORBITRACE_DATA_DIR` also points into the throwaway folder): core's store and worker run inside the editor; after the whole run above with recording off, no history folder exists; Turn history recording on asks in a modal dialog and the shared settings file then says on; the extension copies every session through its own `dist/history-worker.js`; a session whose transcript is deleted is still listed, marked `history`, and opens; Delete a session from history and Delete all history work. The suite answers the dialogs itself (`test-integration/prompt-spies.ts`). On VS Code 1.96 the history steps that need the store are skipped with the reason, and the suite checks that every history command says why history is unavailable.
 
 What it does not check: what the tab draws. The extension cannot read a webview's page or pixels. The app sending its first request is the evidence that its bundle loads and runs inside the editor. The demo tab sends no messages, so nothing shows that its bundle runs.
 

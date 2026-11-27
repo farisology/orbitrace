@@ -113,6 +113,7 @@ describe("ensureDownloadCacheDir (#125)", () => {
       const pkg = tempDir();
       for (const file of [
         ["dist", "extension.js"],
+        ["dist", "history-worker.js"],
         ["dist", "app", "index.html"],
         ["test-integration", "dist", "suite.cjs"],
       ]) {
@@ -136,10 +137,11 @@ describe("ensureDownloadCacheDir (#125)", () => {
 });
 
 describe("missingBuildOutputs", () => {
-  it("lists the extension, the app page and the suite bundle when absent", () => {
+  it("lists the extension, its history worker, the app page and the suite bundle when absent", () => {
     const pkg = tempDir();
     expect(missingBuildOutputs(pkg)).toEqual([
       join("dist", "extension.js"),
+      join("dist", "history-worker.js"),
       join("dist", "app", "index.html"),
       join("test-integration", "dist", "suite.cjs"),
     ]);
@@ -149,6 +151,7 @@ describe("missingBuildOutputs", () => {
     const pkg = tempDir();
     for (const file of [
       ["dist", "extension.js"],
+      ["dist", "history-worker.js"],
       ["dist", "app", "index.html"],
       ["test-integration", "dist", "suite.cjs"],
     ]) {
