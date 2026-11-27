@@ -51,6 +51,20 @@ const UNAVAILABLE: HistoryCapability = {
   reason: "This Node.js (v20.18.1) has no node:sqlite module. History needs Node 22.13 or later.",
 };
 
+/**
+ * A capability stand-in that says the store can run. The recording-off tests never open a
+ * database, so with this they check the commands' own text on every Node, including Node 20,
+ * which has no node:sqlite (#227).
+ */
+const AVAILABLE: HistoryCapability = {
+  available: true,
+  engine: "node:sqlite",
+  nodeVersion: "v24.22.1",
+  sqliteVersion: "3.53.4",
+  fts5: true,
+};
+const available = { capability: async () => AVAILABLE };
+
 interface Ui {
   questions: ModalQuestion[];
   picks: (readonly StoredSessionItem[])[];
@@ -232,7 +246,7 @@ describe("where the store cannot run (VS Code 1.96 to 1.100)", () => {
 
 describe("the commands with recording off", () => {
   it("Turn off, status and show location create nothing", async () => {
-    const { data, handlers, ui } = setup();
+    const { data, handlers, ui } = setup(available);
     await handlers.turnOff();
     await handlers.status();
     await handlers.showLocation();
@@ -251,7 +265,7 @@ describe("the commands with recording off", () => {
   });
 
   it("Turn on asks first; declining writes nothing", async () => {
-    const { data, handlers, ui } = setup();
+    const { data, handlers, ui } = setup(available);
     ui.confirm = false;
     await handlers.turnOn();
     expect(ui.questions).toHaveLength(1);
@@ -264,7 +278,7 @@ describe("the commands with recording off", () => {
   });
 
   it("name the remote machine in status and show location in a remote window", async () => {
-    const { data, handlers, ui } = setup({}, "wsl");
+    const { data, handlers, ui } = setup(available, "wsl");
     ui.confirm = false;
     await handlers.turnOn();
     await handlers.status();
@@ -280,20 +294,20 @@ describe("the commands with recording off", () => {
   });
 
   it("Show where it is stored copies the full path when asked", async () => {
-    const { data, handlers, ui } = setup();
+    const { data, handlers, ui } = setup(available);
     ui.button = () => HISTORY_BUTTONS.copyPath;
     await handlers.showLocation();
     expect(ui.copied).toEqual([data]);
   });
 
   it("says why when there is no usable data folder", async () => {
-    const { handlers, ui } = setup({ env: { ORBITRACE_DATA_DIR: "relative" } });
+    const { handlers, ui } = setup({ ...available, env: { ORBITRACE_DATA_DIR: "relative" } });
     await handlers.status();
     expect(ui.errors[0]).toMatch(/^The history folder could not be worked out: .*absolute path/);
   });
 
   it("shows a failure with core's fixed text", async () => {
-    const { data, handlers, ui } = setup();
+    const { data, handlers, ui } = setup(available);
     // A file where the data folder should be: the settings file cannot be written.
     writeFileSync(data, "");
     await handlers.turnOn();
