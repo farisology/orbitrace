@@ -1,8 +1,9 @@
 # Command line
 
 `orbitrace` lists the Claude Code sessions on your machine, opens one in your browser through a
-local server, exports a structure-only replay of one of them, keeps an opt-in history of your
-sessions with `orbitrace history`, and checks the set-up with `orbitrace doctor`. Orbitrace is
+local server, exports a structure-only replay of one of them, sums up activity across sessions
+with `orbitrace pulse`, keeps an opt-in history of your sessions with `orbitrace history`, and
+checks the set-up with `orbitrace doctor`. Orbitrace is
 not affiliated with Anthropic.
 
 **Status: not released.** The package is private and not on npm, so `npx orbitrace` does not work
@@ -30,6 +31,7 @@ on the repository's synthetic sessions without reading your own.
 | `orbitrace list`             | Lists sessions, newest first.                              |
 | `orbitrace export <key>`     | Writes the replay of one session.                          |
 | `orbitrace export --latest`  | Writes the replay of the session with the newest activity. |
+| `orbitrace pulse`            | Sums up activity across sessions. Reads only.              |
 | `orbitrace history <cmd>`    | Turns history on or off, copies, lists and deletes it.     |
 | `orbitrace doctor`           | Says what is wrong with the set-up and how to fix it.      |
 | `orbitrace help [<command>]` | Shows help. `orbitrace <command> --help` shows the same.   |
@@ -175,6 +177,61 @@ A session that only the history store holds is exported from its stored lines, t
 parser, replay builder and export as a session read from files. When nothing in it was redacted,
 the file is the same, byte for byte, as an export made from its transcripts before they were
 deleted (a test checks this on the synthetic sessions).
+
+### `orbitrace pulse`
+
+```text
+orbitrace pulse [--since <time>] [--until <time>] [--limit <n>] [--tz <zone>]
+                [--project <name>] [--config-dir <path>]... [--extra-roots] [--json]
+```
+
+Sums up activity across sessions (#27): active and idle time and sessions started by hour of the
+week, the tool mix (calls by kind and by name, with failures and calls with no result), a session
+timeline, and totals. It uses core's `pulseReport`; what each number means, and what is not known
+(time spent waiting on you is not), is in [pulse.md](pulse.md). Sessions are found and built as
+for `list` and `export`, including sessions only the history store holds when a store exists.
+
+Reads only: no file is written and no folder or store is created. Nothing leaves your computer.
+The output holds session keys, times, counts, tool names and token counts; no prompt, reply, file
+content, path or project name.
+
+| Option                          | Meaning                                                                                                                                       |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--since <time>`                | Count sessions that start at or after this time. Forms below.                                                                                 |
+| `--until <time>`                | Count sessions that start before this time. Same forms. Must be after `--since`.                                                              |
+| `--limit <n>`                   | Read at most `n` sessions, the newest by last activity, counted or not (outside the range, unreadable). Default 100.                          |
+| `--tz <zone>`                   | Time zone for the hours of the week and for dates without an offset: an IANA name such as `Europe/London` or `UTC`. Default: this computer's. |
+| `--project <name>`              | Count only sessions with this project name, exactly as `orbitrace list` shows it.                                                             |
+| `--config-dir`, `--extra-roots` | As for `list`.                                                                                                                                |
+| `--json`                        | See [JSON output](#json-output).                                                                                                              |
+
+A `<time>` is one of: `2026-11-01` (midnight in the `--tz` zone), `2026-11-01T09:30` or
+`2026-11-01T09:30:15` (in the `--tz` zone; a space may replace the `T`), the same with `Z` or an
+offset such as `+05:30` (that instant), or `12h`, `7d`, `2w` (that long before now). On a
+daylight-saving day a local time that happens twice means the first one, and one that does not
+exist is moved forward by the change. Anything else is a `usage` error.
+
+A session starts at the first timestamp in its transcripts (main and subagents) and is counted
+whole by that start, so the grid, the session start times and `--since` / `--until` follow the
+transcripts, not file times (a copy, clone or restore that did not keep file times changes
+nothing). Sessions are read newest first by last activity, and at most `--limit` of them are
+read, whether they turn out inside the range, outside it or unreadable, so the run stays short:
+about 13 ms per session on the synthetic sessions, after start-up and listing (the
+measurements are in [pulse.md](pulse.md#orbitrace-pulse)). With a narrow range far in the past,
+raise `--limit`. The last lines of the text output, and `sessions` in the JSON document, say how
+many sessions were listed, read and counted, how many were outside the range, how many were not
+read because of the limit, how many could not be read and why (by error code), and how many came
+from the history store. A session that cannot be read does not stop the command.
+
+Times add up across sessions: sessions that overlap each count their own time, so an hour or a
+total can exceed the clock time it covers; within one session, agents and tool calls running at
+once count once ([pulse.md](pulse.md#active-and-idle)).
+
+The text output fits in 80 columns. It shows the totals, a grid of active time by hour of the
+week (one character per hour, `#` for the busiest), the tool calls by kind, the ten most used
+tools and the sessions, oldest first, with their start in the `--tz` zone, compact lengths and
+the shortest unique start of each key (at least 8 characters; `open` and `export` accept it).
+When a session came from the history store, a SRC column marks it `hist`.
 
 ### `orbitrace history`
 
@@ -437,6 +494,7 @@ document, not on stderr.
 | `export --json` (stdout)  | `{ "key", "fileName", "output": null, "bytes", "warnings", "options", "replay" }`        |
 | `export --json -o <file>` | `{ "key", "fileName", "output": "<file as typed>", "bytes", "warnings", "options" }`     |
 | `open --json`             | `{ "url", "origin", "port", "key", "browser", "warnings" }`                              |
+| `pulse --json`            | core's Pulse report and `{ "sessions", "project", "warnings" }` (below)                  |
 | `doctor --json`           | `{ "doctor", "orbitrace", "node", "platform", "status", "summary", "checks" }`           |
 | `history status --json`   | `{ "recording", "settings", "capability", "dataDir", "database", "store" }`              |
 | `history enable --json`   | `{ "recording": true, "changed", "settings" }`                                           |
@@ -461,6 +519,19 @@ milliseconds), `live` (`busy`, `idle`, `ended` or `unknown`) and `subagentCount`
 The project name and the session id are local data: they are shown to you and are not part of an
 export. In `list --json`, a session that only the history store holds also has `"history": true`;
 the others have no `history` field.
+
+The `pulse` document is core's `PulseReport` ([pulse.md](pulse.md)): `version` (1), `timeZone`,
+`range` (`{ "since", "until" }`, epoch milliseconds or `null`), `definitions` (the written meaning
+of each figure), `totals`, `hourOfWeek` (`{ "weekdays", "cells" }`, 7 rows of 24 cells, each
+`{ "weekday", "hour", "activeMs", "idleMs", "sessionsStarted", "keys" }`), `tools`
+(`{ "byKind", "byName", "total" }`), `timeline`, `idle` (`{ "totalMs", "gaps", "longestGapMs",
+"keys", "waitingOnUser": { "known": false } }`) and `skipped`. The command adds `sessions`:
+`{ "listed", "read", "counted", "outOfRange", "notReadLimit", "limit", "unreadable": { "count",
+"byCode" }, "fromHistory", "historyKeys" }` (`historyKeys`: the counted sessions read from the
+history store, in timeline order; `read + unreadable.count` is at most `limit`), `project` (the
+`--project` value, or `null`) and `warnings`. Every length is whole milliseconds and every time is
+epoch milliseconds. `version` covers the whole `pulse` document, the fields the command adds
+included: a change to `sessions`, `project` or `warnings` bumps it too.
 
 History documents (paths shown with the home folder as `~`):
 

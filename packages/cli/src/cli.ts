@@ -28,6 +28,7 @@ import type { HistoryRuntime } from "./history/context.js";
 import { historySearch, isHistoryRef } from "./history/source.js";
 import { runOpen, type OpenRuntime } from "./open.js";
 import { formatSessionTable, writeOutputFile, type ListedSession } from "./output.js";
+import { buildPulseDocument, formatPulseText } from "./pulse.js";
 import {
   CLI_ADAPTERS,
   chooseSession,
@@ -45,12 +46,17 @@ export interface CliIo {
 }
 
 /**
- * What `open`, `doctor` and `history` take from the process. `appDir` is shared: `doctor` checks
+ * What `open`, `doctor`, `history` and `pulse` take from the process. `appDir` is shared: `doctor` checks
  * the same web app folder `open` serves. `history` (the store's capability check, the worker
  * file, the terminal) is shared by the history commands, `open`, `list`, `export` and `doctor`.
  */
 export interface CliRuntime extends OpenRuntime {
   readonly doctor?: DoctorRuntime;
+  /**
+   * The clock, epoch milliseconds, for `pulse`'s relative `--since` / `--until` values (#27).
+   * Default `Date.now`; tests fix it.
+   */
+  readonly now?: () => number;
 }
 
 /**
@@ -189,6 +195,28 @@ async function runExport(
   return EXIT_OK;
 }
 
+async function runPulse(
+  command: Extract<ParsedCommand, { kind: "pulse" }>,
+  io: CliIo,
+  host: HostContext,
+  runtime: CliRuntime,
+): Promise<number> {
+  const now = (runtime.now ?? Date.now)();
+  const { document, knownKeys } = await buildPulseDocument(
+    command,
+    host,
+    runtime.history ?? {},
+    now,
+  );
+  if (command.json) {
+    writeJson(io, document);
+    return EXIT_OK;
+  }
+  writeWarnings(io, document.warnings);
+  io.stdout(formatPulseText(document, knownKeys));
+  return EXIT_OK;
+}
+
 async function runCommand(
   command: ParsedCommand,
   io: CliIo,
@@ -208,6 +236,8 @@ async function runCommand(
       return runList(command, io, host, runtime.history ?? {});
     case "export":
       return runExport(command, io, host, runtime.history ?? {});
+    case "pulse":
+      return runPulse(command, io, host, runtime);
     case "open":
       return runOpen(command, io, host, runtime);
     case "history":

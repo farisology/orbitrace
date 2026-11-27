@@ -130,7 +130,7 @@ export function createReplayer(
 export const MIN_KEY_PREFIX = 4;
 
 /** The part of a key after `<runtime>:`, or the whole key when it has no colon. */
-function keyBody(key: string): string {
+export function keyBody(key: string): string {
   const colon = key.indexOf(":");
   return colon === -1 ? key : key.slice(colon + 1);
 }
