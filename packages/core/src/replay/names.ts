@@ -1,8 +1,15 @@
 /**
  * Identifier helpers for the replay builder. Each one turns a value from a parsed session into
  * a value the replay v1 schema accepts, or into its documented fallback. None of them ever
- * passes free text through: anything outside the schema's identifier pattern is reduced or
- * replaced.
+ * passes free text through: a value is kept only when it already matches the schema's
+ * identifier pattern, and is otherwise replaced by a fixed label.
+ *
+ * Why replace and not reduce (ticket #23, finding F1 in docs/security/export-audit.md):
+ * rewriting the characters the pattern does not allow (`my client plan` to `my-client-plan`, a
+ * path to its folder names joined by `-`, an email address without its `@`) kept the words of a
+ * free-text value, so text that was not a name still reached a shared replay. Names that already
+ * match the pattern (built-in tool names, the agent types and MCP servers in the fixtures) are
+ * unaffected.
  */
 
 import type { KnownEffortLevel } from "../model/raw.js";
@@ -26,19 +33,21 @@ export const FALLBACK_TOOL_NAME = "unknown";
 
 const MODEL_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const FAMILY_WORD = /^[a-z][a-z0-9]*$/;
+/** The schema's `agentName` pattern. */
+const AGENT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
+/** The server part of the schema's `toolName` pattern (after `mcp:`). */
+const MCP_SERVER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+/** The non-MCP part of the schema's `toolName` pattern. */
+const TOOL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 
 /**
- * Agent type to a schema `agentName`: letters, digits and `._:-`, starting with a letter or
- * digit, at most 64 characters. Other characters become `-`. Returns `subagent` when nothing
- * usable is left.
+ * Agent type to a schema `agentName`: kept when it is already letters, digits and `._:-`,
+ * starting with a letter or digit, at most 64 characters. Anything else (spaces, slashes, `@`,
+ * line breaks, non-ASCII letters, a longer value) gives `subagent`, so no part of it is kept.
  */
 export function agentNameOf(agentType: string | null): string {
   if (agentType === null) return FALLBACK_AGENT_NAME;
-  const cleaned = agentType
-    .replace(/[^A-Za-z0-9._:-]+/g, "-")
-    .replace(/^[^A-Za-z0-9]+/, "")
-    .slice(0, 64);
-  return cleaned === "" ? FALLBACK_AGENT_NAME : cleaned;
+  return AGENT_NAME_PATTERN.test(agentType) ? agentType : FALLBACK_AGENT_NAME;
 }
 
 /** A model id the schema accepts, or `null`. Values such as `<synthetic>` become `null`. */
@@ -82,30 +91,24 @@ function serverFromName(name: string): string | null {
   return match?.[1] ?? null;
 }
 
+/** The server name when it is already an identifier the schema accepts, else `unknown`. */
 function serverLabel(server: string | null): string {
   if (server === null) return FALLBACK_MCP_SERVER;
-  const cleaned = server
-    .replace(/[^A-Za-z0-9._-]+/g, "-")
-    .replace(/^[^A-Za-z0-9]+/, "")
-    .slice(0, 64);
-  return cleaned === "" ? FALLBACK_MCP_SERVER : cleaned;
+  return MCP_SERVER_PATTERN.test(server) ? server : FALLBACK_MCP_SERVER;
 }
 
 /**
  * Display label for a tool call. An `mcp` call becomes `mcp:<server>`, so the MCP tool name
- * never reaches the replay. Any other call keeps the runtime name, reduced to the schema's
- * `[A-Za-z][A-Za-z0-9_]{0,63}`. A non-MCP call whose name still looks like a raw MCP name is
- * labelled `mcp` (the schema rejects the raw form, and `mcp:` is reserved for kind `mcp`).
+ * never reaches the replay; a server name that is not already an identifier becomes `unknown`.
+ * Any other call keeps the runtime name when it already matches the schema's
+ * `[A-Za-z][A-Za-z0-9_]{0,63}`, and is labelled `unknown` otherwise. A non-MCP call whose name
+ * looks like a raw MCP name is labelled `mcp` (the schema rejects the raw form, and `mcp:` is
+ * reserved for kind `mcp`).
  */
 export function toolLabelOf(name: string, kind: ToolKind, mcpServer: string | null): string {
   if (kind === "mcp") return `mcp:${serverLabel(mcpServer ?? serverFromName(name))}`;
-  const cleaned = name
-    .replace(/[^A-Za-z0-9_]+/g, "_")
-    .replace(/^[^A-Za-z]+/, "")
-    .slice(0, 64);
-  if (cleaned === "") return FALLBACK_TOOL_NAME;
-  if (cleaned.startsWith("mcp__")) return "mcp";
-  return cleaned;
+  if (name.startsWith("mcp__")) return "mcp";
+  return TOOL_NAME_PATTERN.test(name) ? name : FALLBACK_TOOL_NAME;
 }
 
 /**
