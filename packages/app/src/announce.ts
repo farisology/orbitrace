@@ -39,17 +39,39 @@ export function liveStatusAnnouncement(before: LiveStatus, after: LiveStatus): s
 export const FOLLOW_ANNOUNCEMENTS = {
   entered: "Following the live session.",
   left: "Stopped following the live session. Go live, or press End, to return.",
+  /**
+   * The followed session's status became `unknown` (issue 139). Go live is hidden then, so this
+   * does not offer it.
+   */
+  statusLost: "The session's status can no longer be read. Stopped following it.",
 } as const;
 
 /**
  * What to say when follow mode changed from `before` to `after`, or `null`. Leaving follow
- * because the session ended (`live` is false) says nothing here: "Live session ended." covers it.
+ * because the session ended (`live` is false) says nothing here: "Live session ended." covers it,
+ * and so does `statusLostAnnouncement` when the status became unknown.
  * Called on transitions only, so it is said once per change and never per snapshot.
  */
 export function followAnnouncement(before: boolean, after: boolean, live: boolean): string | null {
   if (before === after) return null;
   if (after) return FOLLOW_ANNOUNCEMENTS.entered;
   return live ? FOLLOW_ANNOUNCEMENTS.left : null;
+}
+
+/**
+ * What to say when a session's status went from `before` to `after` while the view was
+ * following it (`wasFollowing`): `FOLLOW_ANNOUNCEMENTS.statusLost` when a running session's
+ * status became `unknown`, which ends follow; otherwise `null`. Said once: a later snapshot that
+ * is still `unknown` has `before` equal to `after`, and a view that was not following has
+ * nothing to stop.
+ */
+export function statusLostAnnouncement(
+  before: LiveStatus,
+  after: LiveStatus,
+  wasFollowing: boolean,
+): string | null {
+  if (!wasFollowing || after !== "unknown") return null;
+  return before === "busy" || before === "idle" ? FOLLOW_ANNOUNCEMENTS.statusLost : null;
 }
 
 /**

@@ -167,6 +167,59 @@ describe("opening a file", () => {
   });
 });
 
+describe("replay files only (decided on #19)", () => {
+  const transcriptFile = () =>
+    new File(
+      [`${JSON.stringify({ type: "user", timestamp: "2026-01-01T00:00:00.000Z" })}\n`],
+      "example-session.jsonl",
+    );
+
+  it("the start screen's file input offers replay files only", () => {
+    const { container } = renderPlayer();
+    expect(fileInput(container).getAttribute("accept")).toBe(".json,application/json");
+  });
+
+  it("refuses a picked transcript before reading it, says to export a replay, and stays on start", async () => {
+    const { container } = renderPlayer();
+    const file = transcriptFile();
+    const text = vi.spyOn(file, "text");
+    pick(container, file);
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText(PLAYER_MESSAGES.transcriptRefused)).toBeDefined();
+    expect(within(alert).getByText(PLAYER_MESSAGES.transcriptRefusedHelp)).toBeDefined();
+    expect(alert.textContent).toContain(EXPORT_COMMAND);
+    expect(alert.textContent).not.toContain("example-session");
+    expect(text).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { level: 2, name: PLAYER_MESSAGES.title })).toBeDefined();
+  });
+
+  it("refuses a dropped transcript the same way", async () => {
+    const { container } = renderPlayer();
+    const root = container.querySelector(".player");
+    if (root === null) throw new Error("no player root");
+    drop(root, transcriptFile());
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      PLAYER_MESSAGES.transcriptRefused,
+    );
+    expect(screen.queryByRole("list", { name: "Agents" })).toBeNull();
+  });
+
+  it("the app's Open file inside the player offers and opens replay files only", async () => {
+    const { container } = renderPlayer();
+    pick(container, replayFile(makeModel()));
+    await screen.findByText("Replay file: example.replay.json");
+    const input = fileInput(container);
+    expect(input.getAttribute("accept")).toBe(".json,application/json");
+    expect(input.getAttribute("aria-label")).toBe("Open a replay file");
+    pick(container, transcriptFile());
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      PLAYER_MESSAGES.transcriptRefused,
+    );
+    // The replay shown before stays.
+    expect(screen.getByText("Replay file: example.replay.json")).toBeDefined();
+  });
+});
+
 describe("?replay= link", () => {
   const okFetch = (model: unknown) =>
     vi.fn<FetchFunction>(async (input) => {

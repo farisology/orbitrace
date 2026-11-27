@@ -76,6 +76,7 @@ merged so far.
   #117, #118, #134).
 - The CLI tarball installs on its own: `@orbitrace/core` is bundled into its `dist/index.js`, and
   it no longer ships `src/`, source maps or type declarations (#120, #132).
+- Web app polish (#144): the orrery keeps its size while a followed session adds timeline lanes (the lanes scroll in a fixed-height dock, the newest shown while following); the empty event feed says "Press play." only while paused (#159); message pages are centred (#154); losing a followed session's status is announced once (#139); the public player opens replay files only and refuses transcripts (#19).
 
 ### Security
 

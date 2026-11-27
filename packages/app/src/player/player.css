@@ -29,21 +29,9 @@
 }
 
 /*
- * In app.css the later `.app-main` rule gives every main area its two-column replay grid, which
- * puts a centred message in the left column. The player's message pages use one column.
+ * The start panel is an app message page: app.css centres it in one cell, scrolls it inside main
+ * when it is taller (a long problem list, a short window) and keeps its top reachable.
  */
-.player .app-main-message {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  grid-template-areas: none;
-  /* A long problem list or a short window: the start panel scrolls inside main, never clipped. */
-  overflow-y: auto;
-}
-
-.player .app-main-message > .message {
-  margin: auto;
-}
-
 .player-start {
   display: flex;
   flex-direction: column;

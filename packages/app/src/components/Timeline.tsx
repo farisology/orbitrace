@@ -10,9 +10,15 @@
  * (also with a lane label focused). The drawn tracks are hidden from screen readers; the table of
  * agents after the orrery and the inspector say the same in words. Lane names wrap rather than
  * being cut off, so the `#1` / `#2` suffix that tells two lanes apart stays visible at any zoom.
+ *
+ * The lanes scroll inside the dock (issue 144), which has a fixed share of the height, so new
+ * lanes never shrink the orrery. While following, a newly added lane is scrolled into view unless
+ * the user has scrolled the lanes away from their end, or it would hide the selected or focused
+ * lane; a new selection scrolls its lane into view (`lane-scroll.ts`). Only the lane list scrolls,
+ * never the page.
  */
 
-import { memo, useCallback, useId, useRef } from "react";
+import { memo, useCallback, useId, useLayoutEffect, useRef } from "react";
 import {
   toRealSeconds,
   type ReplayAgent,
@@ -22,6 +28,13 @@ import {
 import type { ClockState } from "../clock";
 import { familyShape } from "../agent-stats";
 import { formatClock, formatDuration, plural } from "../format";
+import {
+  isInView,
+  newLaneScrollTop,
+  revealScrollTop,
+  type LaneSpan,
+  type ScrollView,
+} from "../lane-scroll";
 import { useClock, useClockValue } from "../use-clock";
 import { CALL_LEGEND, CALL_TRACK_UNITS, CallMark, callBand, callClass } from "./CallMark";
 
@@ -134,13 +147,106 @@ export interface TimelineProps {
   readonly model: ReplayModel;
   readonly selected: ReplayAgentId | null;
   readonly onSelect: (agentId: ReplayAgentId | null) => void;
+  /**
+   * Changes when a different replay is shown (not for a newer snapshot of the same one): the
+   * lanes then start at the top, and nothing counts as newly added. Default 0.
+   */
+  readonly generation?: number;
 }
 
-export function Timeline({ model, selected, onSelect }: TimelineProps) {
+/** The extent of a lane element in the scrolling body (its offset parent). */
+function spanOf(lane: Element | null | undefined): LaneSpan | null {
+  if (!(lane instanceof HTMLElement)) return null;
+  return { top: lane.offsetTop, bottom: lane.offsetTop + lane.offsetHeight };
+}
+
+function viewOf(body: HTMLElement): ScrollView {
+  return { scrollTop: body.scrollTop, height: body.clientHeight };
+}
+
+/** Scroll the lane list, and note where, so the scroll event it causes is not the user's. */
+function scrollLanesTo(body: HTMLElement, top: number, own: { current: number | null }): void {
+  body.scrollTop = top;
+  // Read back: the browser clamps to the scroll range.
+  own.current = body.scrollTop;
+}
+
+export function Timeline({ model, selected, onSelect, generation = 0 }: TimelineProps) {
   const clock = useClock();
   const tracksRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const lanesRef = useRef<HTMLOListElement>(null);
+  /** The agents shown last, to tell which lanes a newer snapshot added. */
+  const knownRef = useRef<{ readonly generation: number; readonly ids: Set<string> } | null>(null);
+  /** The user scrolled the lanes away from their end: new lanes no longer scroll into view. */
+  const userScrolledRef = useRef(false);
+  /** The position this component last scrolled to, so its own scroll is not taken as the user's. */
+  const autoTopRef = useRef<number | null>(null);
   const headingId = useId();
   const duration = model.totals.duration;
+
+  // Runs before the effects below, so they read the props of this render.
+  const latest = useRef({ agents: model.agents, selected });
+  useLayoutEffect(() => {
+    latest.current = { agents: model.agents, selected };
+  });
+
+  // A newer snapshot added lanes: show the newest while following (see the header). Runs only
+  // when the agents or the replay change; a change of selection is the next effect's.
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    const lanes = lanesRef.current;
+    const ids = model.agents.map((agent) => agent.id);
+    const known = knownRef.current;
+    knownRef.current = { generation, ids: new Set(ids) };
+    if (body === null || lanes === null || known === null) return;
+    if (known.generation !== generation) {
+      userScrolledRef.current = false;
+      scrollLanesTo(body, 0, autoTopRef);
+      return;
+    }
+    let newest = -1;
+    ids.forEach((id, index) => {
+      if (!known.ids.has(id)) newest = index;
+    });
+    if (newest < 0 || userScrolledRef.current || !clock.getState().following) return;
+    const added = spanOf(lanes.children[newest]);
+    if (added === null) return;
+    const keep: LaneSpan[] = [];
+    const current = latest.current.selected;
+    const selectedSpan = current === null ? null : spanOf(lanes.children[ids.indexOf(current)]);
+    if (selectedSpan !== null) keep.push(selectedSpan);
+    const focused = document.activeElement;
+    if (focused !== null && lanes.contains(focused)) {
+      const focusedSpan = spanOf(focused.closest(".lane"));
+      if (focusedSpan !== null) keep.push(focusedSpan);
+    }
+    const next = newLaneScrollTop(viewOf(body), added, keep);
+    if (next !== null) scrollLanesTo(body, next, autoTopRef);
+  }, [clock, model.agents, generation]);
+
+  // A new selection (from the orrery, the inspector or the event feed) brings its lane into view.
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    const lanes = lanesRef.current;
+    if (body === null || lanes === null || selected === null) return;
+    const index = latest.current.agents.findIndex((agent) => agent.id === selected);
+    const span = index < 0 ? null : spanOf(lanes.children[index]);
+    if (span === null) return;
+    const next = revealScrollTop(viewOf(body), span);
+    if (next !== null) scrollLanesTo(body, next, autoTopRef);
+  }, [selected]);
+
+  const onBodyScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const body = event.currentTarget;
+    const own = autoTopRef.current;
+    autoTopRef.current = null;
+    if (own !== null && Math.abs(body.scrollTop - own) < 1) return;
+    // Away from the end (the last lane not wholly visible) stops new lanes from scrolling into
+    // view; back at the end, they do again.
+    const last = spanOf(lanesRef.current?.lastElementChild);
+    userScrolledRef.current = last !== null && !isInView(viewOf(body), last);
+  };
 
   // Up and Down move focus between lane labels.
   const onLanesKeyDown = (event: React.KeyboardEvent<HTMLOListElement>) => {
@@ -210,8 +316,8 @@ export function Timeline({ model, selected, onSelect }: TimelineProps) {
           <span className="ruler-end">{formatClock(model.totals.realDuration)}</span>
         </div>
       </div>
-      <div className="timeline-body">
-        <ol className="lanes" aria-label="Agents" onKeyDown={onLanesKeyDown}>
+      <div className="timeline-body" ref={bodyRef} onScroll={onBodyScroll}>
+        <ol className="lanes" aria-label="Agents" onKeyDown={onLanesKeyDown} ref={lanesRef}>
           {model.agents.map((agent) => (
             <Lane
               key={agent.id}

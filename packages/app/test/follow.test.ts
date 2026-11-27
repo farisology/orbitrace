@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import { toRealSeconds, type ReplayWarp } from "@orbitrace/core";
-import { FOLLOW_ANNOUNCEMENTS, followAnnouncement } from "../src/announce";
+import { FOLLOW_ANNOUNCEMENTS, followAnnouncement, statusLostAnnouncement } from "../src/announce";
 import {
   CUT_NUDGE_SECONDS,
   behindSeconds,
@@ -82,5 +82,26 @@ describe("followAnnouncement", () => {
     expect(followAnnouncement(true, false, false)).toBeNull();
     expect(followAnnouncement(true, true, true)).toBeNull();
     expect(followAnnouncement(false, false, true)).toBeNull();
+  });
+});
+
+describe("statusLostAnnouncement (#139)", () => {
+  it("speaks when a followed running session's status becomes unknown", () => {
+    expect(statusLostAnnouncement("busy", "unknown", true)).toBe(FOLLOW_ANNOUNCEMENTS.statusLost);
+    expect(statusLostAnnouncement("idle", "unknown", true)).toBe(FOLLOW_ANNOUNCEMENTS.statusLost);
+  });
+
+  it("is silent when the view was not following, or nothing was lost", () => {
+    expect(statusLostAnnouncement("busy", "unknown", false)).toBeNull();
+    // Still unknown on a later snapshot: said once only.
+    expect(statusLostAnnouncement("unknown", "unknown", true)).toBeNull();
+    expect(statusLostAnnouncement("ended", "unknown", true)).toBeNull();
+    expect(statusLostAnnouncement("busy", "ended", true)).toBeNull();
+    expect(statusLostAnnouncement("busy", "idle", true)).toBeNull();
+  });
+
+  it("does not offer Go live or End, which are hidden then", () => {
+    expect(FOLLOW_ANNOUNCEMENTS.statusLost).not.toMatch(/Go live|End/);
+    expect(FOLLOW_ANNOUNCEMENTS.statusLost).not.toBe(FOLLOW_ANNOUNCEMENTS.left);
   });
 });

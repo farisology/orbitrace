@@ -13,9 +13,9 @@
  * snapshot carries the playhead through real time onto the new timeline (`follow.ts`) and hands
  * it to the clock, which catches up to the new edge while following (`clock.ts`). The session
  * ending ends follow. The Live badge says whether the view follows or how far behind it is.
- * A snapshot whose status is `unknown` also ends follow and hides the badge and Go live; when a
- * later one says the session runs, they come back, but follow is not re-entered by itself
- * (issue 139). The host reports a session as ended when its process exits, even without a file
+ * A snapshot whose status is `unknown` also ends follow and hides the badge and Go live, and the
+ * live region says once that the status can no longer be read; when a later one says the session
+ * runs, they come back, but follow is not re-entered by itself (issue 139). The host reports a session as ended when its process exits, even without a file
  * change.
  */
 
@@ -34,6 +34,7 @@ import {
   liveStatusAnnouncement,
   loadedAnnouncement,
   newAgentsAnnouncement,
+  statusLostAnnouncement,
 } from "./announce";
 import { createClock, type Clock, type ClockState } from "./clock";
 import {
@@ -80,6 +81,8 @@ export const APP_MESSAGES = {
   loading: "Loading the session…",
   empty: "No session to show.",
   dropHint: "Drop a .replay.json replay or a .jsonl transcript anywhere on this page, or open one.",
+  /** The drop hint when only replay files are taken (`transcripts={false}`, the public player). */
+  dropHintReplayOnly: "Drop a .replay.json replay anywhere on this page, or open one.",
   hostFailed: "The session could not be loaded.",
   dropHere: "Drop to open. The file is read in this page and is not sent anywhere.",
   transcriptNote: "Main agent only: subagent transcripts are separate files.",
@@ -155,7 +158,22 @@ export interface AppProps {
   readonly startOptions?: StartOptions;
   /** Frame scheduler for the clock. Default `requestAnimationFrame`. */
   readonly frames?: FrameScheduler;
+  /**
+   * Whether the Open file control and the drop hint offer `.jsonl` transcripts as well as replay
+   * files. Default true (the CLI, the editor tab and the no-host app). The public player passes
+   * false: it opens replay files only, and refuses a transcript itself (decided on issue 19).
+   */
+  readonly transcripts?: boolean;
 }
+
+/** What the Open file input accepts, and its label, with and without transcripts. */
+export const OPEN_FILE_INPUT = {
+  withTranscripts: {
+    accept: ".json,.jsonl,application/json",
+    label: "Open a replay or transcript file",
+  },
+  replayOnly: { accept: ".json,application/json", label: "Open a replay file" },
+} as const;
 
 export function App({
   transport,
@@ -165,7 +183,9 @@ export function App({
   notice = null,
   startOptions = NO_START_OPTIONS,
   frames = browserFrames,
+  transcripts = true,
 }: AppProps) {
+  const openInput = transcripts ? OPEN_FILE_INPUT.withTranscripts : OPEN_FILE_INPUT.replayOnly;
   const [clock] = useState<Clock>(() => createClock());
   useClockDriver(clock, frames);
   const reducedMotion = usePrefersReducedMotion();
@@ -249,26 +269,35 @@ export function App({
     });
   }, [clock]);
 
-  /** Say that a followed session changed state or gained agents. Rate-limited for agents. */
-  const announceLive = useCallback((live: LiveStatus, model: ReplayModel | null) => {
-    const parts: string[] = [];
-    const before = announcedLiveRef.current;
-    if (before !== null) {
-      const status = liveStatusAnnouncement(before, live);
-      if (status !== null) parts.push(status);
-    }
-    announcedLiveRef.current = live;
-    const now = Date.now();
-    if (model !== null && now - agentsAnnouncedAtRef.current >= LIVE_ANNOUNCE_INTERVAL_MS) {
-      const added = newAgentsAnnouncement(announcedAgentsRef.current, model);
-      if (added !== null) {
-        parts.push(added);
-        announcedAgentsRef.current = model.agents.length;
-        agentsAnnouncedAtRef.current = now;
+  /**
+   * Say that a followed session changed state or gained agents. Rate-limited for agents.
+   * `wasFollowing`: the view followed the live edge before this update, so a status that became
+   * unknown is said to have stopped follow (issue 139).
+   */
+  const announceLive = useCallback(
+    (live: LiveStatus, model: ReplayModel | null, wasFollowing = false) => {
+      const parts: string[] = [];
+      const before = announcedLiveRef.current;
+      if (before !== null) {
+        const status =
+          liveStatusAnnouncement(before, live) ??
+          statusLostAnnouncement(before, live, wasFollowing);
+        if (status !== null) parts.push(status);
       }
-    }
-    if (parts.length > 0) setAnnouncement(parts.join(" "));
-  }, []);
+      announcedLiveRef.current = live;
+      const now = Date.now();
+      if (model !== null && now - agentsAnnouncedAtRef.current >= LIVE_ANNOUNCE_INTERVAL_MS) {
+        const added = newAgentsAnnouncement(announcedAgentsRef.current, model);
+        if (added !== null) {
+          parts.push(added);
+          announcedAgentsRef.current = model.agents.length;
+          agentsAnnouncedAtRef.current = now;
+        }
+      }
+      if (parts.length > 0) setAnnouncement(parts.join(" "));
+    },
+    [],
+  );
 
   /**
    * A newer snapshot of the session already shown. The playhead keeps its real moment: through
@@ -303,7 +332,7 @@ export function App({
       setSelected((id) =>
         id !== null && model.agents.some((agent) => agent.id === id) ? id : null,
       );
-      announceLive(live, model);
+      announceLive(live, model, state.following);
     },
     [clock, announceLive],
   );
@@ -549,9 +578,9 @@ export function App({
             ref={fileInputRef}
             className="visually-hidden"
             type="file"
-            accept=".json,.jsonl,application/json"
+            accept={openInput.accept}
             tabIndex={-1}
-            aria-label="Open a replay or transcript file"
+            aria-label={openInput.label}
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
@@ -613,7 +642,12 @@ export function App({
             </div>
             <div className="dock">
               <Controls model={view.model} playButtonId={playButtonId} />
-              <Timeline model={view.model} selected={selected} onSelect={setSelected} />
+              <Timeline
+                model={view.model}
+                selected={selected}
+                onSelect={setSelected}
+                generation={view.generation}
+              />
             </div>
             <aside className="side">
               <Inspector model={view.model} selected={selected} onSelect={setSelected} />
@@ -632,7 +666,11 @@ export function App({
                   {hostError !== null ? <span className="muted">({hostError.code})</span> : null}
                 </p>
               ) : null}
-              {stage !== "loading" ? <p className="muted">{APP_MESSAGES.dropHint}</p> : null}
+              {stage !== "loading" ? (
+                <p className="muted">
+                  {transcripts ? APP_MESSAGES.dropHint : APP_MESSAGES.dropHintReplayOnly}
+                </p>
+              ) : null}
             </div>
           </main>
         )}

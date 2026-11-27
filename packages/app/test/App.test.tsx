@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { App, APP_MESSAGES, liveLabel, sourceLabel } from "../src/App";
+import { App, APP_MESSAGES, OPEN_FILE_INPUT, liveLabel, sourceLabel } from "../src/App";
 import { OrreryFactoryContext } from "../src/components/OrreryView";
 import { createDemoTransport } from "../src/demo-session";
 import { FILE_MESSAGES } from "../src/load-file";
@@ -339,6 +339,30 @@ describe("dropped files", () => {
     expect(screen.getByText(APP_MESSAGES.dropHere)).toBeDefined();
     fireEvent.dragLeave(app, { dataTransfer: { types: ["Files"], files: [] } });
     expect(screen.queryByText(APP_MESSAGES.dropHere)).toBeNull();
+  });
+});
+
+describe("which files the Open file control offers", () => {
+  it("replays and transcripts by default (CLI, editor tab, no-host app)", async () => {
+    renderApp(createNoHostTransport([]));
+    await screen.findByText(APP_MESSAGES.empty);
+    const input = screen.getByLabelText(OPEN_FILE_INPUT.withTranscripts.label);
+    expect(input.getAttribute("accept")).toBe(".json,.jsonl,application/json");
+    expect(screen.getByText(APP_MESSAGES.dropHint)).toBeDefined();
+  });
+
+  it("replay files only with transcripts={false} (the public player)", async () => {
+    render(
+      <OrreryFactoryContext.Provider value={fakeOrrery().factory}>
+        <App transport={createNoHostTransport([])} frames={stillFrames} transcripts={false} />
+      </OrreryFactoryContext.Provider>,
+    );
+    await screen.findByText(APP_MESSAGES.empty);
+    const input = screen.getByLabelText(OPEN_FILE_INPUT.replayOnly.label);
+    expect(input.getAttribute("accept")).toBe(".json,application/json");
+    expect(screen.getByText(APP_MESSAGES.dropHintReplayOnly)).toBeDefined();
+    expect(screen.queryByText(APP_MESSAGES.dropHint)).toBeNull();
+    expect(APP_MESSAGES.dropHintReplayOnly).not.toMatch(/jsonl|transcript/);
   });
 });
 

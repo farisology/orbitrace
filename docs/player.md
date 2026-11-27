@@ -20,7 +20,7 @@ session.replay.json` (see [cli.md](cli.md#orbitrace-export)) and open the file i
 - The privacy statement below, in one sentence.
 
 After a replay opens, the app's own **Open file** button and drop area open the next one. Every
-way a file gets in goes through the same checks.
+way a file gets in goes through the same checks. The file pickers offer `.json` files only.
 
 ## Privacy
 
@@ -55,6 +55,12 @@ header.
 
 ## Limits and refusals
 
+- **Replay files only.** The player opens `.replay.json` (any `.json`) files. A `.jsonl` Claude
+  Code transcript is refused before any of it is read, with a message that says to export a
+  replay first (`orbitrace export --latest -o session.replay.json`) and open that file. A raw
+  transcript holds the session's private content, and a public page must not invite visitors to
+  drop one. Any other file type is refused as not supported. The local app (the command line's
+  `orbitrace open`, the editor tab and the app without a host) still opens transcripts.
 - **Size limit: 50 MB** (52,428,800 bytes), for an opened file and for a linked replay. A file
   over the limit is refused before any of it is read, and the message says the limit. A linked
   replay is refused when its `Content-Length` is over the limit, or as soon as the body passes
@@ -65,8 +71,6 @@ header.
 - **Untrusted input.** A replay, its file name and a link are untrusted. Every string from them
   reaches the page as text, never as HTML. The replay schema also allows only identifier
   characters in agent, model and tool names.
-- A `.jsonl` Claude Code transcript can be opened too, as in the app: it is parsed in the page,
-  and only the main agent is shown.
 
 ## Query parameters
 
@@ -129,8 +133,11 @@ In `packages/app/test/player/`:
   root path, has inline script or style, lacks the policy, or names an absolute `http(s)` URL the
   page would load or fetch. Allowed are the XML namespace names and React's error-page prefix in
   React's code, and the export docs link, which a visitor clicks.
-- `Player.test.tsx`: start state, demo, opening, refusals, the size limit, `?replay=`
-  (same origin accepted, cross-origin refused and not fetched), and markup in file names, links
-  and replay names.
+- `Player.test.tsx`: start state, demo, opening, refusals (a transcript picked or dropped on the
+  start screen or in the app is refused unread, and the pickers offer `.json` only), the size
+  limit, `?replay=` (same origin accepted, cross-origin refused and not fetched), and markup in
+  file names, links and replay names.
+- `layout-css.test.ts`: the player frame's reflow rules, and that the start panel uses the app's
+  centred message page (`.app-main.app-main-message` in `app.css`) with no override of its own.
 - `open-file.test.ts`, `linked-replay.test.ts`, `replay-transport.test.ts`: the helpers.
 - `a11y.test.tsx`: axe-core on the player's states.

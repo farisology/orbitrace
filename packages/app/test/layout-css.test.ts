@@ -83,6 +83,57 @@ describe("the Playback row never runs under the side panel", () => {
   });
 });
 
+describe("the orrery keeps its size while lanes are added (#144)", () => {
+  it("wide layout: the dock row is a fixed share of the height, never its content's height", () => {
+    const main = rule(".app-main");
+    expect(declaration(main, "grid-template-rows")).toBe("minmax(0, 1fr) var(--dock-height)");
+    const dock = declaration(main, "--dock-height");
+    expect(dock).toBe("clamp(196px, 35%, 360px)");
+    // Only lengths and a percentage of main: nothing that grows with the lanes.
+    expect(dock).not.toMatch(/auto|content|fit/);
+  });
+
+  it("the dock is a column whose lane list takes the rest and scrolls", () => {
+    const dock = rule(".dock");
+    expect(declaration(dock, "display")).toBe("flex");
+    expect(declaration(dock, "flex-direction")).toBe("column");
+    expect(declaration(dock, "min-height")).toBe("0");
+    // If even the fixed parts do not fit, the dock scrolls instead of clipping.
+    expect(declaration(dock, "overflow-y")).toBe("auto");
+    expect(declaration(rule(".dock > .controls"), "flex")).toBe("none");
+    const timeline = rule(".timeline");
+    expect(declaration(timeline, "flex")).toBe("1 1 auto");
+    expect(declaration(timeline, "min-height")).toBe("0");
+    expect(declaration(rule(".timeline > .timeline-body"), "flex")).toBe("1 1 auto");
+    const body = rule(".timeline-body");
+    expect(declaration(body, "overflow-y")).toBe("auto");
+    expect(body).not.toMatch(/max-height/);
+    // Always room for one lane.
+    expect(declaration(body, "min-height")).toBe("calc(var(--lane-height) + 2 * var(--space-1))");
+  });
+
+  it("narrow and short layout: the stage has its own height and the dock its content's", () => {
+    const narrow = mediaBlock(NARROW);
+    expect(declaration(rule(".app-main", narrow), "grid-template-rows")).toBe("auto auto auto");
+    expect(declaration(rule(".stage", narrow), "height")).toBe("min(100vw, 62vh)");
+    expect(declaration(rule(".dock", narrow), "overflow-y")).toBe("visible");
+    expect(declaration(rule(".timeline-body", narrow), "max-height")).toBe("252px");
+  });
+});
+
+describe("message pages are centred (#154)", () => {
+  it("one cell, with two classes so the replay grid of .app-main cannot win", () => {
+    const message = rule(".app-main.app-main-message");
+    expect(declaration(message, "grid-template-columns")).toBe("minmax(0, 1fr)");
+    expect(declaration(message, "grid-template-rows")).toBe("minmax(0, 1fr)");
+    expect(declaration(message, "grid-template-areas")).toBe("none");
+    expect(declaration(message, "place-items")).toBe("center");
+    // The single-class narrow `.app-main` rule must not undo it: no such override for messages.
+    expect(mediaBlock(NARROW)).not.toMatch(/app-main-message/);
+    expect(() => rule(".app-main-message")).toThrow(/no rule/);
+  });
+});
+
 describe("focus inside scroll areas", () => {
   it("draws the outline inside the inspector and other scroll areas", () => {
     const text = topLevel(appCss);

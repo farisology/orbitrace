@@ -507,6 +507,33 @@ describe("when liveness cannot be told (status unknown, decided on #127)", () =>
     expect(document.activeElement).toBe(playButton());
   });
 
+  it("says once that the status can no longer be read and following stopped", async () => {
+    const { host } = await followingAt(1);
+    const texts: string[] = [];
+    const region = liveRegion() as Element;
+    const observer = new MutationObserver(() => texts.push(region.textContent ?? ""));
+    observer.observe(region, { subtree: true, childList: true, characterData: true });
+    act(() => host.push(replayUpdate(snapshot(1), "unknown")));
+    await settle(1);
+    act(() => host.push(replayUpdate(snapshot(2), "unknown")));
+    await settle(1);
+    act(() => host.push(replayUpdate(snapshot(2), "unknown")));
+    await settle(1);
+    observer.disconnect();
+    expect(liveRegion()?.textContent).toBe(FOLLOW_ANNOUNCEMENTS.statusLost);
+    expect(texts.filter((text) => text === FOLLOW_ANNOUNCEMENTS.statusLost)).toHaveLength(1);
+    // Go live is hidden, so the "return" words are never said.
+    expect(texts).not.toContain(FOLLOW_ANNOUNCEMENTS.left);
+  });
+
+  it("says nothing of the kind when the user was not following", async () => {
+    const { host } = await followingAt(1);
+    fireEvent.change(scrubber(), { target: { value: "2" } });
+    expect(liveRegion()?.textContent).toBe(FOLLOW_ANNOUNCEMENTS.left);
+    act(() => host.push(replayUpdate(snapshot(1), "unknown")));
+    expect(liveRegion()?.textContent).toBe(FOLLOW_ANNOUNCEMENTS.left);
+  });
+
   it("brings the badge and Go live back when the session runs again, without following", async () => {
     const { host, runFrames } = await followingAt(1);
     act(() => host.push(replayUpdate(snapshot(1), "unknown")));
