@@ -78,6 +78,9 @@ merged so far.
   browser downloads the file and an editor tab saves it through the editor's save dialog. The
   playhead no longer adds a horizontal scrollbar at the live edge, and a replay that is not live
   gives its dock the height of its lanes (#168, #172).
+- VS Code extension: listing text for the VS Code Marketplace and Open VSX (description,
+  keywords, category, a 256x256 icon drawn from the Orbitrace mark, banner colour, and a readme
+  written as the listing page); nothing is published (#22).
 
 ### Changed
 

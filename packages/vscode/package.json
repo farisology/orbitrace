@@ -1,7 +1,7 @@
 {
   "name": "orbitrace-vscode",
   "displayName": "Orbitrace: Agent Session Visualizer",
-  "description": "Replays Claude Code agent sessions as an orrery in an editor tab. Orbitrace is an independent project. It is not affiliated with or endorsed by Anthropic.",
+  "description": "Replays Claude Code agent sessions as an orrery in an editor tab and follows running sessions live. Nothing is uploaded. Orbitrace is an independent project. It is not affiliated with or endorsed by Anthropic.",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
@@ -14,15 +14,37 @@
     "url": "https://github.com/farisology/orbitrace/issues"
   },
   "homepage": "https://github.com/farisology/orbitrace#readme",
+  "qna": "https://github.com/farisology/orbitrace/issues",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#060714",
+    "theme": "dark"
+  },
+  "pricing": "Free",
+  "preview": true,
   "categories": [
-    "Visualization",
-    "Other"
+    "Visualization"
   ],
   "keywords": [
+    "claude code",
     "agent",
+    "ai agent",
+    "coding agent",
+    "subagent",
+    "multi-agent",
+    "agent session",
+    "session replay",
     "replay",
+    "visualizer",
+    "visualization",
     "orrery",
-    "visualizer"
+    "timeline",
+    "tool calls",
+    "trace",
+    "transcript",
+    "token usage",
+    "llm",
+    "observability"
   ],
   "main": "./dist/extension.js",
   "engines": {
