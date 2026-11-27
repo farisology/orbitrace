@@ -18,6 +18,7 @@ import { createInterface } from "node:readline/promises";
 import { listSessions, type SessionRef } from "@orbitrace/core";
 import {
   deleteHistoryStore,
+  formatHistoryBytes,
   openHistoryStore,
   runHistoryIngestWorker,
   withoutSqliteWarning,
@@ -49,7 +50,7 @@ import {
   workerUrlOf,
   type HistoryRuntime,
 } from "./context.js";
-import { historySettingsFile, readHistorySettings, writeHistorySettings } from "./settings.js";
+import { historySettingsFile, readHistorySettings, setHistoryRecording } from "./settings.js";
 
 type HistoryCommand = Extract<ParsedCommand, { kind: "history" }>;
 
@@ -85,18 +86,8 @@ function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
 
-/** A byte count for people: B, KB, MB or GB, base 1000, one decimal from KB up. */
-export function formatBytes(bytes: number): string {
-  if (bytes < 1000) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1000;
-  let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
-    value /= 1000;
-    unit += 1;
-  }
-  return `${value.toFixed(1)} ${units[unit]}`;
-}
+/** A byte count for people: B, KB, MB or GB, base 1000, one decimal from KB up (core's). */
+export const formatBytes: (bytes: number) => string = formatHistoryBytes;
 
 /** The capability as the JSON documents report it. */
 function capabilityJson(capability: HistoryCapability): Record<string, unknown> {
@@ -236,13 +227,12 @@ function runSwitch(
   on: boolean,
   canRead: boolean,
 ): number {
-  const before = readHistorySettings(place.settingsFile);
-  const changed = before.recording !== on;
-  // With recording off and no settings file, disable writes nothing: it is off already.
-  const write = on || before.state !== "missing";
-  if (write) {
-    writeHistorySettings(place.location, { ...locationOptions(host), platform: host.platform }, on);
-  }
+  // Core's shared switch (#211): with recording off and no settings file, disable writes
+  // nothing, as it is off already.
+  const { changed, written: write } = setHistoryRecording(place.location, on, {
+    ...locationOptions(host),
+    platform: host.platform,
+  });
   const exists = storeExists(place.location);
   if (command.json) {
     writeJson(io, {

@@ -12,8 +12,9 @@ no extension on the VS Code Marketplace or Open VSX. Everything below runs from 
 - **Web app:** plays a bundled demo session (invented data). You can drop a `.replay.json` file
   or a `.jsonl` transcript onto it.
 - **`orbitrace` command:** `list` lists the sessions on your machine, `export` writes a
-  structure-only replay file, `open` shows a session in your browser, and `doctor` checks the
-  set-up and says how to fix what is wrong.
+  structure-only replay file, `open` shows a session in your browser, `history` keeps a copy of
+  your sessions when you turn it on (off by default), and `doctor` checks the set-up and says how
+  to fix what is wrong.
 - **VS Code extension:** a Sessions view in the activity bar, and one editor tab per session.
 
 ## Prerequisites
@@ -54,7 +55,9 @@ Checks that are not part of `npm test`, each described where it is linked:
 
 - The VS Code integration test, with Node 22 or later:
   `npm run test:integration -w orbitrace-vscode`. It downloads VS Code and runs the built
-  extension in a real window against synthetic sessions. See
+  extension in a real window against synthetic sessions, and runs the history store in the
+  extension host. `ORBITRACE_IT_PROBE_ONLY=1` only prints the editor's bundled Node, Electron
+  and SQLite versions; `ORBITRACE_IT_CACHE_DIR=<absolute path>` downloads the editor there. See
   [packages/vscode/README.md](../packages/vscode/README.md#integration-test).
 - The renderer benchmarks, in `packages/renderer`: `npm run bench:node` and
   `npm run bench:browser` (Node 22 or later; settings `BENCH_DPR`, `BENCH_CPU_THROTTLE` and
@@ -91,12 +94,13 @@ node packages/cli/dist/index.js --help
 node packages/cli/dist/index.js --version
 ```
 
-| Command  | What it does                                                                  |
-| -------- | ----------------------------------------------------------------------------- |
-| `list`   | Lists sessions, newest first: key, last activity, status, subagents, project. |
-| `export` | Writes the structure-only replay of one session.                              |
-| `open`   | Opens a session in your browser through a local server. Ctrl+C stops it.      |
-| `doctor` | Checks the set-up and says what is wrong and how to fix it. Changes nothing.  |
+| Command   | What it does                                                                                |
+| --------- | ------------------------------------------------------------------------------------------- |
+| `list`    | Lists sessions, newest first: key, last activity, status, subagents, project.               |
+| `export`  | Writes the structure-only replay of one session.                                            |
+| `open`    | Opens a session in your browser through a local server. Ctrl+C stops it.                    |
+| `history` | Keeps a copy of your sessions that outlives Claude Code's cleanup. Off until you enable it. |
+| `doctor`  | Checks the set-up and says what is wrong and how to fix it. Changes nothing.                |
 
 Run each one as `node packages/cli/dist/index.js <command>`.
 
@@ -110,13 +114,18 @@ replace the default folders.
 
 The repository has a synthetic config folder, `fixtures/config`, with invented sessions. To see
 only those, point the command at it and hide your own config folder for that one command: set
-`HOME` to an empty temporary folder and `CLAUDE_CONFIG_DIR` to nothing.
+`HOME` to an empty temporary folder and `CLAUDE_CONFIG_DIR` to nothing. `ORBITRACE_DATA_DIR`
+points the history store at the same temporary folder, so `history` never touches a store of
+yours.
 
 Run these from the repository root:
 
 ```sh
 sandbox="$(mktemp -d)"
-orbitrace_demo() { HOME="$sandbox" CLAUDE_CONFIG_DIR= node packages/cli/dist/index.js "$@"; }
+orbitrace_demo() {
+  HOME="$sandbox" CLAUDE_CONFIG_DIR= ORBITRACE_DATA_DIR="$sandbox/data" \
+    node packages/cli/dist/index.js "$@"
+}
 
 orbitrace_demo list --config-dir fixtures/config
 ```
@@ -145,6 +154,25 @@ characters after `claude-code:`, can replace `--latest`.
 `open` prints a link with a one-time token. Anyone who has the link can read the sessions the
 command can see while it runs, so do not share it. Use `--no-browser` to print the link without
 opening a browser.
+
+### Try history on synthetic sessions
+
+History is off by default and needs Node 22.13 or later. With the same `orbitrace_demo`
+function, the store goes into `$sandbox/data`:
+
+```sh
+orbitrace_demo history status                             # recording off, no store yet
+orbitrace_demo history ingest --config-dir fixtures/config  # copy every session once
+orbitrace_demo history list --config-dir fixtures/config    # stored sessions, transcript found
+orbitrace_demo history delete --all --yes                   # remove the whole store
+```
+
+`orbitrace_demo history enable` turns recording on, so that `open` copies sessions in a
+background thread while it runs; `disable` turns it off again. The store keeps your content
+(prompts, replies, tool inputs and outputs) with known secret formats redacted, so without the
+overrides above treat it as being as sensitive as the transcripts. The commands are in
+[cli.md](cli.md#orbitrace-history) and what is stored in
+[privacy.md](privacy.md#history-store-25).
 
 ### Follow a running session
 
@@ -223,6 +251,10 @@ To remove it, uninstall Orbitrace from the Extensions view.
 - [ledger.md](ledger.md): the token totals and cost estimate in the inspector.
 - [player.md](player.md): the public replay player.
 - [performance.md](performance.md): performance targets, benchmarks and results.
+- [test-plan.md](test-plan.md): what each package tests, what CI runs and what is not tested. In
+  the app's tests, await `rendererCreated(orrery)` after `findBy…` before you read the fake
+  renderer; `ORBITRACE_TEST_EFFECT_GAP_MS=30 npm test -w @orbitrace/app` finds tests that read
+  an effect too early.
 - [security/export-audit.md](security/export-audit.md): the audit of what can reach a shared
   replay.
 - [releasing.md](releasing.md) and [CHANGELOG.md](../CHANGELOG.md): how a release is cut, and

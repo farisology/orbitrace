@@ -38,6 +38,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   buildMachineLiterals,
   checkArtefact,
+  checkVsixWorker,
   formatReport,
   packAndCheck,
   readWorkspaceIndex,
@@ -143,6 +144,7 @@ export function packAndCheckVsix(options) {
     licensePath: "extension/LICENSE.txt",
     literals: buildMachineLiterals(options.root),
   });
+  errors.push(...checkVsixWorker(unpacked, files));
   const warnings = [];
   const identity = vsixIdentity(readFileSync(join(unpacked, "extension.vsixmanifest"), "utf8"));
   if (identity.version !== options.version) errors.push("extension.vsixmanifest: version differs");

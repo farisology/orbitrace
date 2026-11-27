@@ -30,6 +30,18 @@ const probe = await loadSqlite();
 export const SQLITE_AVAILABLE = probe.capability.available;
 /** Appended to the name of a suite that needs node:sqlite: the skip reason, or nothing. */
 export const SKIP_NOTE = probe.capability.available ? "" : ` (skipped: ${probe.capability.reason})`;
+/**
+ * Appended to the name of a test that checks POSIX file modes and skips on Windows: the reason on
+ * Windows, nothing elsewhere (#204).
+ */
+export const WINDOWS_NO_MODES = windowsNoModesNote(process.platform);
+
+/** The note `WINDOWS_NO_MODES` holds on `platform`. */
+export function windowsNoModesNote(platform: string): string {
+  return platform === "win32"
+    ? " (skipped on Windows: Node's chmod only sets the read-only flag there)"
+    : "";
+}
 
 export interface Sandbox {
   readonly base: string;
@@ -40,6 +52,16 @@ export interface Sandbox {
 }
 
 const ENV_KEYS = ["HOME", "USERPROFILE", "CLAUDE_CONFIG_DIR", "ORBITRACE_DATA_DIR"] as const;
+
+/**
+ * Remove a sandbox folder. On Windows a folder that still holds an open SQLite or WAL file, or a
+ * file a killed child process has only just released, fails to delete with EBUSY or EPERM for a
+ * moment, so this retries, as `removeSandbox` in `packages/vscode/test-integration/sandbox.ts`
+ * does (#204).
+ */
+export async function removeSandbox(base: string): Promise<void> {
+  await rm(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+}
 
 /**
  * Register hooks that give each test a fresh sandbox, with the environment pointed at it before
@@ -74,7 +96,7 @@ export function useSandbox(): () => Sandbox {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
-    if (current !== null) await rm(current.base, { recursive: true, force: true });
+    if (current !== null) await removeSandbox(current.base);
     current = null;
   });
   return () => {

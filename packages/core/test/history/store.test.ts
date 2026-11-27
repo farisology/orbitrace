@@ -24,10 +24,13 @@ import {
   fixtureSessions,
   rawSourceBytes,
   rawStoreBytes,
+  removeSandbox,
   sandboxSessions,
   SKIP_NOTE,
   SQLITE_AVAILABLE,
   useSandbox,
+  WINDOWS_NO_MODES,
+  windowsNoModesNote,
   type Sandbox,
 } from "./helpers.js";
 
@@ -693,20 +696,50 @@ describe.skipIf(!SQLITE_AVAILABLE)(`history store${SKIP_NOTE}`, () => {
     expect(existsSync(join(box.data, "history.sqlite"))).toBe(false);
   });
 
-  it.skipIf(process.platform === "win32")("makes the folder 0700 and every file 0600", async () => {
-    const box = sandbox();
-    await writeSession(box, lines(0, 3));
-    const store = await writer();
-    try {
-      await ingestHistory(store, { roots: [box.root] });
-      const mode = (path: string) => statSync(path).mode & 0o777;
-      expect(mode(box.data)).toBe(0o700);
-      const files = ["history.sqlite", "history.sqlite-wal", "history.sqlite-shm", "history.lock"];
-      expect(files.map((name) => [name, mode(join(box.data, name))])).toEqual(
-        files.map((name) => [name, 0o600]),
-      );
-    } finally {
-      store.close();
+  it.skipIf(process.platform === "win32")(
+    `makes the folder 0700 and every file 0600${WINDOWS_NO_MODES}`,
+    async () => {
+      const box = sandbox();
+      await writeSession(box, lines(0, 3));
+      const store = await writer();
+      try {
+        await ingestHistory(store, { roots: [box.root] });
+        const mode = (path: string) => statSync(path).mode & 0o777;
+        expect(mode(box.data)).toBe(0o700);
+        const files = [
+          "history.sqlite",
+          "history.sqlite-wal",
+          "history.sqlite-shm",
+          "history.lock",
+        ];
+        expect(files.map((name) => [name, mode(join(box.data, name))])).toEqual(
+          files.map((name) => [name, 0o600]),
+        );
+      } finally {
+        store.close();
+      }
+    },
+  );
+});
+
+describe("the test sandbox (#204)", () => {
+  it("names the Windows skip reason on Windows only", () => {
+    expect(windowsNoModesNote("win32")).toBe(
+      " (skipped on Windows: Node's chmod only sets the read-only flag there)",
+    );
+    for (const platform of ["linux", "darwin", "freebsd"]) {
+      expect(windowsNoModesNote(platform)).toBe("");
     }
+    expect(WINDOWS_NO_MODES).toBe(windowsNoModesNote(process.platform));
+  });
+
+  it("removes a sandbox folder with what is in it, and a missing one without an error", async () => {
+    const box = sandbox();
+    const extra = join(box.base, "extra");
+    await mkdir(join(extra, "nested"), { recursive: true });
+    await writeFile(join(extra, "nested", "file.txt"), "invented");
+    await removeSandbox(extra);
+    expect(existsSync(extra)).toBe(false);
+    await expect(removeSandbox(extra)).resolves.toBeUndefined();
   });
 });

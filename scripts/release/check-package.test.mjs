@@ -24,6 +24,7 @@ import {
   checkSelfContained,
   checkSourceMaps,
   checkThirdPartyNotices,
+  checkVsixWorker,
   entryPoints,
   formatReport,
   moduleSpecifiers,
@@ -709,5 +710,63 @@ describe("the .vsix allow-list", () => {
       "extension/media/screenshot.png: not in the allow-list",
       "extension/media/listing/session.png: not in the allow-list",
     ]);
+  });
+});
+
+describe("the .vsix history worker (#211)", () => {
+  /** A .vsix-like tree with the extension, its worker and the web app's files. */
+  const vsixTree = (worker = '"use strict";\nconst w = require("node:worker_threads");\n') => ({
+    "[Content_Types].xml": "<x/>",
+    "extension.vsixmanifest": "<x/>",
+    "extension/package.json": JSON.stringify({ name: "example-extension", devDependencies: {} }),
+    "extension/readme.md": "# example\n",
+    "extension/LICENSE.txt": LICENSE_TEXT,
+    "extension/dist/extension.js": 'const vscode = require("vscode");\n',
+    "extension/dist/history-worker.js": worker,
+    "extension/dist/app/index.html": "<!doctype html>",
+  });
+  const options = { licenseText: LICENSE_TEXT, licensePath: "extension/LICENSE.txt", literals: [] };
+
+  it("is accepted and required by the allow-list, and no other worker is", () => {
+    expect(checkPaths(["extension/dist/history-worker.js"], VSIX_PACKAGE.allow)).toEqual([]);
+    expect(VSIX_PACKAGE.require).toContain("extension/dist/history-worker.js");
+    expect(VSIX_PACKAGE.selfContained).toEqual(["extension/dist/history-worker.js"]);
+    expect(checkPaths(["extension/dist/other-worker.js"], VSIX_PACKAGE.allow)).toEqual([
+      "extension/dist/other-worker.js: not in the allow-list",
+    ]);
+  });
+
+  it("passes with the worker and fails without it", () => {
+    writeTree(dir, vsixTree());
+    const { files, errors } = checkArtefact(dir, VSIX_PACKAGE, options);
+    expect(errors).toEqual([]);
+    expect(checkVsixWorker(dir, files)).toEqual([]);
+    rmSync(join(dir, "extension", "dist", "history-worker.js"));
+    const without = checkArtefact(dir, VSIX_PACKAGE, options);
+    expect(without.errors).toContain("extension/dist/history-worker.js: missing");
+    expect(checkVsixWorker(dir, without.files)).toEqual([
+      "no file matches the self-contained globs",
+    ]);
+  });
+
+  it("fails a worker that loads a package or a file not shipped, and passes without a manifest", () => {
+    writeTree(
+      dir,
+      vsixTree('const a = require("left-pad");\nconst b = require("./missing.js");\n'),
+    );
+    const { files } = checkArtefact(dir, VSIX_PACKAGE, options);
+    expect(checkVsixWorker(dir, files)).toEqual([
+      "extension/dist/history-worker.js: imports left-pad, which is not inside the tarball",
+      "extension/dist/history-worker.js: imports extension/dist/missing.js, which is not shipped",
+    ]);
+    rmSync(join(dir, "extension", "package.json"));
+    expect(checkVsixWorker(dir, files)).toEqual([]);
+  });
+
+  it("is in the extension's manifest files, so vsce packs it", () => {
+    const manifest = JSON.parse(
+      readFileSync(join(REPO_ROOT, "packages", "vscode", "package.json"), "utf8"),
+    );
+    expect(manifest.files).toContain("dist/history-worker.js");
   });
 });

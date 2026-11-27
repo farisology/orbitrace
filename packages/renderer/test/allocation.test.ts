@@ -1,28 +1,50 @@
 /**
- * Proves the hot path (computeFrameState + drawFrame) allocates nothing per frame.
+ * Proves the hot path (computeFrameState + drawFrame) keeps nothing it allocates per frame: no
+ * object made per frame is still alive when sampling stops. Short-lived garbage is not covered;
+ * see the limit at the end of this comment.
  *
  * Method: warm up so the JIT has optimised the code and every interned label exists, then
  * run thousands of frames under V8's sampling heap profiler and add up the bytes it
  * attributes to code in packages/renderer/src. The profiler samples on average every
- * SAMPLING_INTERVAL bytes allocated, so one 16-byte object per frame over FRAMES frames
+ * SAMPLING_INTERVAL bytes allocated, so one 16-byte object kept per frame over FRAMES frames
  * (128 KB) cannot go unseen. The last tests are the control: they show the same measurement
- * catches a small per-frame allocation and names the function that made it.
+ * catches a small per-frame allocation that is kept (each frame's array stays in a sink until
+ * sampling stops) and names the function that made it.
  *
  * Total heap growth is not used: it moves with work V8 does off the JavaScript path, so it
  * is too noisy to prove zero.
  *
  * A failure prints the bytes per file and per allocating function (with its caller), and how
- * many samples they came from with the largest object (#158). Per-frame garbage shows as many
- * samples of one small size. A few samples of mixed sizes, from about a hundred bytes to a few
+ * many samples they came from with the largest object (#158). A kept per-frame allocation shows
+ * as many samples of one small size. A few samples of mixed sizes, from about a hundred bytes to a few
  * KB, are V8 compiling a function during the run: the profiler charges the optimised code and
  * its metadata to whatever JavaScript is running when the compile is installed, so the named
  * function need not be the one compiled. In #158 that was a helper called once per frame that
  * returns at once, which V8 optimises only after tens of thousands of calls; such a check
  * belongs in the caller, with the call made only when there is work to do.
+ *
+ * The warm-up also reads every export of every module the frame path loads (#214). Vitest runs
+ * src and core through Vite's SSR transform, which turns each export into a getter on the
+ * module's export object, `() => { try { return LABEL_BUDGET } catch {} }`, and each use of an
+ * import in another module into a call of that getter. A getter read about once per frame (for
+ * example `LABEL_BUDGET` in draw.ts, or a phase code of timeline.ts in label-layout.ts) reaches
+ * V8's optimising compiler only after some 24,000 reads, which is inside the measured run: its
+ * compile was charged to the src function running when it landed (`markObstacle`, `traceShape`,
+ * or a getter of timeline.ts or lod.ts), usually a few hundred bytes, once 6,976 bytes, under
+ * load on Node 26 (#214). The bundles the browser, the extension and the CLI load have no such
+ * getters: a module reads an imported binding directly. So they are test runner code, optimised
+ * before the frames are measured rather than counted in them.
+ *
+ * A limit of the method (#214): the profile holds only the sampled objects still alive when
+ * sampling stops. An object a garbage collection frees during the run is dropped from it, so a
+ * per-frame allocation is caught when it is kept (as in the control below), and can pass when it
+ * dies young and a collection runs before the run ends.
  */
 
+/// <reference types="vite/client" />
 import { Session } from "node:inspector/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import * as core from "@orbitrace/core";
 import type { ReplayModel } from "@orbitrace/core";
 import { scaledReplay } from "../demo/sessions.js";
 import { drawFrame, type ViewState } from "../src/draw.js";
@@ -163,6 +185,61 @@ beforeAll(async () => {
   for (const agents of [100, 500]) models.set(agents, await scaledReplay(agents));
 });
 
+/**
+ * The export objects of every renderer src module and of core, as Vitest loaded them: the same
+ * module instances, and so the same export getters, that the frame path reads.
+ */
+const LOADED_MODULES: readonly Record<string, unknown>[] = [
+  ...Object.values(import.meta.glob<Record<string, unknown>>("../src/**/*.ts", { eager: true })),
+  core,
+];
+
+/**
+ * Reads of each export per warm-up pass: several times the roughly 24,000 reads after which a
+ * getter was seen to be optimised.
+ */
+const EXPORT_READS = 100_000;
+
+/**
+ * Warm-up passes, with a pause after each. V8 optimises a getter in two steps, each compiled on
+ * a background thread, and ignores further reads while a step is still compiling. Under load
+ * that wait can outlast a whole pass, and the getter then left one pass half-optimised: its last
+ * step landed in the measured run (#214). Each pause lets the compile threads finish, and the
+ * next pass gives every getter the reads its next step needs.
+ */
+const EXPORT_PASSES = 4;
+const EXPORT_PAUSE_MS = 50;
+
+/**
+ * Read every export of `modules` `reads` times, so V8 optimises each export getter Vitest's
+ * transform made (see the top of this file) before the frames are measured. Returns how many
+ * exports there were and how many reads returned a value.
+ */
+function warmExportGetters(
+  modules: readonly Record<string, unknown>[],
+  reads: number,
+): { exports: number; defined: number } {
+  let exports = 0;
+  let defined = 0;
+  for (const module of modules) {
+    for (const name of Object.keys(module)) {
+      exports++;
+      for (let i = 0; i < reads; i++) if (module[name] !== undefined) defined++;
+    }
+  }
+  return { exports, defined };
+}
+
+beforeAll(async () => {
+  for (let pass = 0; pass < EXPORT_PASSES; pass++) {
+    const { exports, defined } = warmExportGetters(LOADED_MODULES, EXPORT_READS);
+    if (exports < 100 || defined === 0) {
+      throw new Error(`the export warm-up read only ${exports} exports (${defined} defined reads)`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, EXPORT_PAUSE_MS));
+  }
+});
+
 function setup(agents: number, reducedMotion: boolean) {
   const scene = buildScene(models.get(agents)!);
   const layout = computeLayout(scene, 1280, 800);
@@ -229,7 +306,7 @@ describe("allocation detector", () => {
     const sampled = await sampledBytes(leaky);
     const report = breakdown(sampled, ["/packages/renderer/test/"]);
     expect(report).toMatch(/^ {2}\d+ B {2}packages\/renderer\/test\/allocation\.test\.ts$/m);
-    // Per-frame garbage: many samples.
+    // A kept per-frame allocation: many samples.
     const line =
       /^ {4}(\d+) B {2}leaky \(packages\/renderer\/test\/allocation\.test\.ts\) <- .* \((\d+) samples, largest (\d+) B\)$/m.exec(
         report,
@@ -240,5 +317,35 @@ describe("allocation detector", () => {
     expect(report).not.toMatch(/\/packages\//);
     // The budgeted files saw nothing of it.
     expect(breakdown(sampled)).toBe("  nothing sampled in budgeted files");
+  });
+});
+
+describe("export getter warm-up (#214)", () => {
+  it("covers the getters the frame path reads: Vitest serves each export through one", () => {
+    const lod = LOADED_MODULES.find((module) => "LABEL_BUDGET" in module);
+    expect(lod).toBeDefined();
+    expect(typeof Object.getOwnPropertyDescriptor(lod, "LABEL_BUDGET")?.get).toBe("function");
+    expect(LOADED_MODULES.some((module) => "PHASE_DONE" in module)).toBe(true);
+    expect(typeof Object.getOwnPropertyDescriptor(core, "toRealSeconds")?.get).toBe("function");
+  });
+
+  it("reads every export the given number of times", () => {
+    const reads = new Map<string, number>();
+    const module: Record<string, unknown> = {};
+    for (const name of ["first", "second", "missing"]) {
+      Object.defineProperty(module, name, {
+        enumerable: true,
+        get: () => {
+          reads.set(name, (reads.get(name) ?? 0) + 1);
+          return name === "missing" ? undefined : name;
+        },
+      });
+    }
+    expect(warmExportGetters([module], 7)).toEqual({ exports: 3, defined: 14 });
+    expect([...reads]).toEqual([
+      ["first", 7],
+      ["second", 7],
+      ["missing", 7],
+    ]);
   });
 });

@@ -46,7 +46,8 @@ npm run format:check
 npm run privacy
 ```
 
-- CI (`.github/workflows/ci.yml`) runs these checks on Node 20, 22, 24 and 26, and the VS Code integration test in a separate job on Node 22. A failure in any of them, `npm run format:check` and the integration test included, fails the CI run.
+- CI (`.github/workflows/ci.yml`) runs these checks on Node 20, 22, 24 and 26, and the VS Code integration test in a separate job on Node 22, on the current stable VS Code and on 1.96.0 (the lowest version `engines.vscode` allows). A failure in any of them, `npm run format:check` and the integration test included, fails the CI run. One more job runs the core tests on `windows-latest` with Node 24; it does not fail the CI run yet (`continue-on-error`).
+- What each package tests, what CI runs and what is not tested are in [docs/test-plan.md](docs/test-plan.md). In the app's tests, after `findBy…` or `waitFor`, await `rendererCreated(orrery)` before you read the fake renderer. To find a test that reads an effect too early, run `ORBITRACE_TEST_EFFECT_GAP_MS=30 npm test -w @orbitrace/app`. Do not fix such a test with a retry or a longer timeout.
 - If a command fails, fix the cause or report the failure in the pull request. Do not hide it or skip it.
 - If you could not run a command, say so and why. Never report a result you did not see.
 - `npm run privacy` fails when forbidden strings appear in the files or in their file and folder names. `npm run privacy -- --range <base>..<head>` checks every line your commits add, every path they add or rename to, and every commit message; CI runs both (`.github/workflows/ci.yml`). Findings name the file, line and rule, never the matched text.

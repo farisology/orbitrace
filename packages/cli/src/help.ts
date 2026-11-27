@@ -95,6 +95,27 @@ export function commandHelpText(name: CommandName): string {
       "the history store in a background thread while it runs, and stops when the server stops.",
     );
   }
+  if (name === "pulse") {
+    lines.push(
+      "",
+      "Reads only: nothing is written and no folder or store is created. The summary holds session",
+      "keys, times, counts, tool names and token counts; no prompt, reply, file content, path or",
+      "project name. Nothing leaves this computer.",
+      "",
+      "Active time is the replay's timeline after long idle stretches (over 45 s with nothing in",
+      "progress) were cut; idle time is what was cut. A replay records no prompts, so idle time is",
+      "not the same as time spent waiting on you. Sessions that overlap each count their own time,",
+      "so times can add up past the clock time they cover. A session starts at the first timestamp",
+      "in its transcripts and is counted whole by that start. At most --limit sessions are read,",
+      "newest first by last activity; the last lines say how many were left out by the limit or",
+      "the time range, and how many could not be read and why. What each number means is in",
+      "docs/pulse.md.",
+      "",
+      "Sessions that are only in the history store (their transcripts are gone) are counted too:",
+      "the session table marks them 'hist' in a SRC column, and --json lists their keys in",
+      "sessions.historyKeys.",
+    );
+  }
   if (name === "list" || name === "export" || name === "open") {
     lines.push(
       "",
@@ -129,7 +150,13 @@ export function commandHelpText(name: CommandName): string {
       "the --json shape are listed in docs/cli.md.",
     );
   }
-  if (name === "list" || name === "export" || name === "open" || name === "doctor") {
+  if (
+    name === "list" ||
+    name === "export" ||
+    name === "open" ||
+    name === "pulse" ||
+    name === "doctor"
+  ) {
     lines.push(
       "",
       "Folders are searched in this order: --config-dir, CLAUDE_CONFIG_DIR, the default",

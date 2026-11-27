@@ -1,7 +1,7 @@
 // Where the history store lives and the checks on that place (#25). Path rules run on every
 // Node; nothing here creates a store.
 import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, normalize, win32 } from "node:path";
 import { describe, expect, it } from "vitest";
 import { checkHistoryLocation } from "../../src/history/location.js";
 import {
@@ -37,10 +37,49 @@ describe("resolveHistoryLocation", () => {
   });
 
   it("prefers an explicit folder, and refuses a relative one", () => {
-    expect(resolveHistoryLocation({ dataDir: "/srv/history", env: {} }).dir).toBe("/srv/history");
+    // The platform is named: with none, this host's path rules apply, and on Windows
+    // "/srv/history" normalises to "\srv\history" (#204).
+    const env = { [HISTORY_DATA_DIR_ENV]: "/srv/ignored" };
+    expect(resolveHistoryLocation({ dataDir: "/srv/history", env, platform: "linux" })).toEqual({
+      dir: "/srv/history",
+      dbFile: "/srv/history/history.sqlite",
+      lockFile: "/srv/history/history.lock",
+    });
+    expect(resolveHistoryLocation({ dataDir: "/srv/history", env: {} }).dir).toBe(
+      normalize("/srv/history"),
+    );
     expect(() =>
       resolveHistoryLocation({ env: { [HISTORY_DATA_DIR_ENV]: "relative/dir" } }),
     ).toThrow(expect.objectContaining({ code: "unsafe-location" }));
+  });
+
+  it("follows Windows path rules on any host when the platform is win32", () => {
+    const win = (dataDir: string) =>
+      resolveHistoryLocation({ dataDir, env: {}, platform: "win32" }).dir;
+    expect(win("D:/Data/history")).toBe("D:\\Data\\history");
+    expect(win("\\\\server\\share\\history")).toBe("\\\\server\\share\\history");
+    // Rooted on the current drive: Node's path.win32 counts it as absolute.
+    expect(win("/srv/history")).toBe("\\srv\\history");
+    expect(resolveHistoryLocation({ dataDir: "D:\\Data\\h", env: {}, platform: "win32" })).toEqual({
+      dir: "D:\\Data\\h",
+      dbFile: "D:\\Data\\h\\history.sqlite",
+      lockFile: "D:\\Data\\h\\history.lock",
+    });
+    // Windows looks environment variables up case-insensitively; other systems do not.
+    expect(
+      resolveHistoryLocation({ env: { orbitrace_data_dir: "D:\\Data\\h" }, platform: "win32" }).dir,
+    ).toBe("D:\\Data\\h");
+    expect(
+      resolveHistoryLocation({
+        env: { orbitrace_data_dir: "/srv/ignored" },
+        homeDir: "/srv/example-home",
+        platform: "linux",
+      }).dir,
+    ).toBe("/srv/example-home/.orbitrace");
+    // Relative and drive-relative paths are refused.
+    for (const dataDir of ["relative\\dir", "D:relative", "D:"]) {
+      expect(() => win(dataDir)).toThrow(expect.objectContaining({ code: "unsafe-location" }));
+    }
   });
 
   it("refuses when there is no home folder and no setting", () => {
@@ -76,6 +115,38 @@ describe("checkHistoryLocation", () => {
         env: {},
       }),
     ).toThrow(expect.objectContaining({ code: "unsafe-location" }));
+  });
+
+  it("follows Windows path rules on any host when the platform is win32", () => {
+    const options = {
+      platform: "win32",
+      homeDir: "D:\\Profiles\\example",
+      env: { claude_config_dir: "E:\\Config\\example" },
+    };
+    const winAt = (dir: string): HistoryLocation => ({
+      dir,
+      dbFile: win32.join(dir, "history.sqlite"),
+      lockFile: win32.join(dir, "history.lock"),
+    });
+    // CLAUDE_CONFIG_DIR is found whatever its case, and folders compare case-insensitively.
+    for (const dir of [
+      "E:\\Config\\example\\h",
+      "e:/config/EXAMPLE/h",
+      "D:\\PROFILES\\example\\.claude",
+    ]) {
+      expect(() => checkHistoryLocation(winAt(dir), options)).toThrow(
+        expect.objectContaining({ code: "unsafe-location" }),
+      );
+    }
+    // Beside the config folders, or on another drive, is allowed. (No share path here: on a
+    // Windows host the check looks for .git on disk, and a share would be a network lookup.)
+    for (const dir of [
+      "D:\\Profiles\\example\\.orbitrace",
+      "E:\\Config\\example-other",
+      "F:\\history",
+    ]) {
+      expect(() => checkHistoryLocation(winAt(dir), options)).not.toThrow();
+    }
   });
 
   it("refuses a folder inside a git working tree", async () => {

@@ -6,6 +6,7 @@ import {
   workspaceFirst,
   type CatalogEntry,
 } from "../src/session-catalog.js";
+import { HISTORY_LOCATOR_PREFIX } from "@orbitrace/core/node";
 import { fakeReplayer, makeRef, makeSummary } from "./helpers.js";
 
 const newest = makeSummary({
@@ -123,5 +124,32 @@ describe("topLevelNodes and childNodes", () => {
     expect(topLevelNodes([inside])).toEqual([{ kind: "session", entry: inside }]);
     expect(topLevelNodes([])).toEqual([]);
     expect(childNodes({ kind: "session", entry: inside })).toEqual([]);
+  });
+});
+
+describe("sessions kept only in the history store (#211)", () => {
+  it("are listed and marked fromHistory; sessions read from files are not marked", async () => {
+    const stored = makeSummary({ key: "claude-code:stored", lastActivity: 500, live: "ended" });
+    const catalog = createSessionCatalog(
+      fakeReplayer([
+        makeRef(newest, "-workspace-marble-run"),
+        {
+          ...makeRef(stored, "-workspace-kite-workshop"),
+          locator: `${HISTORY_LOCATOR_PREFIX}${stored.key}`,
+        },
+      ]),
+    );
+    const entries = await catalog.list([]);
+    expect(entries).toEqual([
+      { summary: newest, inWorkspace: false },
+      { summary: stored, inWorkspace: false, fromHistory: true },
+    ]);
+    // A stored session has no project folder, so it is never matched to the workspace.
+    const inWorkspace = await catalog.list(["/workspace/kite-workshop"]);
+    expect(inWorkspace.find((entry) => entry.summary.key === stored.key)).toEqual({
+      summary: stored,
+      inWorkspace: false,
+      fromHistory: true,
+    });
   });
 });

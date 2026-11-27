@@ -67,7 +67,13 @@
     "onCommand:orbitrace.visualiseCurrent",
     "onCommand:orbitrace.visualiseSession",
     "onCommand:orbitrace.openDemo",
-    "onCommand:orbitrace.refreshSessions"
+    "onCommand:orbitrace.refreshSessions",
+    "onCommand:orbitrace.history.turnOn",
+    "onCommand:orbitrace.history.turnOff",
+    "onCommand:orbitrace.history.status",
+    "onCommand:orbitrace.history.deleteSession",
+    "onCommand:orbitrace.history.deleteAll",
+    "onCommand:orbitrace.history.showLocation"
   ],
   "contributes": {
     "viewsContainers": {
@@ -117,6 +123,36 @@
         "title": "Refresh sessions",
         "category": "Orbitrace",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "orbitrace.history.turnOn",
+        "title": "Turn history recording on",
+        "category": "Orbitrace"
+      },
+      {
+        "command": "orbitrace.history.turnOff",
+        "title": "Turn history recording off",
+        "category": "Orbitrace"
+      },
+      {
+        "command": "orbitrace.history.status",
+        "title": "Show history status",
+        "category": "Orbitrace"
+      },
+      {
+        "command": "orbitrace.history.deleteSession",
+        "title": "Delete a session from history...",
+        "category": "Orbitrace"
+      },
+      {
+        "command": "orbitrace.history.deleteAll",
+        "title": "Delete all history",
+        "category": "Orbitrace"
+      },
+      {
+        "command": "orbitrace.history.showLocation",
+        "title": "Show where history is stored",
+        "category": "Orbitrace"
       }
     ],
     "menus": {
@@ -136,6 +172,7 @@
   },
   "files": [
     "dist/extension.js",
+    "dist/history-worker.js",
     "dist/app",
     "media",
     "LICENSE",

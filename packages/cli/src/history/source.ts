@@ -3,8 +3,9 @@
  * and `open` replay them, through the same session replayer, parser, replay builder and export
  * allow-list as sessions read from files.
  *
- * How: the commands search one more source root, the history root, and use an adapter that wraps
- * the Claude Code adapter. For the history root it lists the stored sessions; for a session found
+ * How (the adapter and the root are core's since #211, shared with the editor extension): the
+ * commands search one more source root, the history root, and use an adapter that wraps the
+ * Claude Code adapter. For the history root it lists the stored sessions; for a session found
  * there it hands the stored lines (core's `readSession`, already a `SessionInput`) to the
  * replayer instead of opening files. Core lists the file roots first and keeps the first session
  * with a key, so a session whose transcript is still found is always read from its files; only
@@ -14,20 +15,14 @@
  * the history root is added only when the database file already exists.
  */
 
-import type {
-  ListSessionsOptions,
-  SessionInput,
-  SessionRef,
-  SourceAdapter,
-  SourceRoot,
-} from "@orbitrace/core";
+import type { SourceAdapter, SourceRoot } from "@orbitrace/core";
 import {
   CLAUDE_CODE_RUNTIME,
+  historyAwareAdapter,
+  historyRoot,
   openHistoryStore,
   toHistoryErrorInfo,
   withoutSqliteWarning,
-  type HistoryLocationOptions,
-  type HistoryStore,
 } from "@orbitrace/core/node";
 import type { CliWarning, HostContext } from "../sessions.js";
 import {
@@ -38,100 +33,14 @@ import {
   type HistoryRuntime,
 } from "./context.js";
 
-/** The locator of a session read from the history store: this prefix and the session key. */
-export const HISTORY_LOCATOR_PREFIX = "orbitrace-history:";
-
-/**
- * The source root that stands for the history store. Its `root` is the database file (local
- * only, like every root); `resolvedBy` is `extra-root` because, like the desktop app's folders,
- * it is searched after the config folders.
- */
-export function historyRoot(dbFile: string): SourceRoot {
-  return { runtime: CLAUDE_CODE_RUNTIME, root: dbFile, resolvedBy: "extra-root", available: true };
-}
-
-/** Whether a root is the history root of `dbFile`. */
-function isHistoryRootOf(root: SourceRoot, dbFile: string): boolean {
-  return root.runtime === CLAUDE_CODE_RUNTIME && root.root === dbFile;
-}
-
-/** Whether a session was found in the history store rather than in files. */
-export function isHistoryRef(ref: SessionRef): boolean {
-  return ref.locator.startsWith(HISTORY_LOCATOR_PREFIX);
-}
-
-/** Open a reader, run `body`, close it. */
-async function withReader<T>(
-  options: HistoryLocationOptions,
-  body: (store: HistoryStore) => T,
-): Promise<T> {
-  const store = await withoutSqliteWarning(() => openHistoryStore({ ...options, mode: "read" }));
-  try {
-    return body(store);
-  } finally {
-    store.close();
-  }
-}
-
-/** The stored sessions as `SessionRef`s under the history root, newest first. */
-async function listStored(
-  options: HistoryLocationOptions,
-  root: SourceRoot,
-  listOptions: ListSessionsOptions = {},
-): Promise<readonly SessionRef[]> {
-  const stored = await withReader(options, (store) => store.listSessions());
-  const refs = stored
-    .filter(
-      (session) => listOptions.since === undefined || session.lastActivity >= listOptions.since,
-    )
-    .map((session): SessionRef => ({
-      key: session.key,
-      runtime: session.runtime,
-      source: root,
-      projectLabel: session.projectLabel,
-      sessionId: session.sessionId,
-      lastActivity: session.lastActivity,
-      // Its transcript is not where it was found, so it is not being written.
-      live: "ended",
-      subagentCount: session.subagentCount,
-      locator: `${HISTORY_LOCATOR_PREFIX}${session.key}`,
-    }));
-  return refs;
-}
-
-/**
- * The adapter the commands use: the Claude Code adapter, plus the history store for refs and
- * roots that come from it. `dbFile` is the store's database file; `options` locate it.
- */
-export function historyAwareAdapter(
-  base: SourceAdapter,
-  dbFile: string,
-  options: HistoryLocationOptions,
-): SourceAdapter {
-  const baseWatch = base.watchSession?.bind(base);
-  return {
-    runtime: base.runtime,
-    displayName: base.displayName,
-    resolveRoots: (context) => base.resolveRoots(context),
-    listSessions: (root, listOptions) =>
-      isHistoryRootOf(root, dbFile)
-        ? listStored(options, root, listOptions)
-        : base.listSessions(root, listOptions),
-    openSession: async (ref): Promise<SessionInput> => {
-      if (!isHistoryRef(ref)) return base.openSession(ref);
-      const input = await withReader(options, (store) => store.readSession(ref.key));
-      if (input === null) throw new Error("The session is no longer in the history store.");
-      return input;
-    },
-    ...(baseWatch === undefined
-      ? {}
-      : {
-          // A stored session does not change while it is shown: nothing to watch.
-          watchSession: (ref: SessionRef, listener: Parameters<typeof baseWatch>[1]) =>
-            isHistoryRef(ref) ? () => undefined : baseWatch(ref, listener),
-        }),
-  };
-}
+// The adapter, the root and the locator prefix are core's since #211, shared with the editor
+// extension; passed on here under the names the CLI uses.
+export {
+  HISTORY_LOCATOR_PREFIX,
+  historyAwareAdapter,
+  historyRoot,
+  isHistoryRef,
+} from "@orbitrace/core/node";
 
 /** The history root to search and the adapters to use, or none, with any warning. */
 export interface HistorySearch {
@@ -169,7 +78,8 @@ export async function historySearch(
   if (!capability.available) return unreadable(capability.reason);
   const options = locationOptions(host);
   try {
-    await withReader(options, () => undefined);
+    const store = await withoutSqliteWarning(() => openHistoryStore({ ...options, mode: "read" }));
+    store.close();
   } catch (error) {
     return unreadable(toHistoryErrorInfo(error).message);
   }

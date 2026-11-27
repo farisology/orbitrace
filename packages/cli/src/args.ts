@@ -47,7 +47,15 @@ export interface CommandSpec {
   readonly subcommands?: readonly SubcommandSpec[];
 }
 
-export const COMMAND_NAMES = ["open", "list", "export", "history", "doctor", "help"] as const;
+export const COMMAND_NAMES = [
+  "open",
+  "list",
+  "export",
+  "pulse",
+  "history",
+  "doctor",
+  "help",
+] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
 /** The subcommands of `orbitrace history` (#195). */
@@ -61,6 +69,15 @@ export const HISTORY_ACTIONS = [
   "where",
 ] as const;
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
+
+/**
+ * Sessions `pulse` reads at most without `--limit` (#27): the newest by last activity, whether
+ * they turn out inside the range, outside it or unreadable. Each one is parsed and built, so the
+ * run time grows with it. Measured on 1,000 generated synthetic sessions (89 KB each on
+ * average): about 13 ms per session after start-up and listing, so the default run takes about
+ * 2 s there, in or out of the range (docs/pulse.md has the figures).
+ */
+export const PULSE_DEFAULT_LIMIT = 100;
 
 /** Sessions the `doctor` parser check reads, newest first, without `--parse-limit`. */
 export const DOCTOR_DEFAULT_PARSE_LIMIT = 20;
@@ -215,6 +232,51 @@ export const COMMANDS: Readonly<Record<CommandName, CommandSpec>> = {
       HELP_OPTION,
     ],
   },
+  pulse: {
+    name: "pulse",
+    summary:
+      "Sum up activity across sessions: hours of the week, tool mix, a session timeline and idle time. Reads only.",
+    usage:
+      "orbitrace pulse [--since <time>] [--until <time>] [--limit <n>] [--tz <zone>] [--project <name>] [--config-dir <path>]... [--extra-roots] [--json]",
+    arguments: [],
+    options: [
+      {
+        name: "since",
+        type: "string",
+        value: "time",
+        description:
+          "Count sessions that start at or after this time: 2026-11-01 (midnight in --tz), 2026-11-01T09:30 (in --tz), an ISO time with Z or an offset, or 7d, 12h, 2w before now.",
+      },
+      {
+        name: "until",
+        type: "string",
+        value: "time",
+        description: "Count sessions that start before this time. Same forms as --since.",
+      },
+      {
+        name: "limit",
+        type: "string",
+        value: "n",
+        description: `Read at most n sessions, the newest by last activity, counted or not (outside the range, unreadable). Default: ${PULSE_DEFAULT_LIMIT}.`,
+      },
+      {
+        name: "tz",
+        type: "string",
+        value: "zone",
+        description:
+          "Time zone for the hours of the week and for dates without an offset, such as Europe/London or UTC. Default: this computer's zone.",
+      },
+      {
+        name: "project",
+        type: "string",
+        value: "name",
+        description: "Count only sessions with this project name, as 'orbitrace list' shows it.",
+      },
+      ...SOURCE_OPTIONS,
+      JSON_OPTION,
+      HELP_OPTION,
+    ],
+  },
   history: {
     name: "history",
     summary:
@@ -353,6 +415,16 @@ export interface SourceFlags {
   readonly extraRoots: boolean;
 }
 
+/**
+ * A `--since` or `--until` value as typed, resolved to an instant only when the command runs,
+ * because a date without an offset needs the time zone and a relative value needs the clock.
+ * `local` is a wall-clock time as milliseconds since 1970-01-01 00:00 local.
+ */
+export type PulseTimeSpec =
+  | { readonly kind: "instant"; readonly ms: number }
+  | { readonly kind: "local"; readonly localMs: number }
+  | { readonly kind: "ago"; readonly ms: number };
+
 export type ParsedCommand =
   | { readonly kind: "help"; readonly json: boolean; readonly command?: CommandName }
   | { readonly kind: "version"; readonly json: boolean }
@@ -383,6 +455,18 @@ export type ParsedCommand =
       /** False with --no-browser. */
       readonly browser: boolean;
       readonly port?: number;
+    }
+  | {
+      readonly kind: "pulse";
+      readonly json: boolean;
+      readonly sources: SourceFlags;
+      readonly since?: PulseTimeSpec;
+      readonly until?: PulseTimeSpec;
+      /** Most sessions read (counted, outside the range or unreadable), newest first by last activity. */
+      readonly limit: number;
+      /** `--tz` as typed; checked against `Intl` when the command runs. */
+      readonly tz?: string;
+      readonly project?: string;
     }
   | {
       readonly kind: "doctor";
@@ -520,6 +604,67 @@ export function parsePort(value: string): number {
     throw usageError("--port needs a whole number from 1 to 65535.", "open");
   }
   return port;
+}
+
+const PULSE_TIME_UNITS: Readonly<Record<string, number>> = {
+  h: 3_600_000,
+  d: 86_400_000,
+  w: 604_800_000,
+};
+
+/**
+ * A `--since` or `--until` value: `YYYY-MM-DD`, `YYYY-MM-DDTHH:MM[:SS]` (both in the `--tz`
+ * zone), either with `Z` or `+HH:MM` / `-HH:MM` (an instant), or `<n>h`, `<n>d`, `<n>w` before
+ * now. Anything else, or a date that does not exist (such as 2026-02-30), is a usage error that
+ * names the flag and not the value.
+ */
+export function parsePulseTime(value: string, flag: "--since" | "--until"): PulseTimeSpec {
+  const message = `${flag} needs a date such as 2026-11-01, a time such as 2026-11-01T09:30 or 2026-11-01T09:30Z, or a span before now such as 7d, 12h or 2w.`;
+  const trimmed = value.trim();
+  const ago = /^(\d{1,6})([hdw])$/.exec(trimmed);
+  if (ago !== null) {
+    return {
+      kind: "ago",
+      ms: Number(ago[1]) * (PULSE_TIME_UNITS[ago[2] as string] as number),
+    };
+  }
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?(Z|[+-]\d{2}:\d{2})?)?$/.exec(
+      trimmed,
+    );
+  if (match === null) throw usageError(message, "pulse");
+  const [, y, mo, d, h = "0", mi = "0", sec = "0", zone] = match;
+  const parts = [y, mo, d, h, mi, sec].map(Number) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  const [year, month, day, hour, minute, second] = parts;
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, second, 0);
+  const localMs = date.getTime();
+  const valid =
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    hour < 24 &&
+    minute < 60 &&
+    second < 60;
+  if (!valid) throw usageError(message, "pulse");
+  if (zone === undefined) return { kind: "local", localMs };
+  if (zone === "Z") return { kind: "instant", ms: localMs };
+  const sign = zone.startsWith("-") ? -1 : 1;
+  const offsetHours = Number(zone.slice(1, 3));
+  const offsetMinutes = Number(zone.slice(4, 6));
+  if (offsetHours > 23 || offsetMinutes > 59) throw usageError(message, "pulse");
+  return {
+    kind: "instant",
+    ms: localMs - sign * (offsetHours * 3_600_000 + offsetMinutes * 60_000),
+  };
 }
 
 export function isHistoryAction(value: string): value is HistoryAction {
@@ -712,6 +857,34 @@ export function parseCommandLine(argv: readonly string[]): ParsedCommand {
         latest,
         browser: values["no-browser"] !== true,
         ...(port === undefined ? {} : { port }),
+      };
+    }
+    case "pulse": {
+      if (positionals.length > 0) {
+        throw usageError(`pulse takes no arguments, got '${positionals[0]}'.`, "pulse");
+      }
+      const since =
+        typeof values.since === "string" ? parsePulseTime(values.since, "--since") : undefined;
+      const until =
+        typeof values.until === "string" ? parsePulseTime(values.until, "--until") : undefined;
+      const tz = typeof values.tz === "string" ? values.tz.trim() : undefined;
+      if (tz !== undefined && tz === "") throw usageError("--tz needs a time zone name.", "pulse");
+      const project = typeof values.project === "string" ? values.project : undefined;
+      if (project !== undefined && project.trim() === "") {
+        throw usageError("--project needs a project name.", "pulse");
+      }
+      return {
+        kind: "pulse",
+        json: commandJson,
+        sources: sourceFlags(values, "pulse"),
+        ...(since === undefined ? {} : { since }),
+        ...(until === undefined ? {} : { until }),
+        limit:
+          typeof values.limit === "string"
+            ? parseLimit(values.limit, "pulse")
+            : PULSE_DEFAULT_LIMIT,
+        ...(tz === undefined ? {} : { tz }),
+        ...(project === undefined ? {} : { project }),
       };
     }
     case "history":

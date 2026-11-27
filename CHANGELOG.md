@@ -75,6 +75,7 @@ merged so far.
 - `orbitrace doctor`: a read-only check of the set-up (Node version, config folder, session folders, parser health, running-sessions folder, web app, loopback port, `node:sqlite`) with a stable code, a status and an exact fix per check, `--json` and exit code 12 when a check fails; see `docs/cli.md` (#31).
 - Ledger: `sessionLedger` in `@orbitrace/core` totals one session's tokens in four classes and estimates their cost at Anthropic's list prices (read 27 Nov 2026), per model and per agent, with unpriced models marked and never guessed; the inspector shows it, every cost labelled an estimate. See `docs/ledger.md` (#26).
 - `orbitrace history`: opt-in history in the command line, off by default. `enable` and `disable` switch recording, `status`, `where`, `ingest` (a one-off copy), `list` and `delete <session>` / `delete --all`; with recording on, `open` copies sessions in a background worker while it runs. Sessions only the history store holds are listed, exported and opened like the others. On Node 20 the history commands that need the store exit with 13 (`history-unavailable`); `disable`, `where` and `delete --all` work on every Node, and `disable` also stops a running `open` before its next copy. The worker ships as `dist/history-worker.js` from the new `@orbitrace/core/history-worker` export, and `orbitrace doctor` now uses core's capability check and reports whether recording is on. See `docs/cli.md` (#195, #188, #189, #184).
+- VS Code extension: opt-in history, off by default, on the same switch as `orbitrace history` (the settings file in the data folder, now shared through `@orbitrace/core/node`). Commands to turn recording on (after a modal dialog) and off, show status, delete one session or all history, and show where it is stored; with recording on, sessions are copied through `dist/history-worker.js`, shipped as its own file in the `.vsix`, at activation and after a followed session changes; sessions only history holds appear in the Sessions view marked `history` and open like any other; on VS Code 1.96 to 1.100 the commands say why history is unavailable (#211).
 - Web app: an Export button and dialog that write the replay on screen with core's
   `exportReplay`, with the opt-in opaque names, rounded times and bucketed tokens, all off; a
   browser downloads the file and an editor tab saves it through the editor's save dialog. The
@@ -85,6 +86,7 @@ merged so far.
   written as the listing page); nothing is published (#22).
 - Ledger: prices cache writes at their own 5-minute and 1-hour prices and each reply at its own model when the in-memory model records them (`buildReplay` option `replyDetails`, new optional `ReplayReplyDetails`), and otherwise falls back to the 5-minute price and the agent's model with a note in the inspector; replay files, the schema and every golden replay are unchanged (#191, #190).
 - Reply details reach the app: the session replayer (used by `orbitrace open` and the editor tab) builds every replay with each reply's cache writes by lifetime and its own model, the app accepts them, and a dropped transcript is built with them, so the inspector shows the cache-write split; replay files and every export are unchanged (#203).
+- Pulse, first part: `pulseReport` in `@orbitrace/core` (browser-safe) and `orbitrace pulse` sum up activity across sessions: active and idle time and sessions started by hour of the week in a stated time zone, the tool mix, a session timeline and totals, each listing the session keys it came from; idle time is not presented as waiting on the user, which a replay cannot tell. Read-only, `--since`, `--until`, `--limit`, `--tz`, `--project`, `--json`; counts history-only sessions. See `docs/pulse.md` (#27).
 
 ### Changed
 
@@ -113,6 +115,7 @@ merged so far.
 - Docs catch-up for `orbitrace doctor`, the history store, the ledger, export from the app and the
   `saveReplay` request, the CI Node matrix and the release artefact sizes (#183, #185, #186,
   #187).
+- Docs catch-up for `orbitrace history` and `dist/history-worker.js`, the release artefact sizes, links to the test plan, the integration-test settings and CI jobs, core's entry list, and the first CI results for VS Code 1.96.0 and Windows in the storage decision record (#205, #206, #207, #208, #212).
 
 ### Fixed
 
@@ -127,6 +130,7 @@ merged so far.
   session is busy or idle, core's `watchSession` reads the live registry again every
   `livenessIntervalMs` (5 s by default) and reports `ended` once the process is gone. The app
   also stops following, and hides Go live, when the status becomes unknown (#139, #147).
+- `@orbitrace/core/node`: `platformForPath` reads a path that starts with one backslash and no drive letter (`\srv\x`, rooted on the current Windows drive) as a Windows path, so the subagent folder of such a locator is found (#210, #204).
 
 ### Security
 

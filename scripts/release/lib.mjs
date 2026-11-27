@@ -117,7 +117,12 @@ export const NPM_PACKAGES = [
   },
 ];
 
-/** The VS Code extension, packed with vsce into a .vsix. */
+/**
+ * The VS Code extension, packed with vsce into a .vsix. Core's history ingest worker ships as its
+ * own file beside the bundle, extension/dist/history-worker.js (#211): required, and checked like
+ * the CLI's files (`selfContained`) to load only Node.js built-ins and files shipped beside it.
+ * The bundle itself is not in `selfContained`: it requires `vscode`, which the editor provides.
+ */
 export const VSIX_PACKAGE = {
   dir: "vscode",
   name: "orbitrace-vscode",
@@ -128,6 +133,8 @@ export const VSIX_PACKAGE = {
     "extension/readme.md",
     "extension/LICENSE.txt",
     "extension/dist/extension.js",
+    // The history ingest worker, bundled from @orbitrace/core beside the extension (#188, #211).
+    "extension/dist/history-worker.js",
     "extension/dist/app/index.html",
     "extension/dist/app/THIRD-PARTY-NOTICES.txt",
     "extension/dist/app/third-party-modules.json",
@@ -145,8 +152,10 @@ export const VSIX_PACKAGE = {
     "extension/readme.md",
     "extension/LICENSE.txt",
     "extension/dist/extension.js",
+    "extension/dist/history-worker.js",
     "extension/dist/app/index.html",
   ],
+  selfContained: ["extension/dist/history-worker.js"],
 };
 
 /**

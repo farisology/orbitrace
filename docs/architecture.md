@@ -6,21 +6,22 @@ independent project and is not affiliated with Anthropic.
 
 This page describes the package boundaries, the data flow, where each piece lives and which
 ticket built it. Ticket #2 wrote the contract; the parser, source resolution, the replay
-builder, export, the ledger, the history store (in core only), the renderer, the app, the editor
-extension and the command line with its loopback server and `doctor` are built on `dev`. What is
+builder, export, the ledger, the history store (used by the command line only), the renderer,
+the app, the editor extension and the command line with its loopback server, `history` and
+`doctor` are built on `dev`. What is
 not built is listed in [Not built yet](#not-built-yet).
 Nothing is published to npm or a marketplace; see [getting-started.md](getting-started.md).
 
 ## Packages
 
-| Package               | Folder              | Role                                                                                                                                                                                                                                                                                                      | Depends on at run time                                                                                                                                                      |
-| --------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@orbitrace/core`     | `packages/core`     | Raw, parsed and replay types; the replay v1 schema; the parser, source resolution, the replay builder and feed, export and validation, the ledger. The Node-only parts (the Claude Code adapter, its file watcher, the session replayer and the history store) are on the `@orbitrace/core/node` subpath. | nothing (Ajv is a dev dependency)                                                                                                                                           |
-| `@orbitrace/renderer` | `packages/renderer` | Framework-free Canvas 2D engine that draws one replay model: `createOrrery`, and `createOrreryWithEnvironment` for an injected frame scheduler, pixel ratio and sprite surfaces.                                                                                                                          | core (`toRealSeconds`, `KNOWN_MODEL_FAMILIES`, types)                                                                                                                       |
-| `@orbitrace/app`      | `packages/app`      | React and Vite shell: orrery, inspector, timeline, controls, event feed and session picker. Talks to its host only through `HostTransport`. Private.                                                                                                                                                      | core (`parseSession`, `buildReplay`, `validateReplay`, `describeReplayProblems`, `replayFeed`, `toRealSeconds`, `exportReplay`, `sessionLedger`); renderer (`createOrrery`) |
-| `@orbitrace/fixtures` | `packages/fixtures` | Seeded generator of synthetic transcripts, the paths of the files in `fixtures/`, and the golden replay files. Used by tests and for the demo. Private.                                                                                                                                                   | core                                                                                                                                                                        |
-| `orbitrace-vscode`    | `packages/vscode`   | Editor extension: a Sessions view, four commands and one editor tab per session, answered by the editor side of `HostTransport`. Private.                                                                                                                                                                 | core, bundled into `dist/extension.js`; the built app, copied into `dist/app` (both are devDependencies, see [below](#how-the-extension-ships-the-web-app-87))              |
-| `orbitrace`           | `packages/cli`      | Command line: `list`, `export`, `open` and `doctor`; `open` serves the app over a loopback server. Private.                                                                                                                                                                                               | core, bundled into `dist/index.js` (#120); the built app, copied into `dist/app` (both are devDependencies, see [below](#how-the-cli-ships-the-web-app-76))                 |
+| Package               | Folder              | Role                                                                                                                                                                                                                                                                                                      | Depends on at run time                                                                                                                                                                                              |
+| --------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@orbitrace/core`     | `packages/core`     | Raw, parsed and replay types; the replay v1 schema; the parser, source resolution, the replay builder and feed, export and validation, the ledger. The Node-only parts (the Claude Code adapter, its file watcher, the session replayer and the history store) are on the `@orbitrace/core/node` subpath. | nothing (Ajv is a dev dependency)                                                                                                                                                                                   |
+| `@orbitrace/renderer` | `packages/renderer` | Framework-free Canvas 2D engine that draws one replay model: `createOrrery`, and `createOrreryWithEnvironment` for an injected frame scheduler, pixel ratio and sprite surfaces.                                                                                                                          | core (`toRealSeconds`, `KNOWN_MODEL_FAMILIES`, types)                                                                                                                                                               |
+| `@orbitrace/app`      | `packages/app`      | React and Vite shell: orrery, inspector, timeline, controls, event feed and session picker. Talks to its host only through `HostTransport`. Private.                                                                                                                                                      | core (`parseSession`, `buildReplay`, `validateReplay`, `describeReplayProblems`, `replayFeed`, `toRealSeconds`, `exportReplay`, `sessionLedger`); renderer (`createOrrery`)                                         |
+| `@orbitrace/fixtures` | `packages/fixtures` | Seeded generator of synthetic transcripts, the paths of the files in `fixtures/`, the golden replay files, and the editor-tab wire conversation (`@orbitrace/fixtures/wire`, #194) that the app's and the extension's tests check against. Used by tests and for the demo. Private.                       | core                                                                                                                                                                                                                |
+| `orbitrace-vscode`    | `packages/vscode`   | Editor extension: a Sessions view, four commands and one editor tab per session, answered by the editor side of `HostTransport`. Private.                                                                                                                                                                 | core, bundled into `dist/extension.js`; the built app, copied into `dist/app` (both are devDependencies, see [below](#how-the-extension-ships-the-web-app-87))                                                      |
+| `orbitrace`           | `packages/cli`      | Command line: `list`, `export`, `open`, `history` and `doctor`; `open` serves the app over a loopback server. Private.                                                                                                                                                                                    | core, bundled into `dist/index.js` (#120) and, for the history worker, `dist/history-worker.js` (#195); the built app, copied into `dist/app` (all devDependencies, see [below](#how-the-cli-ships-the-web-app-76)) |
 
 Rules:
 
@@ -81,6 +82,10 @@ can be linked, but no text, inputs, outputs, paths, branch, title or subagent de
   Hosts (the CLI, the editor extension) import these from here and everything else from `@orbitrace/core`. The replayer's
   update types (`SessionReplayUpdate`, `SessionReplayListener`) are also exported from the main
   entry, as types only (#84).
+- `@orbitrace/core/history-worker` (#188) maps to `dist/history/worker.js`, the worker thread
+  entry of the history store. It is a file to start, not a module to import: a host bundles it
+  as a file of its own and passes its location to `runHistoryIngestWorker`. The CLI ships it as
+  `dist/history-worker.js` (see [History in the command line](#history-in-the-command-line-195)).
 - The main entry must stay free of Node imports. Two tests guard this:
   `packages/core/test/sources/entry-points.test.ts` walks the imports of `src/index.ts` and
   checks which entry exports what, and `packages/fixtures/test/generator.test.ts` checks that the
@@ -105,7 +110,10 @@ The transport messages (`TransportRequest`, `TransportMessage`) are defined in c
 wire layout (meta tag names, fragment parameters, routes, request and message checks,
 `core/src/protocol/`) (#96). `@orbitrace/app/transport` exports `HostTransport`, `LiveUpdate` and
 `TransportError` and re-exports the message types and `TransportErrorCode`; `@orbitrace/app`
-re-exports the wire layout.
+re-exports the wire layout. `@orbitrace/fixtures/wire` (#194) holds one conversation on the
+editor-tab wire, with no Node import: each request the app posts and what the extension answers.
+`packages/app/test/webview-wire.test.ts` and `packages/vscode/test/message-host.test.ts` each
+check their own code against it, so neither test imports the other package's source.
 
 | Ticket | What                                                                                                           | Where                                                                     |
 | ------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -127,7 +135,10 @@ re-exports the wire layout.
 | #85    | The wire layout shared by the app and both hosts                                                               | exported as `@orbitrace/app`                                              |
 | #87    | How the extension ships the web app                                                                            | `packages/vscode/scripts/`                                                |
 | #96    | One host protocol and one set of display formatters, shared from core                                          | `core/src/model/transport.ts`, `core/src/protocol/`, `core/src/format/`   |
-| #25    | The history store (`@orbitrace/core/node`); no host uses it yet                                                | `core/src/history/`                                                       |
+| #25    | The history store (`@orbitrace/core/node`); the command line uses it (#195), the extension does not            | `core/src/history/`                                                       |
+| #188   | The history worker as a package export, `@orbitrace/core/history-worker`                                       | `core/src/history/worker.ts`                                              |
+| #195   | `orbitrace history`, recording in `open`, and history-only sessions in `list`, `export` and `open`             | `packages/cli/src/history/`                                               |
+| #194   | The editor-tab wire conversation both sides test against, `@orbitrace/fixtures/wire`                           | `packages/fixtures/src/wire.ts`                                           |
 | #26    | The ledger: `sessionLedger`, the price table and `formatCostEstimate`                                          | `core/src/ledger/`                                                        |
 | #31    | `orbitrace doctor`                                                                                             | `packages/cli/src/doctor/`                                                |
 | #168   | Export from the app; the `saveReplay` request                                                                  | `packages/app/src/export-replay.ts`, `core/src/protocol/save-replay.ts`   |
@@ -228,8 +239,10 @@ All three are exported from `@orbitrace/core/node`, not from the main entry.
 ## History store (#25)
 
 A copy of each session's transcript lines, redacted, in one SQLite file, so a session outlives
-Claude Code's cleanup. Built in core and exported from `@orbitrace/core/node`; **no host calls it
-yet**, and nothing is written unless a caller opens a store for writing and calls the ingest.
+Claude Code's cleanup. Built in core and exported from `@orbitrace/core/node`. The command line
+calls it (`orbitrace history`, off by default, #195; see
+[History in the command line](#history-in-the-command-line-195)); the editor extension does not.
+Nothing is written unless a caller opens a store for writing and calls the ingest.
 Importing the module does nothing. The engine decision and its measurements are in
 [decisions/0001-storage.md](decisions/0001-storage.md); what is stored and what redaction does
 not catch is in [privacy.md](privacy.md#history-store-25).
@@ -290,11 +303,37 @@ not catch is in [privacy.md](privacy.md#history-store-25).
   `deleteHistoryStore` takes the lock and deletes the database, its `-wal`, `-shm` and `-journal`
   files and the lock, then the folder if it is empty.
 
-What a host needs before it can call this (later tickets): ship `dist/history/worker.js` as its
-own file next to its bundle and pass its location as `workerUrl`, which is required because a
+What a host needs before it can call this: ship the worker (`@orbitrace/core/history-worker`) as
+its own file next to its bundle and pass its location as `workerUrl`, which is required because a
 bundler moves the module away from the worker file and the extension's CommonJS bundle has no
 `import.meta.url`; check `historyCapability()` before offering history; and keep recording off
-until the user turns it on.
+until the user turns it on. The command line does all three (below). The editor extension does
+none of them yet.
+
+### History in the command line (#195)
+
+`packages/cli/src/history/` holds the `orbitrace history` subcommands, the recorder that `open`
+runs, and the source that lets `list`, `export` and `open` read sessions from the store. The
+commands, their output and their exit codes are in [cli.md](cli.md#orbitrace-history).
+
+- **Switch.** Recording is off by default. `orbitrace history enable` writes `settings.json` in
+  the data folder; `disable` writes it again only when it exists. Only `enable` and `ingest`
+  create the data folder, and only `ingest` and a recording `open` create the store.
+- **Capability.** `status`, `enable`, `ingest`, `list` and `delete <key>` check
+  `historyCapability()` first and exit with 13 (`history-unavailable`) where `node:sqlite` is
+  missing. `disable`, `where` and `delete --all` need no `node:sqlite`, so the opt-out and the
+  delete work on every Node.
+- **Worker.** `ingest` and the recorder copy sessions with `runHistoryIngestWorker`, with
+  `workerUrl` set to `history-worker.js` beside the running `dist/index.js`. The recorder copies
+  every session when `open` starts, and copies a session the app shows again after it changes
+  and a short quiet period, one
+  worker at a time, and reads the switch again before each copy, so `disable` stops a running
+  `open` before its next copy. It stops when the server stops; nothing runs after `open` ends.
+- **History-only sessions.** When the database file exists, `list`, `export` and `open` search
+  one more source root, the history root, after the config folders. A session found in files is
+  always read from its files; only a session whose transcript is gone comes from the store, and
+  it goes through the same parser, replay builder and export allow-list. `orbitrace list` marks
+  it `history` in the SOURCE column.
 
 ## Export and validation (#18)
 
@@ -365,14 +404,19 @@ file that needs no other package.
   `scripts/run-workspaces.mjs` to build both before the CLI. Neither is a run-time dependency:
   the CLI's `package.json` has no `dependencies`, so an installed tarball needs nothing else. The
   app does not need to be published or to export its build output.
-- `files` in `packages/cli/package.json` is `["dist/index.js", "dist/app"]`, so a packed CLI
-  carries the command and the app, and no `src/`, maps or declarations. The package is marked
-  private and is not published yet.
+- Since #195 the same esbuild run also bundles core's history worker (the package export
+  `@orbitrace/core/history-worker`, #188) into a second, separate file, `dist/history-worker.js`,
+  beside `dist/index.js`. A worker thread starts from a file, so the worker is never inlined into
+  `dist/index.js`; the command finds it next to itself. The third-party check covers it too.
+- `files` in `packages/cli/package.json` lists `dist/index.js`, `dist/history-worker.js` and
+  `dist/app`, so a packed CLI carries the command, the history worker and the app, and no
+  `src/`, maps or declarations. The package is marked private and is not published yet.
 - At run time `appBundleDir()` (`packages/cli/src/app-bundle.ts`, bundled into `dist/index.js`)
   returns the `app/` folder beside the bundle, or `null` when it holds no `index.html`. The
   loopback server (#17) serves from that folder. `test/app-bundle.test.ts` imports the built
   `dist/index.js` and checks that it finds `index.html`; `test/build.test.ts` checks that `dist/`
-  holds only `index.js` and `app/`, and that the bundle is executable and imports only Node
+  holds only `index.js`, `history-worker.js` and `app/`, that the bundle is executable and
+  imports only Node built-ins, and that the worker is its own file that imports only Node
   built-ins.
 
 The tarball checks and the offline install check of the CLI are in
@@ -560,8 +604,9 @@ Nothing in the replay model, the renderer, the app or the transport refers to a 
 - **Publishing.** No package is on npm, and the extension is not on the VS Code Marketplace or
   Open VSX. `@orbitrace/app`, `@orbitrace/fixtures`, `orbitrace` and `orbitrace-vscode` are
   marked private.
-- **A history record in use.** The store exists in core (see [History store](#history-store-25)),
-  but no host calls it, so nothing is stored.
+- **History in the editor.** The command line records history when the user turns it on (see
+  [History in the command line](#history-in-the-command-line-195)). The editor extension has no
+  history switch and does not call the store.
 - **Hooks.** Core resolves roots from hook-reported transcript paths, but no host passes any.
 - **Host settings.** The extension has no settings: it reads `CLAUDE_CONFIG_DIR` or the default
   config folder only, with no extra roots and no polling mode. The command line takes

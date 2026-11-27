@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { formatAgo } from "@orbitrace/core";
 import {
   describeSession,
+  HISTORY_TEXT,
+  HISTORY_TOOLTIP,
   liveText,
   panelTitle,
   projectText,
@@ -63,6 +65,19 @@ describe("describeSession", () => {
     ).toBe("just now");
     const uncounted = describeSession(makeSummary({ subagentCount: null, lastActivity: NOW }), NOW);
     expect(uncounted.tooltip).toContain("Subagents: not counted");
+  });
+});
+
+describe("describeSession for a session kept only in history (#211)", () => {
+  it("says history instead of its live status and explains it in the hover", () => {
+    const summary = makeSummary({ live: "ended", subagentCount: 2, lastActivity: NOW });
+    const text = describeSession(summary, NOW, { fromHistory: true });
+    expect(text.description).toBe(`just now · ${HISTORY_TEXT} · 2 subagents`);
+    expect(text.tooltip.split("\n").at(-1)).toBe(HISTORY_TOOLTIP);
+    const plain = describeSession(summary, NOW);
+    expect(plain.description).toBe("just now · ended · 2 subagents");
+    expect(plain.tooltip).not.toContain(HISTORY_TOOLTIP);
+    expect(describeSession(summary, NOW, { fromHistory: false })).toEqual(plain);
   });
 });
 

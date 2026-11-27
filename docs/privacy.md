@@ -113,13 +113,22 @@ replay that session, because it keeps no record of its own (next section).
 ## History store (#25)
 
 **Off by default.** `@orbitrace/core/node` has a history store that keeps a copy of your
-sessions so they outlive Claude Code's cleanup. The `orbitrace` command can use it since #195;
-the editor extension and the app do not yet. Nothing is recorded until you turn it on or ask for
-a copy. How it works is in [architecture.md](architecture.md#history-store-25); the commands are
-in [cli.md](cli.md#orbitrace-history).
+sessions so they outlive Claude Code's cleanup. The `orbitrace` command can use it since #195,
+and the editor extension since #211; the app does not use it directly. Nothing is recorded until
+you turn it on or ask for a copy. How it works is in
+[architecture.md](architecture.md#history-store-25); the command-line commands are in
+[cli.md](cli.md#orbitrace-history), the editor's in the extension's
+[README](../packages/vscode/README.md#history).
 
 ### Turning it on and off
 
+- **One switch for both hosts.** The command line and the editor read and write the same
+  settings file through the same code in `@orbitrace/core/node`, so they cannot disagree. The
+  editor has no setting of its own.
+- In the editor, **Orbitrace: Turn history recording on** first asks in a modal dialog that says
+  what is stored, where, and that redaction of secrets is best effort; only after you confirm does
+  it write the settings file. **Orbitrace: Turn history recording off** turns it off (what is
+  stored stays), and **Orbitrace: Show history status** says which it is.
 - `orbitrace history enable` turns recording on. It writes one small file, `settings.json`
   (`{ "settings": 1, "historyRecording": true }`, readable by your account only), in the data
   folder below. `orbitrace history disable` turns it off again; what is already stored stays.
@@ -128,11 +137,17 @@ in [cli.md](cli.md#orbitrace-history).
   next time `open` starts. `orbitrace history status` says which it is.
 - While recording is off, no command creates the data folder, the settings file or the store,
   except `orbitrace history enable` and `orbitrace history ingest`. A test runs every command with
-  recording off and checks that nothing was created.
+  recording off and checks that nothing was created. The editor extension creates nothing either
+  while recording is off: it reads the settings file, and opens the store as a reader only when it
+  already exists. Its unit tests and the integration test in a real VS Code window check this.
 - History needs Node 22.13 or later (`node:sqlite`). On Node 20 the `history` commands that read
   or write the store say so and exit with 13; nothing is recorded or read. `disable`, `where` and
   `delete --all` need no `node:sqlite` and work on every Node, so turning recording off and
   deleting a store made on another Node always work.
+- VS Code 1.96 to 1.100 run extensions on Node 20, which has no `node:sqlite`. There every history
+  command of the editor says why history is unavailable and changes nothing; the editor records
+  nothing and lists nothing from the store, and the rest of the extension works as before. The
+  `orbitrace` command in a terminal can still turn recording off and delete the store.
 
 ### When it copies
 
@@ -140,13 +155,20 @@ in [cli.md](cli.md#orbitrace-history).
   session you are viewing again about 2 seconds after it changes. The copy runs in a background
   thread of that process and stops when you stop `open`. There is no daemon and no timer: when no
   `orbitrace open` runs, nothing is copied.
+- With recording on, while the editor runs (#211): every session once when the extension starts
+  or when you turn recording on, and a session open in a tab again about 2 seconds after it
+  changes. The copy runs in a background worker thread (the extension ships it as its own file,
+  `dist/history-worker.js`), one copy at a time, and stops when the window closes or recording is
+  turned off, from either host. When another process is writing the store (an `orbitrace open` or
+  another editor window that is recording), the editor does not wait for it: the next change tries
+  again.
 - `orbitrace history ingest` copies every session it finds once, now, whether recording is on or
   off.
 - Each copy adds only the lines written since the last one. A last line Claude Code is still
   writing is left for the next copy, unless the session has ended (its live status is `ended` and
   nothing was written for a minute); then it is stored once as it is.
-- A session kept only in the store is listed by `orbitrace list` (marked `history`) and can be
-  exported and opened. Its replay goes through the same export as any other session and holds
+- A session kept only in the store is listed by `orbitrace list` (marked `history`) and in the
+  editor's Sessions view (marked `history`, with an archive icon), and can be exported and opened. Its replay goes through the same export as any other session and holds
   structure only, as described under [What a shared replay contains](#what-a-shared-replay-contains).
 
 What it stores:
@@ -226,9 +248,13 @@ It can also replace harmless text that looks like a secret (for example a type a
 
 From the command line: `orbitrace history delete <session-key>` deletes one stored session and
 `orbitrace history delete --all` deletes the whole store. Both ask first on a terminal and need
-`--yes` anywhere else. `orbitrace history where` prints the folder. Deleting the store keeps the
-settings file, so recording stays on if it was on; turn it off with `orbitrace history disable`
-first, and a running `orbitrace open` copies nothing more, so it does not start a new store.
+`--yes` anywhere else. `orbitrace history where` prints the folder. In the editor: **Orbitrace:
+Delete a session from history...** lets you pick a stored session and asks in a modal dialog
+before it deletes it; **Orbitrace: Delete all history** asks in a modal dialog before it deletes
+the store; **Orbitrace: Show where history is stored** shows the folder. Deleting the store keeps the
+settings file, so recording stays on if it was on; turn it off first (`orbitrace history disable`
+or the editor's Turn history recording off), and a running `orbitrace open` or editor window
+copies nothing more, so it does not start a new store.
 Underneath:
 
 - One session: `deleteSession` removes its rows with SQLite's `secure_delete` on, so its pages are
