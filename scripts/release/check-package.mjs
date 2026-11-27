@@ -17,6 +17,13 @@ import { builtinModules } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { join, posix, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  MODULE_LIST_FILE,
+  MODULE_LIST_FORMAT,
+  NOTICES_FILE,
+  parseModuleList,
+  parseNoticedPackages,
+} from "../../packages/app/scripts/third-party-notices.mjs";
 import { RULES, scanText } from "../privacy-check.mjs";
 import {
   DENIED_PATHS,
@@ -304,6 +311,95 @@ export function checkContents(root, paths, literals) {
 }
 
 /**
+ * The folders of an artefact that hold the web app bundle: an `index.html` with at least one
+ * `assets/*.js` beside it. "" is the artefact's root.
+ * @param {ReadonlySet<string>} paths
+ * @returns {string[]} folders, sorted
+ */
+export function webBundleDirs(paths) {
+  const dirs = new Set();
+  for (const path of paths) {
+    const match = /^(?:(.+)\/)?assets\/[^/]+\.js$/.exec(path);
+    if (!match) continue;
+    const dir = match[1] ?? "";
+    if (paths.has(dir === "" ? "index.html" : `${dir}/index.html`)) dirs.add(dir);
+  }
+  return [...dirs].sort();
+}
+
+/**
+ * Read the module list beside a web app bundle, or describe why it cannot be used.
+ * @param {string} file
+ * @returns {{ list: ReturnType<typeof parseModuleList> } | { problem: string }}
+ */
+function readModuleList(file) {
+  try {
+    return { list: parseModuleList(readFileSync(file, "utf8")) };
+  } catch {
+    return { problem: `not a format ${MODULE_LIST_FORMAT} module list` };
+  }
+}
+
+/**
+ * Check the third-party notices of every web app bundle in an artefact (#143). Beside its
+ * index.html there must be THIRD-PARTY-NOTICES.txt and the build's module list,
+ * third-party-modules.json (both written by packages/app/scripts/third-party-notices.mjs);
+ * every script of the bundle must be a chunk of that list, so the bundle, the list and the
+ * notices come from one build; and the notices must name exactly the packages the list puts in
+ * those scripts.
+ * @param {string} root the unpacked artefact
+ * @param {ReadonlySet<string>} paths
+ * @returns {string[]} errors
+ */
+export function checkThirdPartyNotices(root, paths) {
+  const errors = [];
+  for (const dir of webBundleDirs(paths)) {
+    const prefix = dir === "" ? "" : `${dir}/`;
+    const notices = `${prefix}${NOTICES_FILE}`;
+    const listPath = `${prefix}${MODULE_LIST_FILE}`;
+    if (!paths.has(notices)) {
+      errors.push(`${notices}: missing; the web app bundle beside it contains third-party code`);
+    }
+    if (!paths.has(listPath)) {
+      errors.push(`${listPath}: missing; the notices beside it cannot be checked without it`);
+    }
+    if (!paths.has(notices) || !paths.has(listPath)) continue;
+    const read = readModuleList(join(root, listPath));
+    if ("problem" in read) {
+      errors.push(`${listPath}: ${read.problem}`);
+      continue;
+    }
+    const chunks = read.list.chunks;
+    const assets = `${prefix}assets/`;
+    const scripts = [...paths]
+      .filter((path) => path.startsWith(assets) && /^[^/]+\.js$/.test(path.slice(assets.length)))
+      .sort();
+    const bundled = new Set();
+    let complete = true;
+    for (const path of scripts) {
+      const chunk = path.slice(prefix.length);
+      if (!Object.hasOwn(chunks, chunk)) {
+        errors.push(
+          `${path}: not in ${listPath}; the bundle and the list come from different builds`,
+        );
+        complete = false;
+      } else chunks[chunk].forEach((id) => bundled.add(id));
+    }
+    const named = parseNoticedPackages(readFileSync(join(root, notices), "utf8"));
+    for (const id of [...bundled].sort()) {
+      if (!named.has(id)) errors.push(`${notices}: does not name ${id}, which is in the bundle`);
+    }
+    if (!complete) continue;
+    for (const id of [...named].sort()) {
+      if (!bundled.has(id)) {
+        errors.push(`${notices}: names ${id}, which is not in the bundle (stale)`);
+      }
+    }
+  }
+  return errors;
+}
+
+/**
  * Check one unpacked artefact.
  * @param {string} root the unpacked folder (the `package/` folder of an npm tarball)
  * @param {{ allow: readonly string[], require: readonly string[] }} spec
@@ -327,6 +423,7 @@ export function checkArtefact(root, spec, options) {
     errors.push("README.md: empty");
   }
   errors.push(...checkSourceMaps(root, paths));
+  errors.push(...checkThirdPartyNotices(root, paths));
   errors.push(...checkContents(root, [...paths], options.literals));
   return { files, errors };
 }

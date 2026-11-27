@@ -1,6 +1,8 @@
 # dependencies and builds
 node_modules/
 dist/
+# the public replay player build (npm run build:player in packages/app, #152)
+dist-player/
 out/
 *.vsix
 *.tsbuildinfo

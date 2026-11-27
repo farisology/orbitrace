@@ -23,15 +23,21 @@ import {
   checkPaths,
   checkSelfContained,
   checkSourceMaps,
+  checkThirdPartyNotices,
   entryPoints,
   formatReport,
   moduleSpecifiers,
   packAndCheck,
   readWorkspaceIndex,
+  webBundleDirs,
 } from "./check-package.mjs";
+import * as appNotices from "../../packages/app/scripts/third-party-notices.mjs";
+import * as cliCopy from "../../packages/cli/scripts/copy-app.mjs";
+import * as vscodeCopy from "../../packages/vscode/scripts/copy-app.mjs";
 import {
   DENIED_PATHS,
   NPM_PACKAGES,
+  VSIX_PACKAGE,
   REPO_GIT_URL,
   REPO_ROOT,
   REPO_URL,
@@ -443,6 +449,138 @@ describe("checkArtefact", () => {
   });
 });
 
+describe("third-party notices (#143)", () => {
+  const NOTICES = "THIRD-PARTY-NOTICES.txt";
+  const LIST = "third-party-modules.json";
+  /** A module list as the app build writes it. */
+  const moduleList = {
+    format: 1,
+    notices: NOTICES,
+    packages: [
+      { name: "@synthetic/helper", version: "2.0.0", license: "ISC" },
+      { name: "widget-lib", version: "1.0.0", license: "MIT" },
+    ],
+    chunks: {
+      "assets/data-0000.js": [],
+      "assets/index-0000.js": ["@synthetic/helper@2.0.0", "widget-lib@1.0.0"],
+    },
+  };
+  const notices = (...ids) =>
+    `Synthetic notices\n\n${ids.map((id) => `Package: ${id}\nLicence: MIT\n\nText.\n`).join("\n")}`;
+  /** A CLI-like artefact: dist/app holds the web app bundle with its notices and module list. */
+  const bundleTree = (extra = {}) => ({
+    "package.json": "{}",
+    "dist/index.js": "export {};\n",
+    "dist/app/index.html": "<!doctype html>",
+    "dist/app/favicon.svg": "<svg/>",
+    "dist/app/assets/index-0000.js": "x",
+    "dist/app/assets/data-0000.js": "x",
+    "dist/app/assets/index-0000.css": "x",
+    [`dist/app/${NOTICES}`]: notices("widget-lib@1.0.0", "@synthetic/helper@2.0.0"),
+    [`dist/app/${LIST}`]: JSON.stringify(moduleList),
+    ...extra,
+  });
+  const pathsOf = (root) => new Set(listTree(root).map((file) => file.path));
+
+  it("uses the file names of the app build and of both copy steps", () => {
+    expect(appNotices.NOTICES_FILE).toBe(NOTICES);
+    expect(appNotices.MODULE_LIST_FILE).toBe(LIST);
+    expect(cliCopy.NOTICES_FILE).toBe(NOTICES);
+    expect(vscodeCopy.NOTICES_FILE).toBe(NOTICES);
+  });
+
+  it("accepts the notices and the module list in the CLI and .vsix allow-lists", () => {
+    const cli = NPM_PACKAGES.find((spec) => spec.dir === "cli");
+    expect(checkPaths([`dist/app/${NOTICES}`, `dist/app/${LIST}`], cli?.allow ?? [])).toEqual([]);
+    expect(
+      checkPaths(
+        [`extension/dist/app/${NOTICES}`, `extension/dist/app/${LIST}`],
+        VSIX_PACKAGE.allow,
+      ),
+    ).toEqual([]);
+    expect(checkPaths([`dist/${NOTICES}`], cli?.allow ?? [])).toEqual([
+      `dist/${NOTICES}: not in the allow-list`,
+    ]);
+  });
+
+  it("finds the folders that hold a web app bundle", () => {
+    expect(
+      webBundleDirs(
+        new Set([
+          "index.html",
+          "assets/a.js",
+          "extension/dist/app/index.html",
+          "extension/dist/app/assets/b.js",
+          "docs/index.html",
+          "docs/assets/c.css",
+          "lib/assets/d.js",
+        ]),
+      ),
+    ).toEqual(["", "extension/dist/app"]);
+    expect(webBundleDirs(new Set(["dist/index.js", "README.md"]))).toEqual([]);
+  });
+
+  it("passes notices that name exactly the bundled packages, and ignores artefacts without the app", () => {
+    writeTree(dir, bundleTree());
+    expect(checkThirdPartyNotices(dir, pathsOf(dir))).toEqual([]);
+    const library = join(dir, "library");
+    writeTree(library, { "package.json": "{}", "dist/index.js": "export {};\n" });
+    expect(checkThirdPartyNotices(library, pathsOf(library))).toEqual([]);
+  });
+
+  it("fails an artefact that carries the web bundle without the notices", () => {
+    writeTree(dir, bundleTree());
+    rmSync(join(dir, "dist", "app", NOTICES));
+    expect(checkThirdPartyNotices(dir, pathsOf(dir))).toEqual([
+      `dist/app/${NOTICES}: missing; the web app bundle beside it contains third-party code`,
+    ]);
+  });
+
+  it("fails notices that do not name a package found in the bundle's module list", () => {
+    writeTree(dir, bundleTree({ [`dist/app/${NOTICES}`]: notices("widget-lib@1.0.0") }));
+    expect(checkThirdPartyNotices(dir, pathsOf(dir))).toEqual([
+      `dist/app/${NOTICES}: does not name @synthetic/helper@2.0.0, which is in the bundle`,
+    ]);
+  });
+
+  it("fails stale notices: an extra package, or a bundle from another build", () => {
+    const extra = notices("widget-lib@1.0.0", "@synthetic/helper@2.0.0", "widget-lib@0.9.0");
+    writeTree(dir, bundleTree({ [`dist/app/${NOTICES}`]: extra }));
+    expect(checkThirdPartyNotices(dir, pathsOf(dir))).toEqual([
+      `dist/app/${NOTICES}: names widget-lib@0.9.0, which is not in the bundle (stale)`,
+    ]);
+    writeTree(dir, { "dist/app/assets/index-1111.js": "x" });
+    expect(checkThirdPartyNotices(dir, pathsOf(dir))).toEqual([
+      `dist/app/assets/index-1111.js: not in dist/app/${LIST}; the bundle and the list come from different builds`,
+    ]);
+  });
+
+  it("fails a missing or unreadable module list", () => {
+    writeTree(dir, bundleTree());
+    rmSync(join(dir, "dist", "app", LIST));
+    expect(checkThirdPartyNotices(dir, pathsOf(dir))).toEqual([
+      `dist/app/${LIST}: missing; the notices beside it cannot be checked without it`,
+    ]);
+    writeTree(dir, { [`dist/app/${LIST}`]: JSON.stringify({ format: 99 }) });
+    expect(checkThirdPartyNotices(dir, pathsOf(dir))).toEqual([
+      `dist/app/${LIST}: not a format 1 module list`,
+    ]);
+    writeTree(dir, { [`dist/app/${LIST}`]: "not json" });
+    expect(checkThirdPartyNotices(dir, pathsOf(dir))).toHaveLength(1);
+  });
+
+  it("runs as part of checkArtefact", () => {
+    writeTree(dir, bundleTree({ "README.md": "# widget\n", LICENSE: LICENSE_TEXT }));
+    const spec = NPM_PACKAGES.find((entry) => entry.dir === "cli") ?? SPEC;
+    const options = { licenseText: LICENSE_TEXT, licensePath: "LICENSE", literals: [] };
+    expect(checkArtefact(dir, spec, options).errors).toEqual([]);
+    rmSync(join(dir, "dist", "app", NOTICES));
+    expect(checkArtefact(dir, spec, options).errors).toEqual([
+      `dist/app/${NOTICES}: missing; the web app bundle beside it contains third-party code`,
+    ]);
+  });
+});
+
 describe("readWorkspaceIndex and formatReport", () => {
   it("indexes every workspace manifest with its version and private flag", () => {
     writeTree(dir, {
@@ -528,6 +666,9 @@ describe.skipIf(!built)("the real tarballs (after npm run build)", () => {
         "dist/index.js",
         "package.json",
       ]);
+      // #143: the notices and the build's module list travel beside the web app.
+      expect(cliPaths).toContain("dist/app/THIRD-PARTY-NOTICES.txt");
+      expect(cliPaths).toContain("dist/app/third-party-modules.json");
     },
   );
 });

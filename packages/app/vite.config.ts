@@ -3,8 +3,10 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
+import { thirdPartyNotices } from "./scripts/third-party-notices.mjs";
 
 const packageDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(packageDir, "..", "..");
 
 /** `vite build --mode player` (`npm run build:player`) builds the public replay player. */
 export const PLAYER_MODE = "player";
@@ -55,7 +57,9 @@ function playerCsp(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const app = {
-    plugins: [react()],
+    // thirdPartyNotices writes THIRD-PARTY-NOTICES.txt next to index.html, and the module list
+    // the release check reads (#143). See scripts/third-party-notices.mjs.
+    plugins: [react(), thirdPartyNotices({ repoRoot, appDir: packageDir, moduleList: true })],
     // Relative asset URLs, so the same build loads from an editor webview or a loopback server.
     base: "./",
     server: { host: "127.0.0.1" },
@@ -71,7 +75,12 @@ export default defineConfig(({ mode }) => {
   // build above, which the editor and the CLI copy, is unchanged by this mode.
   return {
     ...app,
-    plugins: [react(), playerCsp()],
+    // The player ships the notices too, but not the module list: no release check reads it.
+    plugins: [
+      react(),
+      playerCsp(),
+      thirdPartyNotices({ repoRoot, appDir: packageDir, moduleList: false }),
+    ],
     root: resolve(packageDir, "src", "player"),
     publicDir: resolve(packageDir, "public"),
     build: { outDir: resolve(packageDir, "dist-player"), emptyOutDir: true },
