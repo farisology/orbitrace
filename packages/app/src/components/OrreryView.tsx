@@ -3,11 +3,20 @@
  * time, play state and rate to the `OrreryHandle`, and the model and selection from props.
  */
 
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { ReplayAgentId, ReplayModel } from "@orbitrace/core";
 import { createOrrery, type OrreryHandle, type OrreryOptions } from "@orbitrace/renderer";
 import { useClock } from "../use-clock";
 import { plural } from "../format";
+import { ScopeTable } from "./ScopeTable";
 
 /** Makes a renderer on a canvas. The app uses `createOrrery`; tests pass a fake. */
 export type OrreryFactory = (canvas: HTMLCanvasElement, options: OrreryOptions) => OrreryHandle;
@@ -26,13 +35,17 @@ export interface OrreryViewProps {
   readonly reducedMotion: boolean;
 }
 
-/** Text alternative for the canvas. */
+/**
+ * Short text alternative for the canvas. The full one is the table of agents right after it
+ * (`ScopeTable`). The table is not tied to the canvas with `aria-describedby`, so a screen reader
+ * does not read the whole table each time it reaches the canvas.
+ */
 export function orreryLabel(model: ReplayModel): string {
   const subagents = model.agents.length - 1;
   return `Orrery: the main agent in the centre, ${plural(subagents, "subagent")} in orbit, ${plural(
     model.totals.toolCalls,
     "tool call",
-  )}. Select an agent with the timeline lanes below.`;
+  )}. The table of agents after it lists what it shows; select an agent with the timeline lanes.`;
 }
 
 export function OrreryView({
@@ -54,6 +67,7 @@ export function OrreryView({
     latest.current = { model, generation, selected, onSelect };
   });
   const [failed, setFailed] = useState(false);
+  const tableId = useId();
   const [hovered, setHovered] = useState<ReplayAgentId | null>(null);
 
   // Create the renderer; again when the motion preference or the factory changes.
@@ -139,6 +153,7 @@ export function OrreryView({
 
   return (
     <div className="orrery" ref={containerRef}>
+      <h2 className="visually-hidden">Orrery</h2>
       <canvas
         ref={canvasRef}
         className="orrery-canvas"
@@ -146,6 +161,7 @@ export function OrreryView({
         aria-label={orreryLabel(model)}
         title={hoveredName}
       />
+      <ScopeTable model={model} selected={selected} id={tableId} />
       {failed ? (
         <p className="orrery-failed" role="status">
           {ORRERY_FAILED_MESSAGE}

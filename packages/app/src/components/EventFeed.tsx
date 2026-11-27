@@ -70,7 +70,12 @@ export function EventFeed({ model, onSelect }: EventFeedProps) {
                   <time className="feed-time">
                     {formatClock(toRealSeconds(model.warps, event.t))}
                   </time>
-                  <span className="feed-tag">{TAG_LABELS[line.tag]}</span>
+                  {/* Screen reader commas: the grid cells would otherwise run together. */}
+                  <span className="feed-tag">
+                    <span className="visually-hidden">, </span>
+                    {TAG_LABELS[line.tag]}
+                    <span className="visually-hidden">: </span>
+                  </span>
                   <span className="feed-text">{line.text}</span>
                 </button>
               </li>

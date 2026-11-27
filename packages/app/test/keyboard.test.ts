@@ -11,10 +11,15 @@ const key = (k: string, extra: Partial<Parameters<typeof keyAction>[0]> = {}) =>
 });
 
 describe("keyAction", () => {
-  it("maps space and K to play or pause", () => {
+  it("maps space to play or pause", () => {
     expect(keyAction(key(" "))).toEqual({ type: "toggle" });
-    expect(keyAction(key("k"))).toEqual({ type: "toggle" });
     expect(keyAction(key("Spacebar"))).toEqual({ type: "toggle" });
+  });
+
+  it("has no single-letter shortcut (WCAG 2.1.4)", () => {
+    for (const letter of "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") {
+      expect(keyAction(key(letter))).toBeNull();
+    }
   });
 
   it("maps arrows to scrubbing, larger with Shift", () => {
@@ -58,13 +63,21 @@ describe("targetHandlesKey", () => {
     expect(targetHandlesKey(make("select"), "ArrowRight")).toBe(true);
   });
 
-  it("leaves a slider its movement keys but not space or K", () => {
+  it("leaves a slider its movement keys but not space", () => {
     const range = make("input", "range");
-    for (const key of ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"]) {
+    for (const key of [
+      "ArrowLeft",
+      "ArrowRight",
+      "ArrowUp",
+      "ArrowDown",
+      "Home",
+      "End",
+      "PageUp",
+      "PageDown",
+    ]) {
       expect(targetHandlesKey(range, key)).toBe(true);
     }
     expect(targetHandlesKey(range, " ")).toBe(false);
-    expect(targetHandlesKey(range, "k")).toBe(false);
     expect(targetHandlesKey(range, "Escape")).toBe(false);
   });
 

@@ -15,11 +15,24 @@ export function positionText(model: ReplayModel, t: number): string {
   return `${formatClock(toRealSeconds(model.warps, t))} of ${formatClock(model.totals.realDuration)}`;
 }
 
-export interface ControlsProps {
-  readonly model: ReplayModel;
+/**
+ * Value text of the scrubber for screen readers. Paused: the exact position. Playing: the
+ * position rounded down to the minute, so a screen reader that reads a focused slider's value
+ * changes speaks at most once per replay minute instead of on every frame.
+ */
+export function scrubValueText(model: ReplayModel, t: number, playing: boolean): string {
+  if (!playing) return `${positionText(model, t)}, real time`;
+  const minute = Math.floor(toRealSeconds(model.warps, t) / 60) * 60;
+  return `Playing, past ${formatClock(minute)} of ${formatClock(model.totals.realDuration)}, real time`;
 }
 
-export function Controls({ model }: ControlsProps) {
+export interface ControlsProps {
+  readonly model: ReplayModel;
+  /** Id of the play button, so the skip link can move focus to it. */
+  readonly playButtonId?: string;
+}
+
+export function Controls({ model, playButtonId }: ControlsProps) {
   const clock = useClock();
   const playing = useClockValue(selectPlaying);
   const rate = useClockValue(selectRate);
@@ -36,6 +49,7 @@ export function Controls({ model }: ControlsProps) {
     <div className="controls" role="group" aria-label="Playback">
       <button
         type="button"
+        id={playButtonId}
         className="control-play"
         onClick={() => clock.toggle()}
         aria-keyshortcuts="Space"
@@ -69,7 +83,7 @@ export function Controls({ model }: ControlsProps) {
         value={time}
         onChange={onScrub}
         aria-label="Replay position"
-        aria-valuetext={`${positionText(model, time)}, real time`}
+        aria-valuetext={scrubValueText(model, time, playing)}
         aria-keyshortcuts="ArrowLeft ArrowRight"
       />
       <output className="control-clock" aria-live="off" title="Real time, idle gaps included">

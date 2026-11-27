@@ -9,6 +9,15 @@ import {
   OrreryView,
   orreryLabel,
 } from "../src/components/OrreryView";
+import {
+  CALL_BANDS,
+  CALL_LEGEND,
+  CALL_TRACK_UNITS,
+  CallMark,
+  FAILED_CALL_BAND,
+  callBand,
+  callClass,
+} from "../src/components/CallMark";
 import { Timeline, percentAt, timeAtPointer } from "../src/components/Timeline";
 import { prefersReducedMotion, usePrefersReducedMotion } from "../src/reduced-motion";
 import { ClockContext, useClock, useClockDriver, useClockValue } from "../src/use-clock";
@@ -126,7 +135,7 @@ describe("OrreryView", () => {
 
   it("describes the canvas in words", () => {
     expect(orreryLabel(model)).toBe(
-      "Orrery: the main agent in the centre, 2 subagents in orbit, 10 tool calls. Select an agent with the timeline lanes below.",
+      "Orrery: the main agent in the centre, 2 subagents in orbit, 10 tool calls. The table of agents after it lists what it shows; select an agent with the timeline lanes.",
     );
   });
 });
@@ -152,11 +161,63 @@ describe("Timeline", () => {
       },
     );
     expect(container.querySelectorAll(".lane")).toHaveLength(3);
-    expect(container.querySelectorAll(".call-failed")).toHaveLength(2);
-    expect(container.querySelectorAll(".k-shell")).toHaveLength(1);
-    expect(container.querySelectorAll(".k-agent")).toHaveLength(2);
+    expect(container.querySelectorAll(".lane-track .call-failed")).toHaveLength(2);
+    expect(container.querySelectorAll(".lane-track .k-shell")).toHaveLength(1);
+    expect(container.querySelectorAll(".lane-track .k-agent")).toHaveLength(2);
     expect(container.querySelectorAll(".warp-line")).toHaveLength(1);
     expect(container.querySelector(".lane-selected")?.textContent).toContain("widget-explorer");
+  });
+
+  it("draws each kind of call at its own height, not by colour alone (WCAG 1.4.1)", () => {
+    const clock = createClock({ time: 0, playing: false, rate: 1, duration: 60 });
+    const { container } = render(
+      <Timeline model={makeModel()} selected={null} onSelect={() => {}} />,
+      { wrapper: withClock(clock) },
+    );
+    const bandOf = (selector: string) =>
+      Array.from(container.querySelectorAll(`.lane-track ${selector}`), (rect) => [
+        Number(rect.getAttribute("y")),
+        Number(rect.getAttribute("height")),
+      ]);
+    expect(bandOf(".k-shell")).toEqual([[0.5, 4]]);
+    expect(bandOf(".k-read")).toEqual([
+      [3, 4],
+      [3, 4],
+    ]);
+    expect(bandOf(".k-mcp")).toEqual([[3, 4]]);
+    expect(bandOf(".k-edit")).toEqual([
+      [5.5, 4],
+      [5.5, 4],
+    ]);
+    expect(bandOf(".k-agent")).toEqual([
+      [1.5, 7],
+      [1.5, 7],
+    ]);
+    expect(bandOf(".call-failed")).toEqual([
+      [0, 10],
+      [0, 10],
+    ]);
+  });
+
+  it("shows a visible legend naming each mark beside a sample of it", () => {
+    const clock = createClock({ time: 0, playing: false, rate: 1, duration: 60 });
+    render(<Timeline model={makeModel()} selected={null} onSelect={() => {}} />, {
+      wrapper: withClock(clock),
+    });
+    const legend = screen.getByRole("list", { name: "Tool call marks" });
+    const items = Array.from(legend.querySelectorAll("li"));
+    expect(items.map((item) => item.textContent)).toEqual([
+      "Shell",
+      "Read, MCP, Other",
+      "Edit",
+      "Agent",
+      "Failed",
+    ]);
+    for (const item of items) {
+      expect(item.querySelector("svg.call-mark")?.getAttribute("aria-hidden")).toBe("true");
+    }
+    const failedSample = items[4]?.querySelector(".call-failed");
+    expect(failedSample?.getAttribute("height")).toBe(String(FAILED_CALL_BAND.height));
   });
 
   it("selects and deselects with a lane label, and seeks with the pointer", () => {
@@ -265,5 +326,46 @@ describe("reduced motion", () => {
   it("is false where matchMedia is missing", () => {
     vi.stubGlobal("matchMedia", undefined);
     expect(prefersReducedMotion()).toBe(false);
+  });
+});
+
+describe("CallMark", () => {
+  it("gives every kind a band inside the track and failures the whole track", () => {
+    for (const band of [...Object.values(CALL_BANDS), FAILED_CALL_BAND]) {
+      expect(band.y).toBeGreaterThanOrEqual(0);
+      expect(band.y + band.height).toBeLessThanOrEqual(CALL_TRACK_UNITS);
+    }
+    expect(FAILED_CALL_BAND).toEqual({ y: 0, height: CALL_TRACK_UNITS });
+    expect(callBand("edit", true)).toBe(FAILED_CALL_BAND);
+    expect(callBand("edit", false)).toBe(CALL_BANDS.edit);
+  });
+
+  it("gives marks of different colours different bands, so the colour is never the only sign", () => {
+    // Kinds that share a colour (read, MCP, other) share a band; every other pair differs.
+    const groups = CALL_LEGEND.map((entry) => callBand(entry.kind, entry.failed));
+    const keys = groups.map((band) => `${band.y}/${band.height}`);
+    expect(new Set(keys).size).toBe(CALL_LEGEND.length);
+    expect(CALL_BANDS.mcp).toEqual(CALL_BANDS.read);
+    expect(CALL_BANDS.other).toEqual(CALL_BANDS.read);
+    // The failure band is the only one that fills the track.
+    for (const band of Object.values(CALL_BANDS)) {
+      expect(band.height).toBeLessThan(FAILED_CALL_BAND.height);
+    }
+  });
+
+  it("names the colour class of a call", () => {
+    expect(callClass("shell", false)).toBe("call k-shell");
+    expect(callClass("shell", true)).toBe("call call-failed");
+  });
+
+  it("draws a hidden sample mark at the kind's band", () => {
+    const { container } = render(<CallMark kind="agent" />);
+    const svg = container.querySelector("svg.call-mark");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    const mark = container.querySelector(".k-agent");
+    expect(mark?.getAttribute("y")).toBe(String(CALL_BANDS.agent.y));
+    expect(mark?.getAttribute("height")).toBe(String(CALL_BANDS.agent.height));
+    const { container: failed } = render(<CallMark kind="read" failed />);
+    expect(failed.querySelector(".call-failed")?.getAttribute("height")).toBe("10");
   });
 });

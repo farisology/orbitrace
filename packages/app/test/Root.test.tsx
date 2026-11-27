@@ -45,7 +45,12 @@ function renderRoot(startup: Startup, orrery: FakeOrrery = fakeOrrery()) {
   return orrery;
 }
 
-const picker = () => screen.getByRole("list", { name: "Sessions" });
+/** The open session list (opened first when it is closed). */
+const picker = () => {
+  const toggle = screen.getByRole("button", { name: /^Sessions \(/ });
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+  return screen.getByRole("list", { name: "Sessions" });
+};
 const sessionButton = (label: string) =>
   within(picker()).getByRole("button", { name: new RegExp(`^${label}`) });
 

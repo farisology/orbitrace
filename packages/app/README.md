@@ -21,9 +21,11 @@ The page URL takes `?t=<seconds>` (compressed timeline), `?select=<agent id>`,
 
 ## Use
 
-- **Keyboard:** Space (or K) plays and pauses, Left and Right scrub 5 s (30 s with Shift), Home
-  and End jump to the start and end, Escape clears the selection. A focused control keeps the
-  keys it uses itself: Space presses a focused button, arrows move a focused slider or select.
+- **Keyboard:** Space plays and pauses, Left and Right scrub 5 s (30 s with Shift), Home and End
+  jump to the start and end, Escape clears the selection. A focused control keeps the keys it
+  uses itself: Space presses a focused button, arrows move a focused slider or select. There is
+  no single-letter shortcut. The first Tab stop is a "Skip to playback controls" button; Up and
+  Down move between timeline lane labels; Escape closes the open session list.
 - **Select an agent** on the canvas or with its timeline lane label. The inspector shows its
   callsign, model family and shape, effort, wave, start and end in real time, token classes and
   tool calls by kind with failures.
@@ -31,8 +33,15 @@ The page URL takes `?t=<seconds>` (compressed timeline), `?select=<agent id>`,
   `validateReplay`; a `.jsonl` transcript is parsed with `parseSession` and `buildReplay`. The
   file is read in the page and is not sent anywhere. A single transcript holds the main agent
   only; subagent transcripts are separate files and are not read.
-- **Reduced motion:** with `prefers-reduced-motion: reduce` the replay does not autoplay and the
-  renderer draws still frames.
+- **Reduced motion:** with `prefers-reduced-motion: reduce`, or in an editor tab when the editor's
+  own reduce-motion setting puts `vscode-reduce-motion` on the page body, the replay does not
+  autoplay and the renderer draws still frames.
+- **Screen readers:** the canvas has a short text alternative, and a visually hidden table after
+  it lists every agent with its model family and shape, who started it, whether it is running at
+  the playhead and its tool calls so far. A polite live region says when a replay loads, when a
+  live session changes state and when it gains agents (at most once every 10 s). What was
+  checked, how, and what still needs a person with a screen reader is in
+  [ACCESSIBILITY.md](ACCESSIBILITY.md).
 
 ## Hosts
 
@@ -60,8 +69,8 @@ exported as `@orbitrace/app`.
 When a host lists no sessions the app shows the demo and says so. When the host refuses the
 token, or the session list cannot be read, the app shows a plain error page instead.
 
-With a host, the header has a session picker: the host's sessions (path-free summaries, newest
-first) with the shown one marked. A session listed as live (or with an unknown status) is
+With a host, the header has a session picker (a button that shows and hides a list): the
+host's sessions (path-free summaries, newest first) with the shown one marked. A session listed as live (or with an unknown status) is
 followed with `subscribe`; later snapshots go to the renderer's `updateModel`, so the selection
 and time are kept, and the header shows a Live marker. A session listed as ended is read once
 with `loadReplay`. The picker is hidden in demo mode.

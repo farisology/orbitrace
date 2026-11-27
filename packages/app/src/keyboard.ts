@@ -3,7 +3,7 @@
  *
  * | key                 | action                         |
  * | ------------------- | ------------------------------ |
- * | Space, K            | play or pause                  |
+ * | Space               | play or pause                  |
  * | Left / Right        | back / forward 5 s             |
  * | Shift+Left / Right  | back / forward 30 s            |
  * | Home / End          | start / end                    |
@@ -11,6 +11,10 @@
  *
  * Keys typed into a control that uses them itself (a text field, a select, a slider, a button)
  * are left to that control, so space on a focused button presses it once, not twice.
+ *
+ * There is no single-letter shortcut. A letter key (K once played and paused) would fire on its
+ * own, which WCAG 2.1 success criterion 2.1.4 (Character Key Shortcuts) rules out unless it can
+ * be turned off or remapped, and speech input users can trigger it by accident.
  */
 
 /** Seconds of replay time one arrow press moves. */
@@ -38,8 +42,6 @@ export function keyAction(event: KeyInput): KeyAction | null {
   switch (event.key) {
     case " ":
     case "Spacebar":
-    case "k":
-    case "K":
       return { type: "toggle" };
     case "ArrowLeft":
       return { type: "seekBy", delta: -(event.shiftKey ? SCRUB_STEP_LARGE : SCRUB_STEP) };
@@ -56,17 +58,9 @@ export function keyAction(event: KeyInput): KeyAction | null {
   }
 }
 
-const TEXT_INPUT_TYPES = new Set([
-  "text",
-  "search",
-  "email",
-  "number",
-  "password",
-  "url",
-  "tel",
-]);
+const TEXT_INPUT_TYPES = new Set(["text", "search", "email", "number", "password", "url", "tel"]);
 
-/** Keys a native slider uses itself. Space and K are not among them, so they still play and pause. */
+/** Keys a native slider uses itself. Space is not among them, so it still plays and pauses. */
 const SLIDER_KEYS = new Set([
   "ArrowLeft",
   "ArrowRight",
