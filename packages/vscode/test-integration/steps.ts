@@ -13,6 +13,12 @@ export interface Step {
   run(): Promise<void> | void;
   /** Milliseconds before the step fails. Default: `RunStepsOptions.timeoutMs`. */
   readonly timeoutMs?: number;
+  /**
+   * Checked just before the step would run: a reason (one line) skips the step and is logged
+   * with it, `undefined` runs it. For a step that cannot run here, such as one that needs
+   * `node:sqlite` in an editor whose Node lacks it. A skipped step does not stop the run.
+   */
+  skip?(): string | undefined;
 }
 
 export type StepOutcome = "passed" | "failed" | "skipped";
@@ -24,6 +30,8 @@ export interface StepResult {
   readonly durationMs: number;
   /** The failure message, for a failed step. */
   readonly error?: string;
+  /** Why the step was skipped, when its `skip` gave a reason. */
+  readonly skipReason?: string;
 }
 
 export interface StepReport {
@@ -111,6 +119,12 @@ export async function runSteps(
     }
     const started = now();
     try {
+      const reason = step.skip?.();
+      if (reason !== undefined) {
+        results.push({ name: step.name, outcome: "skipped", durationMs: 0, skipReason: reason });
+        log(`  - skipped  ${step.name} (${reason})`);
+        continue;
+      }
       const timeoutMs = step.timeoutMs ?? options.timeoutMs;
       await withTimeout(
         Promise.resolve().then(() => step.run()),
@@ -136,6 +150,19 @@ export async function runSteps(
     passed: count("passed"),
     failed: count("failed"),
     skipped: count("skipped"),
+  };
+}
+
+/** One report for several runs of `runSteps`, in order: their results and counts together. */
+export function mergeReports(reports: readonly StepReport[]): StepReport {
+  const results = reports.flatMap((report) => report.results);
+  const sum = (pick: (report: StepReport) => number): number =>
+    reports.reduce((total, report) => total + pick(report), 0);
+  return {
+    results,
+    passed: sum((report) => report.passed),
+    failed: sum((report) => report.failed),
+    skipped: sum((report) => report.skipped),
   };
 }
 

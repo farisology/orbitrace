@@ -75,6 +75,9 @@ describe("createSandbox", () => {
       expect(statSync(dir).isDirectory()).toBe(true);
     }
     expect(readSandbox(sandbox.root)).toEqual(sandbox);
+    // The history store creates its own folder; the sandbox only names it.
+    expect(sandbox.historyDataDir).toBe(join(sandbox.root, "hd"));
+    expect(existsSync(sandbox.historyDataDir)).toBe(false);
     expect(existsSync(join(sandbox.workspaceDir, "README.md"))).toBe(true);
     expect(existsSync(sandbox.workspaceSession.transcript)).toBe(true);
     for (const session of sandbox.otherSessions) expect(existsSync(session.transcript)).toBe(true);
@@ -157,12 +160,14 @@ describe("editorEnvironment and editorArguments", () => {
       ELECTRON_RUN_AS_NODE: "1",
       CLAUDE_CONFIG_DIR: "/tmp/not-this-one",
       HOME: "/tmp/not-this-home",
+      ORBITRACE_DATA_DIR: "/tmp/not-this-store",
       EMPTY: undefined,
     });
     expect(env.PATH).toBe("/usr/bin");
     expect(Object.keys(env).filter(isInheritedEditorVariable)).toEqual([]);
     expect(env.CLAUDE_CONFIG_DIR).toBe(sandbox.configDir);
     expect(env.HOME).toBe(sandbox.homeDir);
+    expect(env.ORBITRACE_DATA_DIR).toBe(sandbox.historyDataDir);
     expect("EMPTY" in env).toBe(false);
   });
 
@@ -173,12 +178,13 @@ describe("editorEnvironment and editorArguments", () => {
     expect(isInheritedEditorVariable("MY_VSCODE_THING")).toBe(false);
   });
 
-  it("point the config folder and home folder into the sandbox", () => {
+  it("point the config folder, home folder and history data folder into the sandbox", () => {
     const sandbox = createSandbox(parent());
     expect(editorEnvironment(sandbox)).toEqual({
       CLAUDE_CONFIG_DIR: sandbox.configDir,
       HOME: sandbox.homeDir,
       USERPROFILE: sandbox.homeDir,
+      ORBITRACE_DATA_DIR: sandbox.historyDataDir,
       [SANDBOX_ENV]: sandbox.root,
     });
   });
@@ -216,6 +222,8 @@ describe("readSandbox", () => {
       extensionsDir: dir,
     };
     writeFileSync(join(dir, SANDBOX_FILE), JSON.stringify(paths));
+    expect(() => readSandbox(dir)).toThrow("has no historyDataDir");
+    writeFileSync(join(dir, SANDBOX_FILE), JSON.stringify({ ...paths, historyDataDir: dir }));
     expect(() => readSandbox(dir)).toThrow("has no sessions");
   });
 });

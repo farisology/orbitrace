@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   delay,
   errorMessage,
+  mergeReports,
   runSteps,
   summarizeReport,
   waitFor,
@@ -135,9 +136,70 @@ describe("runSteps", () => {
     expect(report.results[0]?.error).toBe("hangs timed out after 10 ms");
   });
 
+  it("skips a step whose skip gives a reason, logs the reason and runs the next step", async () => {
+    const ran: string[] = [];
+    const lines: string[] = [];
+    const report = await runSteps(
+      [
+        { name: "needs x", skip: () => "x is missing here", run: () => void ran.push("x") },
+        { name: "plain", skip: () => undefined, run: () => void ran.push("plain") },
+      ],
+      { timeoutMs: 1_000, log: (l) => lines.push(l) },
+    );
+    expect(ran).toEqual(["plain"]);
+    expect(report).toMatchObject({ passed: 1, failed: 0, skipped: 1 });
+    expect(report.results[0]).toEqual({
+      name: "needs x",
+      outcome: "skipped",
+      durationMs: 0,
+      skipReason: "x is missing here",
+    });
+    expect(lines[0]).toBe("  - skipped  needs x (x is missing here)");
+  });
+
+  it("fails a step whose skip check throws, and skips the rest", async () => {
+    const report = await runSteps(
+      [
+        {
+          name: "bad check",
+          skip: () => {
+            throw new Error("check broke");
+          },
+          run: () => undefined,
+        },
+        { name: "after", run: () => undefined },
+      ],
+      { timeoutMs: 1_000 },
+    );
+    expect(report).toMatchObject({ passed: 0, failed: 1, skipped: 1 });
+    expect(report.results[0]).toMatchObject({ outcome: "failed", error: "check broke" });
+  });
+
   it("works without a log", async () => {
     const report = await runSteps([], { timeoutMs: 10 });
     expect(report).toEqual({ results: [], passed: 0, failed: 0, skipped: 0 });
+  });
+});
+
+describe("mergeReports", () => {
+  it("joins the results in order and adds up the counts", async () => {
+    const first = await runSteps([{ name: "a", run: () => undefined }], { timeoutMs: 100 });
+    const second = await runSteps(
+      [
+        {
+          name: "b",
+          run: () => {
+            throw new Error("no");
+          },
+        },
+        { name: "c", run: () => undefined },
+      ],
+      { timeoutMs: 100 },
+    );
+    const merged = mergeReports([first, second]);
+    expect(merged.results.map((r) => r.name)).toEqual(["a", "b", "c"]);
+    expect(merged).toMatchObject({ passed: 1, failed: 1, skipped: 1 });
+    expect(mergeReports([])).toEqual({ results: [], passed: 0, failed: 0, skipped: 0 });
   });
 });
 

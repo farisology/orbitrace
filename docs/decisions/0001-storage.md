@@ -212,12 +212,36 @@ Two consequences:
 - 22.12.0 does not load `node:sqlite` without a flag and 22.13.1 does, so on the 22 line the repository's `engines` floor (22.13) is where history becomes available (22.13.0 itself was not run). Node 20 never has it, so history is unavailable on Node 20 and the store's tests skip there, with the reason in the suite name. CI runs Node 20 and 22.
 - FTS5 is missing in some builds that load the module (22.13.1, 23.11.1). `historyCapability()` reports `fts5: true | false`, so full-text search (#28) can check before it creates its table.
 
+### Which VS Code versions load `node:sqlite` (#196)
+
+Run on 2026-11-27 on the test machine (macOS, arm64). Each version was downloaded with `@vscode/test-electron` 3.1.0 (`downloadAndUnzipVSCode`, the downloader the integration test uses; the macOS arm64 archive of each release, about 130 MB) into a temporary folder outside the repository, then deleted. The editor binary ran as Node with `ELECTRON_RUN_AS_NODE=1`, printed `process.versions`, then ran `require("node:sqlite")`, `new DatabaseSync(":memory:")`, `sqlite_version()` and `CREATE VIRTUAL TABLE ... USING fts5(x)`. The launcher of the integration test does this (`packages/vscode/test-integration/runtime-probe.ts`):
+
+```
+ORBITRACE_IT_PROBE_ONLY=1 ORBITRACE_VSCODE_VERSION=<version> ORBITRACE_IT_CACHE_DIR=<absolute temporary folder> \
+  npm run test:integration -w orbitrace-vscode
+```
+
+| VS Code                          | Electron | Node    | `node:sqlite`                    | SQLite | FTS5 | Warning printed       |
+| -------------------------------- | -------- | ------- | -------------------------------- | ------ | ---- | --------------------- |
+| 1.96.0 (lowest `engines.vscode`) | 32.2.6   | 20.18.1 | no: `ERR_UNKNOWN_BUILTIN_MODULE` | n/a    | n/a  | none                  |
+| 1.100.0                          | 34.5.1   | 20.19.0 | no: `ERR_UNKNOWN_BUILTIN_MODULE` | n/a    | n/a  | none                  |
+| 1.101.0                          | 35.5.1   | 22.15.1 | yes                              | 3.49.1 | no   | `ExperimentalWarning` |
+| 1.102.0                          | 35.6.0   | 22.15.1 | yes                              | 3.49.1 | no   | `ExperimentalWarning` |
+| 1.103.0                          | 37.2.3   | 22.17.0 | yes                              | 3.50.0 | yes  | `ExperimentalWarning` |
+| 1.104.0                          | 37.3.1   | 22.18.0 | yes                              | 3.50.2 | yes  | `ExperimentalWarning` |
+| 1.107.0                          | 39.2.3   | 22.21.1 | yes                              | 3.50.4 | yes  | `ExperimentalWarning` |
+| 1.113.0                          | 39.8.3   | 22.22.1 | yes                              | 3.51.2 | yes  | `ExperimentalWarning` |
+| 1.125.0                          | 42.2.0   | 24.15.0 | yes                              | 3.51.3 | yes  | none                  |
+| 1.148.0 (stable on 2026-11-27)   | 43.8.10  | 24.22.1 | yes                              | 3.53.4 | yes  | none                  |
+
+Only the `.0` release of each listed version was run; patch releases and the versions between the rows were not. So among the versions run, `node:sqlite` first loads in 1.101.0 and FTS5 first works in 1.103.0. Every VS Code that `engines.vscode: ^1.96.0` allows below 1.101.0 has no history: the store reports itself unavailable there, with the reason, and the rest of the extension works (checked in a real window on 1.96.0, below). The 1.148.0 row matches the runtime check at the top of this record.
+
 ### What #25 built against the five items above
 
 1. One writer: an owner-checked pid lock file. A second writer waits (optional) or fails with `locked`; a lock left by a dead process is taken over. Readers take no lock. Tested in-process and across processes.
 2. A writer killed mid-transaction (a child process blocked inside its third transaction, then `SIGKILL`): the next run takes over the lock and ends with exactly the lines of the files, none lost and none twice. Tested.
-3. Writes off the main thread: a `worker_threads` entry (`dist/history/worker.js`) with progress and result messages. Tested in Node, not in an extension host.
-4. Not done: Cursor, Windsurf, Windows and Linux were not tested.
+3. Writes off the main thread: a `worker_threads` entry (`dist/history/worker.js`) with progress and result messages. Tested in Node, and since #196 in a real VS Code extension host: the integration test (`packages/vscode/test-integration/history-steps.ts`) points `HOME`, `CLAUDE_CONFIG_DIR` and `ORBITRACE_DATA_DIR` at temporary folders, calls `historyCapability()` inside the host, runs `runHistoryIngestWorker` over 10 synthetic sessions (41 transcript files, 1,014 lines), checks the totals against a direct count, checks that a second run adds nothing, reads the totals back and deletes the store. Run locally on macOS (arm64) in a real window, all six steps passed on VS Code 1.148.0 and 1.101.0 (three runs: the worker took 58 to 296 ms; the longest gap of a 5 ms timer on the host thread during the run was 8 to 59 ms). On 1.96.0 the host reported `unavailable` with the reason "This Node.js (v20.18.1) has no node:sqlite module. History needs Node 22.13 or later.", the store and the worker both failed with `unavailable`, nothing was written, the four store steps were skipped with that reason, and the extension's own 15 steps passed. CI runs the suite on the current stable VS Code and on 1.96.0, on Linux under Xvfb; those CI runs had not happened when this was written. The extension itself does not call the history store yet; the test loads it from `@orbitrace/core/node`.
+4. Partly done (#196). Linux: the core history tests already run in CI on Ubuntu with Node 20 (they skip there, with the reason), 22, 24 and 26, and CI runs the extension-host check above on Ubuntu. Windows: a CI job runs the core tests on `windows-latest` with Node 24, not blocking yet; it had not run when this was written, so nothing is confirmed on Windows. Read for Windows: Node's `chmod` there sets only the read-only flag (the 0700 / 0600 test skips on Windows), `child.kill("SIGKILL")` in the crash test ends the process with `TerminateProcess`, and the location checks compare paths case-insensitively on Windows. Not tested: Cursor and Windsurf (not installed), Windows in an extension host, VS Code on Linux outside CI.
 5. The interface is narrow: capability, open (reader or writer), ingest, read back, delete one session, delete the store, close.
 
 The file uses WAL journal mode, not the `journal_mode=DELETE` recommended above: with one engine, WAL lets readers read while the writer writes. A second engine that cannot open WAL files would need a checkpoint and `journal_mode=DELETE` first; the data does not change.

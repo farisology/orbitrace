@@ -23,16 +23,23 @@
  *
  * Needs Node.js 22 or later (the `engines` range of `@vscode/test-electron` 3).
  *
+ * Before the editor starts, the launcher runs the downloaded editor binary once as plain Node
+ * (`runtime-probe.ts`) and prints the Node, Electron and SQLite versions it bundles and whether
+ * `node:sqlite` loads in it (#196).
+ *
  * Settings, all optional: `ORBITRACE_VSCODE_VERSION` (`stable` by default, `insiders`, or a
  * number such as `1.96.0`, the lowest the manifest accepts); `ORBITRACE_IT_TIMEOUT_MS` (whole
  * run, default 180000); `ORBITRACE_IT_KEEP_SANDBOX=1` keeps the sandbox, with the editor's
  * logs under `ud/logs`, when a run fails; `ORBITRACE_IT_EDITOR_ARGS` adds editor arguments,
- * separated by spaces, for debugging.
+ * separated by spaces, for debugging; `ORBITRACE_IT_PROBE_ONLY=1` downloads the editor, prints
+ * its runtime and stops, without the build check or the suite; `ORBITRACE_IT_CACHE_DIR` (an
+ * absolute path) downloads into that folder instead of `downloadCacheDir`, for example a
+ * temporary folder outside the repository when measuring several versions.
  */
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { APP_BUNDLE_SEGMENTS, APP_INDEX_FILE } from "../src/app-bundle.js";
 import {
@@ -43,6 +50,7 @@ import {
   type SandboxDescription,
 } from "./sandbox.js";
 import { readSuiteResult, SUITE_LOG_FILE, type SuiteResult } from "./sandbox-description.js";
+import { describeRuntime, probeEditorRuntime, type EditorRuntime } from "./runtime-probe.js";
 
 /** Environment variable that picks the VS Code version. */
 export const VERSION_ENV = "ORBITRACE_VSCODE_VERSION";
@@ -58,6 +66,12 @@ export const KEEP_ENV = "ORBITRACE_IT_KEEP_SANDBOX";
  * (for example `--remote-debugging-port=9339` to look into the webview with a debugger).
  */
 export const EXTRA_ARGS_ENV = "ORBITRACE_IT_EDITOR_ARGS";
+
+/** Environment variable that makes the launcher print the editor's runtime and stop (#196). */
+export const PROBE_ONLY_ENV = "ORBITRACE_IT_PROBE_ONLY";
+
+/** Environment variable with another download folder (an absolute path) for the editor. */
+export const CACHE_DIR_ENV = "ORBITRACE_IT_CACHE_DIR";
 
 /** Lowest Node.js major version `@vscode/test-electron` 3 supports (its `engines` field). */
 export const MIN_NODE_MAJOR = 22;
@@ -138,17 +152,24 @@ export interface RunSettings {
   readonly keepSandbox: boolean;
   /** Extra editor arguments, from `EXTRA_ARGS_ENV`. */
   readonly extraArguments: readonly string[];
+  /** Print the editor's runtime and stop, from `PROBE_ONLY_ENV`. */
+  readonly probeOnly: boolean;
+  /** Download folder from `CACHE_DIR_ENV`, or null for `downloadCacheDir`. Not checked here. */
+  readonly cacheDir: string | null;
 }
 
 /** Read the settings. A timeout that is not a positive number falls back to the default. */
 export function readSettings(env: Readonly<Record<string, string | undefined>>): RunSettings {
   const version = env[VERSION_ENV]?.trim();
   const timeout = Number(env[TIMEOUT_ENV]);
+  const cacheDir = env[CACHE_DIR_ENV]?.trim();
   return {
     version: version === undefined || version === "" ? "stable" : version,
     timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_TIMEOUT_MS,
     keepSandbox: env[KEEP_ENV] === "1",
     extraArguments: (env[EXTRA_ARGS_ENV] ?? "").split(/\s+/).filter((arg) => arg !== ""),
+    probeOnly: env[PROBE_ONLY_ENV] === "1",
+    cacheDir: cacheDir === undefined || cacheDir === "" ? null : cacheDir,
   };
 }
 
@@ -269,6 +290,40 @@ function editorOutputTail(sandbox: SandboxDescription, lines: number): string {
   return readFileSync(file, "utf8").split("\n").slice(-lines).join("\n");
 }
 
+/**
+ * The folder the editor is downloaded into: `settings.cacheDir` when set (created with its
+ * parents), else `downloadCacheDir` of the package (`ensureDownloadCacheDir`).
+ */
+export function downloadFolder(
+  packageDir: string,
+  settings: Pick<RunSettings, "cacheDir">,
+): string {
+  if (settings.cacheDir === null) return ensureDownloadCacheDir(packageDir);
+  mkdirSync(settings.cacheDir, { recursive: true });
+  return settings.cacheDir;
+}
+
+/**
+ * Print the runtime the editor binary bundles (`runtime-probe.ts`). Returns it, or null after
+ * printing why the probe failed. A failed probe does not stop the integration run: the suite
+ * reports `historyCapability()` from inside the extension host as well.
+ */
+export function reportRuntime(
+  executable: string,
+  probe: (executable: string) => EditorRuntime = probeEditorRuntime,
+): EditorRuntime | null {
+  try {
+    const runtime = probe(executable);
+    console.log(`test:integration: the editor bundles ${describeRuntime(runtime)}`);
+    return runtime;
+  } catch (error) {
+    console.error(
+      `test:integration: could not read the editor's runtime: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
+}
+
 /** Run the suite once. Resolves with the process exit code. */
 export async function main(packageDir: string): Promise<number> {
   if (nodeTooOld(process.version)) {
@@ -277,21 +332,31 @@ export async function main(packageDir: string): Promise<number> {
     );
     return 1;
   }
-  const missing = missingBuildOutputs(packageDir);
+  const settings = readSettings(process.env);
+  if (settings.cacheDir !== null && !isAbsolute(settings.cacheDir)) {
+    console.error(`test:integration: ${CACHE_DIR_ENV} must be an absolute path.`);
+    return 1;
+  }
+  const missing = settings.probeOnly ? [] : missingBuildOutputs(packageDir);
   if (missing.length > 0) {
     console.error(
       `test:integration: missing ${missing.join(", ")}. Run 'npm run build' at the repository root first.`,
     );
     return 1;
   }
-  const settings = readSettings(process.env);
   // Loaded here, not at the top, so the unit tests of this file (which run on every Node.js
   // version the repository supports) never load it.
   const { downloadAndUnzipVSCode } = await import("@vscode/test-electron");
   const executable = await downloadAndUnzipVSCode({
     version: settings.version,
-    cachePath: ensureDownloadCacheDir(packageDir),
+    cachePath: downloadFolder(packageDir, settings),
   });
+  const runtime = reportRuntime(executable);
+  if (settings.probeOnly) {
+    if (runtime === null) return 1;
+    console.log(JSON.stringify(runtime));
+    return 0;
+  }
   const sandbox = createSandbox();
   let passed = false;
   try {

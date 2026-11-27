@@ -1,5 +1,6 @@
 /**
- * The integration suite (ticket #102). Runs inside a real VS Code extension host, launched by
+ * The integration suite (ticket #102; the history store steps, `history-steps.ts`, ticket #196).
+ * Runs inside a real VS Code extension host, launched by
  * `run.ts` with the built extension from this package, a temporary workspace, profile and
  * extensions folder, and `CLAUDE_CONFIG_DIR` / `HOME` pointing at a synthetic config tree
  * (`sandbox.ts`).
@@ -28,6 +29,7 @@ import { PANEL_VIEW_TYPE } from "../src/panels.js";
 import { GROUP_TITLES, type SessionTreeNode } from "../src/session-catalog.js";
 import { panelTitle } from "../src/session-labels.js";
 import { LIST_FAILED_MESSAGE } from "../src/session-tree.js";
+import { buildHistorySteps } from "./history-steps.js";
 import { pathInsideBase, policyProblems, readPage } from "./html-checks.js";
 import {
   appendSuiteLog,
@@ -51,6 +53,7 @@ import {
 import {
   delay,
   errorMessage,
+  mergeReports,
   runSteps,
   summarizeReport,
   waitFor,
@@ -652,7 +655,16 @@ export async function run(): Promise<void> {
   log(`Orbitrace integration suite, VS Code ${vscode.version}, ${process.platform}`);
   let report: StepReport = { results: [], passed: 0, failed: 1, skipped: 0 };
   try {
-    report = await runSteps(buildSteps(context), { timeoutMs: 20_000, log });
+    // Two stories, each stopping at its own first failure. The history store first (#196), while
+    // the transcripts are as the sandbox wrote them; it does not touch the extension.
+    log("History store in the extension host:");
+    const history = await runSteps(buildHistorySteps({ sandbox, packageDir: PACKAGE_DIR, log }), {
+      timeoutMs: 20_000,
+      log,
+    });
+    log("The extension:");
+    const extension = await runSteps(buildSteps(context), { timeoutMs: 20_000, log });
+    report = mergeReports([history, extension]);
   } finally {
     await cleanUp(context);
     log(`Orbitrace integration suite: ${summarizeReport(report)}`);

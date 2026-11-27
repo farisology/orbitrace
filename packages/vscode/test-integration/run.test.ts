@@ -27,8 +27,10 @@ vi.mock("@vscode/test-electron", async () => {
   };
 });
 import {
+  CACHE_DIR_ENV,
   DEFAULT_TIMEOUT_MS,
   downloadCacheDir,
+  downloadFolder,
   ensureDownloadCacheDir,
   main,
   EXTRA_ARGS_ENV,
@@ -37,8 +39,10 @@ import {
   missingBuildOutputs,
   nodeTooOld,
   packageDirFrom,
+  PROBE_ONLY_ENV,
   processesMentioning,
   readSettings,
+  reportRuntime,
   suiteBundlePath,
   TEST_EDITOR_ARGUMENTS,
   testEditorArguments,
@@ -46,6 +50,7 @@ import {
   VERSION_ENV,
 } from "./run.js";
 import type { SandboxDescription } from "./sandbox-description.js";
+import type { EditorRuntime } from "./runtime-probe.js";
 
 const dirs: string[] = [];
 
@@ -57,6 +62,8 @@ function tempDir(): string {
 
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 const SANDBOX: SandboxDescription = {
@@ -66,6 +73,7 @@ const SANDBOX: SandboxDescription = {
   workspaceDir: "/tmp/oti-abcdef/ws",
   userDataDir: "/tmp/oti-abcdef/ud",
   extensionsDir: "/tmp/oti-abcdef/ext",
+  historyDataDir: "/tmp/oti-abcdef/hd",
   workspaceSession: { key: "claude-code:test-1", projectLabel: "kite-workshop", transcript: "/x" },
   otherSessions: [],
 };
@@ -167,6 +175,8 @@ describe("readSettings", () => {
       timeoutMs: DEFAULT_TIMEOUT_MS,
       keepSandbox: false,
       extraArguments: [],
+      probeOnly: false,
+      cacheDir: null,
     });
   });
 
@@ -177,12 +187,16 @@ describe("readSettings", () => {
         [TIMEOUT_ENV]: "5000",
         [KEEP_ENV]: "1",
         [EXTRA_ARGS_ENV]: "  --a  --b=1 ",
+        [PROBE_ONLY_ENV]: "1",
+        [CACHE_DIR_ENV]: " /tmp/oti-cache ",
       }),
     ).toEqual({
       version: "1.96.0",
       timeoutMs: 5000,
       keepSandbox: true,
       extraArguments: ["--a", "--b=1"],
+      probeOnly: true,
+      cacheDir: "/tmp/oti-cache",
     });
   });
 
@@ -192,6 +206,74 @@ describe("readSettings", () => {
     expect(settings.timeoutMs).toBe(DEFAULT_TIMEOUT_MS);
     expect(settings.keepSandbox).toBe(false);
     expect(readSettings({ [TIMEOUT_ENV]: "soon" }).timeoutMs).toBe(DEFAULT_TIMEOUT_MS);
+    expect(readSettings({ [PROBE_ONLY_ENV]: "yes", [CACHE_DIR_ENV]: "  " })).toMatchObject({
+      probeOnly: false,
+      cacheDir: null,
+    });
+  });
+});
+
+describe("downloadFolder", () => {
+  it("is the package's cache folder by default, created", () => {
+    const pkg = tempDir();
+    expect(downloadFolder(pkg, { cacheDir: null })).toBe(downloadCacheDir(pkg));
+    expect(statSync(downloadCacheDir(pkg)).isDirectory()).toBe(true);
+  });
+
+  it("is the chosen folder when one is set, created with its parents", () => {
+    const pkg = tempDir();
+    const chosen = join(tempDir(), "a", "b");
+    expect(downloadFolder(pkg, { cacheDir: chosen })).toBe(chosen);
+    expect(statSync(chosen).isDirectory()).toBe(true);
+    expect(existsSync(downloadCacheDir(pkg))).toBe(false);
+  });
+});
+
+describe("reportRuntime", () => {
+  const runtime: EditorRuntime = {
+    node: "20.18.1",
+    electron: "32.2.6",
+    sqlite: null,
+    modules: "128",
+    nodeSqlite: false,
+    sqliteVersion: null,
+    fts5: null,
+    error: "ERR_UNKNOWN_BUILTIN_MODULE",
+    experimentalWarning: false,
+  };
+
+  it("prints and returns what the probe found", () => {
+    const logged = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    expect(reportRuntime("/x/editor", () => runtime)).toEqual(runtime);
+    expect(String(logged.mock.calls[0]?.[0])).toContain("Node 20.18.1, Electron 32.2.6");
+  });
+
+  it("prints why and returns null when the probe fails", () => {
+    const failed = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const probe = (): EditorRuntime => {
+      throw new Error("no result");
+    };
+    expect(reportRuntime("/x/editor", probe)).toBeNull();
+    expect(String(failed.mock.calls[0]?.[0])).toContain("no result");
+  });
+});
+
+describe.skipIf(nodeTooOld(process.version))("main with the probe settings (#196)", () => {
+  it("downloads into the chosen folder without the build check when probing only", async () => {
+    const pkg = tempDir();
+    const chosen = join(tempDir(), "cache");
+    vi.stubEnv(PROBE_ONLY_ENV, "1");
+    vi.stubEnv(CACHE_DIR_ENV, chosen);
+    // No build outputs in `pkg`: a full run would stop before the download.
+    await expect(main(pkg)).rejects.toThrow(/stand-in/);
+    expect(download.cachePath).toBe(chosen);
+    expect(download.existedAtCall).toBe(true);
+  });
+
+  it("refuses a download folder that is not absolute", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubEnv(CACHE_DIR_ENV, "relative/cache");
+    expect(await main(tempDir())).toBe(1);
   });
 });
 
