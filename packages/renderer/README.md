@@ -2,7 +2,14 @@
 
 Framework-free Canvas 2D engine that draws one Orbitrace replay model as an orrery: the main
 agent in the centre, subagents on one orbit per wave, tool calls as spokes while they run and
-moons once they finish. Orbitrace is not affiliated with Anthropic.
+moons once they finish.
+
+Orbitrace is an independent project. It is not affiliated with or endorsed by Anthropic.
+
+**Status: not released.** This package is not on npm yet. Build it from the
+[repository](https://github.com/farisology/orbitrace). It depends on `@orbitrace/core` at run
+time and ships compiled JavaScript and type declarations only; the `src/` paths below are in the
+repository, not in the package.
 
 ## Use
 
@@ -18,7 +25,8 @@ orrery.play();
 // The host owns the clock: call setTime(t) every frame while playing.
 ```
 
-The full contract is `src/api.ts`. Points that the types do not say:
+The full contract is
+[`src/api.ts`](https://github.com/farisology/orbitrace/blob/main/packages/renderer/src/api.ts). Points that the types do not say:
 
 - The renderer never advances replay time. `play`, `pause` and `setSpeed` only start, stop and
   scale motion that is not tied to replay time. Effects with a real-time length (comets, reply
@@ -61,3 +69,7 @@ npm run bench:browser   # run the demo benchmark in headless Chrome (CHROME_PATH
 
 The demo page takes `?t=<seconds>`, `?select=<agent id>`, `?paused` and `?bench=1`. All demo
 data is invented by a seeded generator in `demo/demo-model.ts`.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).

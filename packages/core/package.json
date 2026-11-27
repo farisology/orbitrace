@@ -3,6 +3,22 @@
   "version": "0.0.0",
   "description": "Orbitrace core: transcript parsing, source resolution, replay model and export. No editor dependency.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/farisology/orbitrace.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/farisology/orbitrace/tree/main/packages/core#readme",
+  "bugs": {
+    "url": "https://github.com/farisology/orbitrace/issues"
+  },
+  "keywords": [
+    "agent",
+    "replay",
+    "transcript",
+    "orrery",
+    "visualizer"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,8 +35,13 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.map",
     "schema"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",

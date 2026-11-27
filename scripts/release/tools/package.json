@@ -1,0 +1,14 @@
+{
+  "name": "orbitrace-release-tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pinned packaging and publishing tools for the release workflow (.github/workflows/release.yml). Not a workspace; installed with npm ci in this folder only.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "4.1.1",
+    "ovsx": "1.4.0"
+  }
+}

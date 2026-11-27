@@ -1,0 +1,327 @@
+# Release: builds, checks and packages one version of Orbitrace and uploads the artefacts.
+# How to run it, the gates, the secrets and the one-time owner steps: docs/releasing.md.
+#
+# It runs only when someone with write access starts it by hand (Actions > Release > Run
+# workflow). There is no push, tag, schedule or pull request trigger.
+#
+#   package        every run: the CI checks, then npm pack of core, renderer and cli, the .vsix,
+#                  their checks (scripts/release/pack-release.mjs) and SHA256SUMS, uploaded as
+#                  one workflow artefact. Read-only token.
+#   draft-release  only when dry_run is false: a DRAFT GitHub Release for the existing
+#                  v<version> tag, with the artefacts attached. It never creates a tag and never
+#                  publishes the release. The only job with contents: write.
+#   publish-*      DISABLED (`false &&` in their `if`). npm, VS Code Marketplace, Open VSX.
+#
+# Security, as in ci.yml: least permissions per job (none at the top level), no
+# pull_request_target, checkout does not keep the token on disk, actions pinned to a full commit
+# SHA (version in the comment; Dependabot updates both), inputs reach shell steps only through
+# environment variables, and secrets only reach the one step that needs them. No dependency
+# cache: a release installs from the lockfiles alone.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without a leading v, for example 0.1.0. Every packages/*/package.json must already have it."
+        required: true
+        type: string
+      dry_run:
+        description: "Dry run: build, check and upload the artefacts only. Untick only for a real release, run from the v<version> tag."
+        required: true
+        type: boolean
+        default: true
+
+run-name: "Release ${{ inputs.version }}${{ inputs.dry_run && ' (dry run)' || '' }}"
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Check, build and package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Node 22: vsce 4 and ovsx 1.4 need it. CI covers Node 20 and 22 for the code itself.
+      - name: Set up Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      # Stops the run before anything is installed: version format, one version in every
+      # package, CHANGELOG.md format, and for a real release the v<version> tag, a changelog
+      # section and the extension publisher. Node built-ins only.
+      - name: Preflight
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: node scripts/release/preflight.mjs
+
+      # The same flags as CI: no dependency runs an install script.
+      - name: Install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Install the pinned packaging tools (vsce, ovsx)
+        working-directory: scripts/release/tools
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Privacy check
+        run: npm run privacy
+
+      - name: Package and check the artefacts
+        env:
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=(--out "$RUNNER_TEMP/artefacts" --version "$VERSION" --summary "$GITHUB_STEP_SUMMARY")
+          if [ "$DRY_RUN" = "false" ]; then args+=(--require-publisher); fi
+          node scripts/release/pack-release.mjs "${args[@]}"
+
+      - name: Upload the artefacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: orbitrace-${{ inputs.version }}
+          path: ${{ runner.temp }}/artefacts
+          if-no-files-found: error
+          retention-days: 30
+
+  draft-release:
+    name: Create a draft GitHub Release
+    needs: package
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Download the artefacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: orbitrace-${{ inputs.version }}
+          path: ${{ runner.temp }}/artefacts
+
+      - name: Verify the SHA-256 sums
+        working-directory: ${{ runner.temp }}/artefacts
+        run: sha256sum --check --strict SHA256SUMS
+
+      - name: Write the release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ inputs.version }}
+        run: node scripts/release/changelog.mjs notes "$VERSION" > "$RUNNER_TEMP/notes.md"
+
+      # --verify-tag: fail if v<version> does not exist, so this job never creates a tag.
+      # --draft: nothing is visible until the owner publishes the draft by hand.
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          flags=(--draft --verify-tag --title "Orbitrace $VERSION" --notes-file "$RUNNER_TEMP/notes.md")
+          case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" "${flags[@]}" "$RUNNER_TEMP"/artefacts/*
+
+  # -------------------------------------------------------------------------------------------
+  # PUBLISH JOBS: DISABLED.
+  #
+  # Every job below has `false &&` at the start of its `if`, so GitHub skips it on every run,
+  # dry run or not. Turning one on is a reviewed pull request that removes `false &&`, after the
+  # one-time owner steps in docs/releasing.md (#35 names, #98 publisher, #16 private flag).
+  # Even then a job runs only when dry_run is false, after the draft release, inside its GitHub
+  # environment (add required reviewers there), and only when its secret is set. Each job
+  # publishes the uploaded artefacts after checking their SHA-256 sums; nothing is rebuilt.
+  # -------------------------------------------------------------------------------------------
+
+  publish-npm:
+    name: Publish to npm (disabled)
+    needs: [package, draft-release]
+    if: ${{ false && !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # npm provenance (publishConfig.provenance in each package)
+    steps:
+      - name: Set up Node 22 for the npm registry
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Download the artefacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: orbitrace-${{ inputs.version }}
+          path: ${{ runner.temp }}/artefacts
+
+      - name: Verify the SHA-256 sums
+        working-directory: ${{ runner.temp }}/artefacts
+        run: sha256sum --check --strict SHA256SUMS
+
+      - name: Require the NPM_TOKEN secret
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN is not set in the npm environment. Nothing was published."
+            exit 1
+          fi
+
+      # Core first: renderer and cli depend on it. A private package and a version that is
+      # already on npm are skipped, so a re-run after a partial publish finishes the rest.
+      - name: Publish core, renderer and cli
+        working-directory: ${{ runner.temp }}/artefacts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          for file in "orbitrace-core-$VERSION.tgz" "orbitrace-renderer-$VERSION.tgz" "orbitrace-$VERSION.tgz"; do
+            manifest="$(tar -xOzf "$file" package/package.json)"
+            name="$(node -p 'JSON.parse(process.argv[1]).name' "$manifest")"
+            if [ "$(node -p 'JSON.parse(process.argv[1]).private === true' "$manifest")" = "true" ]; then
+              echo "::warning::$name is private and was not published."
+              continue
+            fi
+            if npm view "$name@$VERSION" version > /dev/null 2>&1; then
+              echo "::notice::$name@$VERSION is already on npm; skipped."
+              continue
+            fi
+            npm publish "./$file" --provenance --access public
+          done
+
+  publish-vscode-marketplace:
+    name: Publish to the VS Code Marketplace (disabled)
+    needs: [package, draft-release]
+    if: ${{ false && !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: vscode-marketplace
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install the pinned packaging tools (vsce, ovsx)
+        working-directory: scripts/release/tools
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Download the artefacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: orbitrace-${{ inputs.version }}
+          path: ${{ runner.temp }}/artefacts
+
+      - name: Verify the SHA-256 sums
+        working-directory: ${{ runner.temp }}/artefacts
+        run: sha256sum --check --strict SHA256SUMS
+
+      - name: Require the VSCE_PAT secret
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "::error::VSCE_PAT is not set in the vscode-marketplace environment. Nothing was published."
+            exit 1
+          fi
+
+      - name: Publish the .vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          VERSION: ${{ inputs.version }}
+        run: scripts/release/tools/node_modules/.bin/vsce publish --packagePath "$RUNNER_TEMP/artefacts/orbitrace-vscode-$VERSION.vsix"
+
+  publish-open-vsx:
+    name: Publish to Open VSX (disabled)
+    needs: [package, draft-release]
+    if: ${{ false && !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: open-vsx
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install the pinned packaging tools (vsce, ovsx)
+        working-directory: scripts/release/tools
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Download the artefacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: orbitrace-${{ inputs.version }}
+          path: ${{ runner.temp }}/artefacts
+
+      - name: Verify the SHA-256 sums
+        working-directory: ${{ runner.temp }}/artefacts
+        run: sha256sum --check --strict SHA256SUMS
+
+      - name: Require the OVSX_PAT secret
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then
+            echo "::error::OVSX_PAT is not set in the open-vsx environment. Nothing was published."
+            exit 1
+          fi
+
+      - name: Publish the .vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+          VERSION: ${{ inputs.version }}
+        run: scripts/release/tools/node_modules/.bin/ovsx publish "$RUNNER_TEMP/artefacts/orbitrace-vscode-$VERSION.vsix"
