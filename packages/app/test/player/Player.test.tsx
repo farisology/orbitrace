@@ -15,6 +15,7 @@ import {
   DEMO,
   fakeOrrery,
   makeModel,
+  rendererCreated,
   replayUpdate,
   scriptedHost,
   stillFrames,
@@ -102,6 +103,8 @@ describe("opening a file", () => {
     pick(container, replayFile(makeModel()));
     await screen.findByRole("list", { name: "Agents" });
     expect(screen.getByText("Replay file: example.replay.json")).toBeDefined();
+    // A paused start: the renderer's effect can run after the list is in the DOM (issue 194).
+    await rendererCreated(orrery);
     expect(orrery.calls.some((call) => call.method === "setModel")).toBe(true);
   });
 

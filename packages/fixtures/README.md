@@ -71,6 +71,29 @@ Only these are this package's own: the `INVENTED_*` values, `MODELS` and
 object is a `RawSubagentMeta`, a generated session fits `SessionInput`, every line type in the
 fixtures that is not invented is in `KNOWN_RAW_LINE_TYPES`, and every invented one is not.
 
+## The editor-tab wire conversation
+
+`@orbitrace/fixtures/wire` holds one conversation between the app's editor-tab transport and the
+editor extension's message host: every request the app posts and every message the host posts
+back, written with core's message types. It has no Node dependency.
+
+```ts
+import { EDITOR_WIRE_CONVERSATION, withWireErrorText } from "@orbitrace/fixtures/wire";
+
+for (const { name, request, replies } of EDITOR_WIRE_CONVERSATION) {
+  // the app's test: make the call, expect `request` to be posted, then deliver `replies`
+  // the host's test: handle `request`, expect `replies` to be posted
+}
+```
+
+The two packages must agree on this layout, and each checks its real code against the same
+conversation (`packages/app/test/webview-wire.test.ts`,
+`packages/vscode/test/message-host.test.ts`), so neither test imports the other package's source.
+When the layout changes, change the conversation with it: both tests then show what still has to
+follow. An error's text is each host's own wording, so every error here carries `WIRE_ERROR_TEXT`
+and a host's test passes its messages through `withWireErrorText` before it compares.
+`test/wire.test.ts` checks the conversation itself against core's request and message checks.
+
 ## Scenarios
 
 `SCENARIO_NAMES` lists them and `SCENARIOS[name].description` says what each one is for. The

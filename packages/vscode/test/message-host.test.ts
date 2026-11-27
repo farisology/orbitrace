@@ -3,13 +3,20 @@ import { SESSION_REPLAY_MESSAGES } from "@orbitrace/core/node";
 import type { TransportMessage } from "@orbitrace/app/transport";
 import {
   MAX_SAVED_REPLAY_BYTES,
+  SAVE_REPLAY_METHOD,
   exportReplay,
+  parseSaveReplayResult,
   type SaveReplayOutcome,
   type TransportMessage as CoreTransportMessage,
 } from "@orbitrace/core";
-// The app's real webview transport, from source: the agreement test below runs it against this
-// host (#100).
-import { createWebviewTransport } from "../../app/src/webview-transport";
+// The conversation both ends of the editor-tab wire are checked against (#197). The app's
+// transport is checked against the same one in packages/app/test/webview-wire.test.ts.
+import {
+  EDITOR_WIRE_CONVERSATION,
+  WIRE_REPLAY,
+  WIRE_SESSION,
+  withWireErrorText,
+} from "@orbitrace/fixtures/wire";
 import { MESSAGE_HOST_ERRORS, createMessageHost } from "../src/message-host.js";
 import {
   demoReplay,
@@ -259,75 +266,99 @@ describe("createMessageHost with core's session replayer and the synthetic fixtu
   });
 });
 
-describe("the editor host and the app's webview transport (#100)", () => {
-  /** The app's webview transport wired to a message host, messages cloned as the webview does. */
-  function connect(saveReplay?: (data: string) => Promise<SaveReplayOutcome>) {
-    const ref = makeRef(makeSummary(), "-workspace-kite-workshop");
-    const listeners = new Set<(event: MessageEvent) => void>();
-    let deliver: (message: unknown) => void = () => undefined;
-    const transport = createWebviewTransport({
-      api: { postMessage: (message) => deliver(structuredClone(message)) },
-      events: {
-        addEventListener: (type, listener) => {
-          if (type === "message") listeners.add(listener);
-        },
-        removeEventListener: (_type, listener) => {
-          listeners.delete(listener);
-        },
-      },
+describe("the editor host and the app's webview transport (#100, #197)", () => {
+  /**
+   * A message host over the conversation's one session. Messages are cloned on the way in and
+   * out, as the webview does. `saved` collects the texts handed to the saver; the saver answers
+   * with the outcomes the conversation records, in order.
+   */
+  function recordedHost() {
+    const replayer = fakeReplayer([makeRef(WIRE_SESSION, "-workspace-kite-workshop")], {
+      replay: WIRE_REPLAY,
     });
+    const outcomes = EDITOR_WIRE_CONVERSATION.flatMap(({ replies }) => {
+      const first = replies[0];
+      const result = parseSaveReplayResult(first?.kind === "result" ? first.result : null);
+      return result === null ? [] : [result.outcome];
+    });
+    const posted: TransportMessage[] = [];
+    const saved: string[] = [];
     const host = createMessageHost({
-      replayer: fakeReplayer([ref]),
-      post: (message) => {
-        const event = { data: structuredClone(message) } as MessageEvent;
-        for (const listener of listeners) listener(event);
+      replayer,
+      post: (message) => posted.push(structuredClone(message)),
+      saveReplay: async (data) => {
+        saved.push(data);
+        const outcome = outcomes.shift();
+        if (outcome === undefined) throw new Error("the conversation records no more saves");
+        return outcome;
       },
-      ...(saveReplay !== undefined ? { saveReplay } : {}),
     });
-    deliver = (message) => void host.handle(message);
-    return { transport, host };
+    return { host, replayer, posted, saved };
   }
 
   it("speaks one message type on both sides", () => {
     expectTypeOf<TransportMessage>().toEqualTypeOf<CoreTransportMessage>();
   });
 
-  it("reports canOpenInBrowser exactly when the host does not answer unsupported", async () => {
-    const { transport, host } = connect();
-    const outcome = await transport.openInBrowser().then(
-      () => "opened",
-      (error: { code?: string }) => error.code,
+  it("answers every request of the recorded conversation with the recorded messages", async () => {
+    const { host, replayer, posted } = recordedHost();
+    const seen: { name: string; posted: TransportMessage[] }[] = [];
+    for (const { name, request, replies } of EDITOR_WIRE_CONVERSATION) {
+      const before = posted.length;
+      await host.handle(structuredClone(request));
+      // The session changes: the replayer pushes what the conversation records for a subscribe.
+      const follow = request.method === "subscribe" ? replayer.follows.at(-1) : undefined;
+      for (const reply of replies) {
+        if (reply.kind === "live") follow?.listener(structuredClone(reply.update));
+      }
+      // An error's text is each host's own wording and not part of the layout.
+      seen.push({ name, posted: posted.slice(before).map(withWireErrorText) });
+    }
+    expect(seen).toEqual(
+      EDITOR_WIRE_CONVERSATION.map(({ name, replies }) => ({ name, posted: [...replies] })),
     );
-    expect(outcome).toBe("unsupported");
-    expect(transport.canOpenInBrowser).toBe(outcome !== "unsupported");
-    transport.close();
+    // The host followed the session each subscribe names; one ended, the app stopped the other.
+    expect(replayer.follows.map((follow) => [follow.key, follow.stopped])).toEqual([
+      [WIRE_SESSION.key, false],
+      [WIRE_SESSION.key, true],
+    ]);
+    expect(host.subscriptionCount).toBe(0);
     host.dispose();
   });
 
-  it("saves what the app exported, byte for byte, and says saved or cancelled (#168)", async () => {
-    const written: string[] = [];
-    const answers: SaveReplayOutcome[] = ["saved", "cancelled"];
-    const { transport, host } = connect(async (data) => {
-      written.push(data);
-      return answers.shift() ?? "cancelled";
+  it("hands the saver what the app exported, byte for byte, and never a refused text (#168)", async () => {
+    const { host, posted, saved } = recordedHost();
+    const saves = EDITOR_WIRE_CONVERSATION.filter(
+      ({ request }) => request.method === SAVE_REPLAY_METHOD,
+    );
+    for (const { request } of saves) await host.handle(structuredClone(request));
+    const accepted = saves.flatMap(({ request, replies }) =>
+      replies[0]?.kind === "result" && "data" in request.params ? [request.params.data] : [],
+    );
+    expect(accepted).toHaveLength(2);
+    expect(saved).toEqual(accepted);
+    // The refusal the app shows is this host's fixed message, passed on as it is.
+    expect(posted.at(-1)).toEqual({
+      kind: "error",
+      id: saves.at(-1)?.request.id,
+      error: { code: "invalid", message: MESSAGE_HOST_ERRORS.saveInvalid },
     });
-    const data = exportReplay(demoReplay(), { names: "opaque", roundTimes: 0.1 }).data;
-    await expect(transport.saveReplay(data)).resolves.toBe("saved");
-    await expect(transport.saveReplay(exportReplay(demoReplay()).data)).resolves.toBe("cancelled");
-    expect(written).toEqual([data, exportReplay(demoReplay()).data]);
-    transport.close();
     host.dispose();
   });
 
-  it("passes the host's refusal of a bad replay back to the app (#168)", async () => {
-    const save = vi.fn(async () => "saved" as const);
-    const { transport, host } = connect(save);
-    await expect(transport.saveReplay('{"formatVersion":99}')).rejects.toEqual({
-      code: "invalid",
-      message: MESSAGE_HOST_ERRORS.saveInvalid,
+  it("answers openInBrowser the way the conversation records, which sets the app's canOpenInBrowser", async () => {
+    // packages/app/test/webview-wire.test.ts holds the other half: the app's transport says
+    // `canOpenInBrowser` exactly when the recorded answer is not `unsupported`.
+    const { host, posted } = recordedHost();
+    const exchange = EDITOR_WIRE_CONVERSATION.find(
+      ({ request }) => request.method === "openInBrowser",
+    );
+    await host.handle(structuredClone(exchange?.request));
+    expect(posted).toHaveLength(1);
+    expect(posted.map(withWireErrorText)).toEqual(exchange?.replies);
+    expect(posted[0]).toMatchObject({
+      error: { code: "unsupported", message: MESSAGE_HOST_ERRORS.openInBrowser },
     });
-    expect(save).not.toHaveBeenCalled();
-    transport.close();
     host.dispose();
   });
 });

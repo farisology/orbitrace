@@ -11,7 +11,13 @@ import type {
   ReplayTotals,
   SessionSummary,
 } from "@orbitrace/core";
-import type { OrreryEventName, OrreryHandle, OrreryListener } from "@orbitrace/renderer";
+import type {
+  OrreryEventName,
+  OrreryHandle,
+  OrreryListener,
+  OrreryOptions,
+} from "@orbitrace/renderer";
+import { waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 import type { OrreryFactory } from "../src/components/OrreryView";
 import type { HostTransport, LiveUpdate, LiveUpdateListener } from "../src/transport";
@@ -199,6 +205,28 @@ export function fakeOrrery(): FakeOrrery {
       return undefined;
     },
   };
+}
+
+/**
+ * Waits until the app has created its renderer, and resolves with the options it gave.
+ *
+ * A test that waited for the DOM with `findBy…` or `waitFor` awaits this before it reads
+ * `orrery.calls` (issue 194). `OrreryView` creates the renderer in a passive effect, and outside
+ * `act` React can run that effect in a later task than the commit that put the view in the DOM.
+ * It does so when opening the replay does not start the clock's frames: a paused start, reduced
+ * motion, or a running session opened at its live edge. (When the frames do start,
+ * `useClockDriver` reads that change with `useSyncExternalStore`, which React renders at once,
+ * effects included.) `findBy…` resolves on the DOM, so the test can continue between the commit
+ * and the effect and find that the fake has recorded nothing yet. The effect makes every
+ * start-up call (`setModel`, `setTime`, `select`, `play`) in one go, so once `create` is recorded
+ * they all are.
+ */
+export async function rendererCreated(orrery: FakeOrrery): Promise<OrreryOptions> {
+  return waitFor(() => {
+    const created = orrery.calls.find((call) => call.method === "create");
+    if (created === undefined) throw new Error("The app has not created its renderer yet.");
+    return created.args[0] as OrreryOptions;
+  });
 }
 
 /** Frames that never fire: the clock moves only when a test moves it. */

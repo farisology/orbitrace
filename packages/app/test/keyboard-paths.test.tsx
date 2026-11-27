@@ -25,6 +25,7 @@ import {
   fakeOrrery,
   makeModel,
   manualFrames,
+  rendererCreated,
   replayUpdate,
   scriptedHost,
   stillFrames,
@@ -508,6 +509,8 @@ describe("reduced motion and editor tabs", () => {
     renderApp(createDemoTransport(), { start: { paused: false }, orrery });
     await screen.findByRole("list", { name: "Agents" });
     expect(screen.getByRole("button", { name: "Play" })).toBeDefined();
+    // No autoplay, so the renderer's effect can run after the list is in the DOM (issue 194).
+    await rendererCreated(orrery);
     expect(orrery.calls[0]).toEqual({ method: "create", args: [{ reducedMotion: true }] });
   });
 

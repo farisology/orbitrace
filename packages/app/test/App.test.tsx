@@ -12,6 +12,7 @@ import {
   SUMMARY,
   fakeOrrery,
   makeModel,
+  rendererCreated,
   replayUpdate,
   scriptedHost,
   stillFrames,
@@ -74,6 +75,8 @@ describe("App with no host", () => {
     await screen.findByRole("heading", { name: "lantern-builder#1" });
     expect(Number(scrubber().value)).toBe(200);
     expect(playButton().textContent).toContain("Play");
+    // A paused start: the renderer's effect can run after the heading is in the DOM.
+    await rendererCreated(orrery);
     expect(orrery.last("select")).toEqual(["a5"]);
     expect(orrery.last("setSpeed")).toEqual([16]);
     expect((screen.getByRole("combobox", { name: "Speed" }) as HTMLSelectElement).value).toBe("16");
@@ -459,6 +462,8 @@ describe("reduced motion", () => {
     const { orrery } = renderApp(createDemoTransport());
     await screen.findByRole("list", { name: "Agents" });
     expect(playButton().textContent).toContain("Play");
+    // No autoplay, so the renderer's effect can run after the list is in the DOM (issue 194).
+    await rendererCreated(orrery);
     expect(orrery.calls.find((c) => c.method === "create")?.args[0]).toEqual({
       reducedMotion: true,
     });
