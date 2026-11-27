@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    // Type checking only, like the package's own config: esbuild bundles the suite and the
+    // launcher (build.mjs). The launcher uses top-level await, which bundler resolution allows.
+    "noEmit": true
+  },
+  "include": ["."],
+  "exclude": ["dist"]
+}
