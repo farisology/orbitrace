@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { COMMANDS } from "../src/commands.js";
 import { createSessionCatalog, type SessionTreeNode } from "../src/session-catalog.js";
-import { LIST_FAILED_MESSAGE, SessionTreeProvider } from "../src/session-tree.js";
+import {
+  HISTORY_SESSION_CONTEXT,
+  LIST_FAILED_MESSAGE,
+  SessionTreeProvider,
+} from "../src/session-tree.js";
 import { ThemeIcon, TreeItemCollapsibleState, fake } from "./fakes/vscode.js";
+import { HISTORY_LOCATOR_PREFIX } from "@orbitrace/core/node";
 import { fakeReplayer, makeRef, makeSummary } from "./helpers.js";
 
 const NOW = Date.UTC(2026, 0, 15, 12, 0, 0);
@@ -62,6 +67,34 @@ describe("SessionTreeProvider", () => {
     });
     const second = (await provider.getChildren())[1] as SessionTreeNode;
     expect((provider.getTreeItem(second).iconPath as ThemeIcon).id).toBe("history");
+  });
+
+  it("marks a session kept only in the history store and opens it like any other (#211)", async () => {
+    const stored = makeSummary({
+      key: "claude-code:stored",
+      live: "ended",
+      lastActivity: NOW - 60_000,
+    });
+    const provider = new SessionTreeProvider({
+      catalog: createSessionCatalog(
+        fakeReplayer([
+          {
+            ...makeRef(stored, "-workspace-quill-archive"),
+            locator: `${HISTORY_LOCATOR_PREFIX}${stored.key}`,
+          },
+        ]),
+      ),
+      workspacePaths: () => [],
+      now: () => NOW,
+    });
+    const [row] = await provider.getChildren();
+    const item = provider.getTreeItem(row as SessionTreeNode);
+    expect(item.description).toBe("1 min ago · history");
+    expect(item.tooltip).toContain("history store");
+    expect((item.iconPath as ThemeIcon).id).toBe("archive");
+    expect(item.contextValue).toBe(HISTORY_SESSION_CONTEXT);
+    expect(item.command?.command).toBe(COMMANDS.visualiseSession);
+    expect(item.command?.arguments).toEqual([row]);
   });
 
   it("shows nothing and reports a message when listing fails", async () => {

@@ -40,7 +40,7 @@ describe("package.json manifest", () => {
     ]);
   });
 
-  it("contributes the three commands with their palette titles, and refresh", () => {
+  it("contributes the session commands, refresh and the history commands with their palette titles", () => {
     const titles = Object.fromEntries(
       manifest.contributes.commands.map(
         (command: { command: string; category: string; title: string }) => [
@@ -54,7 +54,19 @@ describe("package.json manifest", () => {
       [COMMANDS.visualiseSession]: "Orbitrace: Visualise session...",
       [COMMANDS.openDemo]: "Orbitrace: Open demo",
       [COMMANDS.refreshSessions]: "Orbitrace: Refresh sessions",
+      // #211: the history commands, Command Palette only, under the Orbitrace category.
+      [COMMANDS.historyTurnOn]: "Orbitrace: Turn history recording on",
+      [COMMANDS.historyTurnOff]: "Orbitrace: Turn history recording off",
+      [COMMANDS.historyStatus]: "Orbitrace: Show history status",
+      [COMMANDS.historyDeleteSession]: "Orbitrace: Delete a session from history...",
+      [COMMANDS.historyDeleteAll]: "Orbitrace: Delete all history",
+      [COMMANDS.historyShowLocation]: "Orbitrace: Show where history is stored",
     });
+  });
+
+  it("has no editor setting for history: the switch is the settings file both hosts share", () => {
+    expect(manifest.contributes.configuration).toBeUndefined();
+    expect(JSON.stringify(manifest.contributes)).not.toMatch(/"orbitrace\.history\.[a-z]+":\s*\{/i);
   });
 
   it("has an activity-bar container with the Sessions view, a Visualise title button and a welcome message", () => {
@@ -74,10 +86,12 @@ describe("package.json manifest", () => {
     expect(welcome.contents).toContain(`command:${COMMANDS.openDemo}`);
   });
 
-  it("ships only the bundle, the app, the icon, the licence and the readme", () => {
+  it("ships only the bundle, the history worker, the app, the icon, the licence and the readme", () => {
     expect(manifest.main).toBe("./dist/extension.js");
     expect(manifest.files).toEqual([
       "dist/extension.js",
+      // #211: core's history ingest worker, its own file beside the bundle.
+      "dist/history-worker.js",
       "dist/app",
       "media",
       "LICENSE",

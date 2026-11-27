@@ -31,6 +31,7 @@ import {
   REPO_GIT_URL,
   REPO_ROOT,
   REPO_URL,
+  VSIX_PACKAGE,
   extractTarball,
   formatSize,
   globToRegExp,
@@ -255,6 +256,23 @@ export function checkSelfContained(root, paths, globs, manifest) {
     }
   }
   return errors;
+}
+
+/**
+ * Check the history worker of an unpacked .vsix (#211): `extension/dist/history-worker.js` loads
+ * only Node.js built-ins and files shipped beside it (`VSIX_PACKAGE.selfContained`), so it starts
+ * in a worker thread with nothing but the .vsix installed. Its presence is checked by
+ * `VSIX_PACKAGE.require`; without the manifest there is nothing more to check here.
+ * @param {string} root the unpacked .vsix
+ * @param {readonly { path: string }[]} files its files (`listTree`)
+ * @returns {string[]} errors
+ */
+export function checkVsixWorker(root, files) {
+  const manifestPath = join(root, "extension", "package.json");
+  if (!existsSync(manifestPath)) return [];
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const paths = new Set(files.map((file) => file.path));
+  return checkSelfContained(root, paths, VSIX_PACKAGE.selfContained, manifest);
 }
 
 /**

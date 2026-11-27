@@ -13,6 +13,12 @@
  *   `@orbitrace/core/history-worker` (`HISTORY_WORKER_EXPORT`, #188): a host bundles it as its own
  *   file and passes that file's URL as `workerUrl`.
  * - `withoutSqliteWarning`: hold back Node 22's SQLite experimental warning on the first load.
+ * - The recording switch shared by every host (#211): `readHistorySettings`,
+ *   `setHistoryRecording` and the settings file in the data folder (`settings.ts`).
+ * - What both hosts share around the store (#211): `historyAwareAdapter` and `historyRoot` for
+ *   sessions kept only in history (`source.ts`), `createHistoryRecorder` for background copies
+ *   while a host runs (`recorder.ts`), and `historyStoreExists`, `historyStoreBytes`,
+ *   `formatHistoryBytes` for status lines (`status.ts`).
  * - `redactText`, `redactJsonValue`, `HISTORY_REDACTION_RULES`: the redaction applied first.
  *
  * See docs/architecture.md (History store) and docs/privacy.md (History store).
@@ -72,3 +78,33 @@ export {
   type HistoryWorkerMessage,
 } from "./worker-protocol.js";
 export { isSqliteExperimentalWarning, withoutSqliteWarning } from "./quiet.js";
+export {
+  HISTORY_SETTINGS_FILE,
+  HISTORY_SETTINGS_FORMAT,
+  historySettingsFile,
+  readHistorySettings,
+  setHistoryRecording,
+  writeHistorySettings,
+  type HistorySettings,
+  type HistorySettingsState,
+  type HistorySwitchResult,
+} from "./settings.js";
+export { formatHistoryBytes, historyStoreBytes, historyStoreExists } from "./status.js";
+export {
+  HISTORY_LOCATOR_PREFIX,
+  historyAwareAdapter,
+  historyRoot,
+  isHistoryRef,
+} from "./source.js";
+export {
+  createHistoryRecorder,
+  HISTORY_ENDED_AFTER_MS,
+  HISTORY_RECORD_DEBOUNCE_MS,
+  isHistorySessionEnded,
+  recordingSessionReplayer,
+  type HistoryRecorder,
+  type HistoryRecorderOptions,
+  type HistoryRecorderProblem,
+  type HistoryRecorderProblemKind,
+  type SessionChangeSink,
+} from "./recorder.js";
