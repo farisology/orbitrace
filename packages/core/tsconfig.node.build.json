@@ -12,6 +12,6 @@
     "sourceMap": false,
     "tsBuildInfoFile": "node_modules/.cache/tsc/node.tsbuildinfo"
   },
-  "include": ["src/sources/node.ts", "src/sources/claude-code"],
+  "include": ["src/sources/node.ts", "src/sources/claude-code", "src/history"],
   "references": [{ "path": "./tsconfig.browser.build.json" }]
 }

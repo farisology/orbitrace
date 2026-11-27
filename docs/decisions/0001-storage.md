@@ -1,6 +1,6 @@
 # 0001. Storage for the history index
 
-Status: proposed. Ticket: #24 (spike). Date: 2026-11-26.
+Status: accepted, with the engine changed by the amendment at the end. Ticket: #24 (spike), amended for #25. Date: 2026-11-26, amended 2026-11-27.
 
 This is a time-boxed spike. The code under `spikes/storage/` is a measurement harness, not production code. No package uses it, and the history index itself is not built yet.
 
@@ -176,3 +176,61 @@ Main risk: the locking in `node-sqlite3-wasm`. A `.lock` directory left after a 
 3. Run writes off the extension host thread.
 4. Test on Cursor, Windsurf, Windows and Linux.
 5. Keep the storage interface narrow, so the engine can be replaced with `node:sqlite` or (c).
+
+## Amendment (2026-11-27, ticket #25)
+
+The lead decision on #25 changes the engine. The history store uses `node:sqlite` behind the narrow storage interface, found by feature detection, with no new runtime dependency. Where `node:sqlite` is missing, history reports itself unavailable with the reason and everything else works as before. The measurements above are kept as they were; this section records what changed and what #25 measured.
+
+Reasons, from the lead decision on #25:
+
+- No pre-1.0, single-maintainer package (`node-sqlite3-wasm` 0.8.61) in a tool that handles private transcripts.
+- No stale `.lock` directory: the failure mode named as the main risk above goes away with the package.
+- No `.wasm` file to ship and attribute.
+- It was the fastest and leanest option in the spike.
+- The file format is plain SQLite, so a second engine can be added later behind the same interface without a data migration.
+
+History stays off until a user turns it on. #25 builds the core API only (`@orbitrace/core/node`); no host calls it yet.
+
+### Which Node versions load `node:sqlite`
+
+Run on 2026-11-27 on the test machine (macOS) with `npx -y node@<version>` and the local Node, each with `import("node:sqlite")`, then `new DatabaseSync(":memory:")` and `CREATE VIRTUAL TABLE ... USING fts5(x)`:
+
+| Node                               | Loads without a flag                                                 | Warning printed                                                                       | FTS5                   |
+| ---------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------- |
+| 20.20.2                            | no: `ERR_UNKNOWN_BUILTIN_MODULE` (No such built-in module)           | none                                                                                  | n/a                    |
+| 22.12.0                            | no: `ERR_UNKNOWN_BUILTIN_MODULE`; loads with `--experimental-sqlite` | `ExperimentalWarning` with the flag                                                   | `no such module: fts5` |
+| 22.13.1                            | yes                                                                  | `ExperimentalWarning: SQLite is an experimental feature and might change at any time` | `no such module: fts5` |
+| 22.23.5 (`node@22`, SQLite 3.54.1) | yes                                                                  | the same `ExperimentalWarning`                                                        | yes                    |
+| 23.11.1                            | yes                                                                  | the same `ExperimentalWarning`                                                        | `no such module: fts5` |
+| 24.22.3 (`node@24`, SQLite 3.54.1) | yes                                                                  | none                                                                                  | yes                    |
+| 26.5.0 (local, SQLite 3.54.1)      | yes                                                                  | none                                                                                  | yes                    |
+
+The warning is printed once per process, on the first load. The VS Code 1.148.0 result above (Node 24.22.1, no warning) still stands. `--no-experimental-sqlite` turns the module off on Node 22.23.5 and 26.5.0 (`ERR_UNKNOWN_BUILTIN_MODULE`); the tests use it to check the unavailable path on any Node.
+
+Two consequences:
+
+- 22.12.0 does not load `node:sqlite` without a flag and 22.13.1 does, so on the 22 line the repository's `engines` floor (22.13) is where history becomes available (22.13.0 itself was not run). Node 20 never has it, so history is unavailable on Node 20 and the store's tests skip there, with the reason in the suite name. CI runs Node 20 and 22.
+- FTS5 is missing in some builds that load the module (22.13.1, 23.11.1). `historyCapability()` reports `fts5: true | false`, so full-text search (#28) can check before it creates its table.
+
+### What #25 built against the five items above
+
+1. One writer: an owner-checked pid lock file. A second writer waits (optional) or fails with `locked`; a lock left by a dead process is taken over. Readers take no lock. Tested in-process and across processes.
+2. A writer killed mid-transaction (a child process blocked inside its third transaction, then `SIGKILL`): the next run takes over the lock and ends with exactly the lines of the files, none lost and none twice. Tested.
+3. Writes off the main thread: a `worker_threads` entry (`dist/history/worker.js`) with progress and result messages. Tested in Node, not in an extension host.
+4. Not done: Cursor, Windsurf, Windows and Linux were not tested.
+5. The interface is narrow: capability, open (reader or writer), ingest, read back, delete one session, delete the store, close.
+
+The file uses WAL journal mode, not the `journal_mode=DELETE` recommended above: with one engine, WAL lets readers read while the writer writes. A second engine that cannot open WAL files would need a checkpoint and `journal_mode=DELETE` first; the data does not change.
+
+### Ingest speed
+
+Synthetic sessions only, from the seeded generator (`generateSession("demo")`; the copies use seeds `speed-0` to `speed-199`). All folders (home, config, data) were temporary. One macOS laptop with other work running.
+
+| Input                                                                            | Node    | First ingest                         | Second run (nothing new) | Database |
+| -------------------------------------------------------------------------------- | ------- | ------------------------------------ | ------------------------ | -------- |
+| `demo`, the largest scenario: 1 session, 15 transcript files, 549 lines, 0.44 MB | 26.5.0  | 28 ms (about 19,800 lines/s)         | 3 ms                     | 596 KB   |
+| the same                                                                         | 22.23.5 | 31 ms                                | 2 ms                     | 596 KB   |
+| 200 generated `demo` sessions: 108,696 lines, 87.0 MB                            | 26.5.0  | 4,252 ms (25,565 lines/s, 20.5 MB/s) | 301 ms                   | 113 MB   |
+| the same                                                                         | 22.23.5 | 4,341 ms (25,042 lines/s, 20.0 MB/s) | 479 ms                   | 113 MB   |
+
+The database is about 1.3 times the size of the transcripts: each line is stored as redacted JSON text with its key, and `secure_delete` is on.

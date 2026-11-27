@@ -14,5 +14,5 @@
     "tsBuildInfoFile": "node_modules/.cache/tsc/browser-check.tsbuildinfo"
   },
   "include": ["src"],
-  "exclude": ["src/sources/node.ts", "src/sources/claude-code"]
+  "exclude": ["src/sources/node.ts", "src/sources/claude-code", "src/history"]
 }
