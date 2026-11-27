@@ -119,14 +119,15 @@ describe("orbitrace (built binary): version and help", () => {
       const result = run(args);
       expect(result.status).toBe(0);
       expect(result.stdout).toContain("Usage:");
-      for (const name of ["open", "list", "export", "help"]) expect(result.stdout).toContain(name);
+      for (const name of ["open", "list", "export", "doctor", "help"])
+        expect(result.stdout).toContain(name);
       expect(result.stdout).toContain("With no command, orbitrace runs 'open'");
       expect(result.stderr).toBe("");
     }
   });
 
   it("prints help for every command, three ways", () => {
-    for (const name of ["open", "list", "export", "help"]) {
+    for (const name of ["open", "list", "export", "doctor", "help"]) {
       const outputs = [
         [name, "--help"],
         [name, "-h"],
@@ -146,7 +147,13 @@ describe("orbitrace (built binary): version and help", () => {
       commands: { name: string }[];
       exitCodes: Record<string, number>;
     };
-    expect(all.commands.map((command) => command.name)).toEqual(["open", "list", "export", "help"]);
+    expect(all.commands.map((command) => command.name)).toEqual([
+      "open",
+      "list",
+      "export",
+      "doctor",
+      "help",
+    ]);
     expect(all.exitCodes).toEqual({ ok: 0, ...CLI_EXIT_CODES });
     const one = parseJson(run(["export", "--help", "--json"]).stdout) as {
       commands: { name: string }[];

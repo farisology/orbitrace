@@ -67,6 +67,7 @@ merged so far.
   origin (its Content-Security-Policy enforces this). A workflow that runs only when started by
   hand uploads the page as a GitHub Pages artefact; it does not deploy it. See `docs/player.md`
   (#19, #148).
+- `orbitrace doctor`: a read-only check of the set-up (Node version, config folder, session folders, parser health, running-sessions folder, web app, loopback port, `node:sqlite`) with a stable code, a status and an exact fix per check, `--json` and exit code 12 when a check fails; see `docs/cli.md` (#31).
 
 ### Changed
 

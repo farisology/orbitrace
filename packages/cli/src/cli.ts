@@ -7,10 +7,14 @@
  *   to stderr.
  * - Without `--json`, results go to stdout and errors and warnings to stderr.
  * - No message shows an absolute path from the machine unless the user typed that path.
+ *   `doctor` shows folder paths with the home folder as `~`.
+ * - `doctor` is the one command that writes its document and still exits non-zero (12,
+ *   `doctor-failed`) when one of its checks failed.
  */
 
 import { exportReplay, type ExportOptions, type ReplayModel } from "@orbitrace/core";
 import { parseCommandLine, wantsJson, type ExportFlags, type ParsedCommand } from "./args.js";
+import { runDoctorCommand, type DoctorRuntime } from "./doctor/run.js";
 import { EXIT_OK, errorToJson, errorToText, toCliError } from "./errors.js";
 import { helpJson, helpText } from "./help.js";
 import { runOpen, type OpenRuntime } from "./open.js";
@@ -28,6 +32,21 @@ import { statusLine, versionJson } from "./version.js";
 export interface CliIo {
   stdout(text: string): void;
   stderr(text: string): void;
+}
+
+/**
+ * What `open` and `doctor` take from the process. `appDir` is shared: `doctor` checks the same
+ * web app folder `open` serves.
+ */
+export interface CliRuntime extends OpenRuntime {
+  readonly doctor?: DoctorRuntime;
+}
+
+/** The doctor's runtime: its own fields, and `open`'s app folder unless it names one itself. */
+export function doctorRuntime(runtime: CliRuntime): DoctorRuntime {
+  const own = runtime.doctor ?? {};
+  if (own.appDir !== undefined || runtime.appDir === undefined) return own;
+  return { ...own, appDir: runtime.appDir };
 }
 
 function writeJson(io: CliIo, value: unknown): void {
@@ -139,7 +158,7 @@ async function runCommand(
   command: ParsedCommand,
   io: CliIo,
   host: HostContext,
-  runtime: OpenRuntime,
+  runtime: CliRuntime,
 ): Promise<number> {
   switch (command.kind) {
     case "help":
@@ -156,19 +175,21 @@ async function runCommand(
       return runExport(command, io, host);
     case "open":
       return runOpen(command, io, host, runtime);
+    case "doctor":
+      return runDoctorCommand(command, io, host, doctorRuntime(runtime));
   }
 }
 
 /**
  * Run `orbitrace` with the arguments after the command name. Never throws: every failure is
  * written to stderr and turned into its exit code. `runtime` is for `open`, which keeps running
- * until its stop signal; see `OpenRuntime`.
+ * until its stop signal (see `OpenRuntime`), and for `doctor` (see `DoctorRuntime`).
  */
 export async function run(
   argv: readonly string[],
   io: CliIo,
   host: HostContext,
-  runtime: OpenRuntime = {},
+  runtime: CliRuntime = {},
 ): Promise<number> {
   const json = wantsJson(argv);
   try {

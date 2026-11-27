@@ -1,8 +1,8 @@
 # Command line
 
 `orbitrace` lists the Claude Code sessions on your machine, opens one in your browser through a
-local server, and exports a structure-only replay of one of them. Orbitrace is not affiliated with
-Anthropic.
+local server, exports a structure-only replay of one of them, and checks the set-up with
+`orbitrace doctor`. Orbitrace is not affiliated with Anthropic.
 
 **Status: not released.** The package is private and not on npm, so `npx orbitrace` does not work
 yet (see [Install](#install)).
@@ -29,6 +29,7 @@ on the repository's synthetic sessions without reading your own.
 | `orbitrace list`             | Lists sessions, newest first.                              |
 | `orbitrace export <key>`     | Writes the replay of one session.                          |
 | `orbitrace export --latest`  | Writes the replay of the session with the newest activity. |
+| `orbitrace doctor`           | Says what is wrong with the set-up and how to fix it.      |
 | `orbitrace help [<command>]` | Shows help. `orbitrace <command> --help` shows the same.   |
 | `orbitrace --version`        | Prints the version and the status of `@orbitrace/core`.    |
 
@@ -151,6 +152,163 @@ does not:
 None of them hides the structure: agents, who started whom, waves, tool calls and their kinds,
 failures and replies. The details are in [privacy.md](privacy.md#export-options-opt-in).
 
+### `orbitrace doctor`
+
+```text
+orbitrace doctor [--config-dir <path>]... [--extra-roots] [--parse-limit <n>] [--json]
+```
+
+Checks the set-up and says what is wrong and how to fix it (#31). It reads only: it writes no
+file, creates no folder, changes no setting and opens no database. Each fix is a command to run
+or a setting to change; doctor never runs it. Run it again after a fix to see the result.
+
+| Option                          | Meaning                                                                                                         |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `--config-dir`, `--extra-roots` | As for `list`. The checks search the same folders `list` would, found by the same code.                         |
+| `--parse-limit <n>`             | The parser check reads at most `n` sessions, newest first. Default: 20. A whole number of at least 1.           |
+| `--json`                        | One JSON document on stdout (below) instead of text. The checks, codes and exit codes are the same as for text. |
+
+The report goes to stdout in both forms, and nothing goes to stderr unless the command line
+itself is wrong (a `usage` error). The exit code is 0 when no check failed (warnings and skipped
+checks are allowed) and 12, `doctor-failed`, when at least one did. It is the only command that
+writes its document and still exits non-zero.
+
+Each check reports one status:
+
+- `ok`: nothing to do.
+- `warn`: something works less well than it could, for example live status shows as `unknown`.
+- `fail`: something does not work, for example `open` cannot start.
+- `skipped`: there is nothing to check, for example no sessions to parse.
+
+Every `warn` and `fail` carries a `fix`; `ok` and `skipped` carry none.
+
+#### What the report shows
+
+Folder paths, with your home folder written as `~` (`%USERPROFILE%` on Windows). A folder outside
+the home folder is shown only when you put it there: with `--config-dir`, `CLAUDE_CONFIG_DIR`,
+`APPDATA` or `XDG_CONFIG_HOME`. A relative `--config-dir` value is shown relative to the current
+folder (`./cfg`, `../cfg`), never with the current folder's own path, in `session-roots`,
+`running-registry` and the `parser-unreadable` fix alike. Besides paths: counts, the line types the parser skipped (by type
+name and count), the Claude Code versions the transcripts name, the Node version, the platform and
+system error codes such as `EACCES`. It shows no line content, session id, session key or project
+name, and never the text of a system error. Check the paths before you paste a report into an
+issue.
+
+#### Checks
+
+| Check              | What it checks                                                                                                                                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `node-version`     | The running Node against the `engines.node` range of the command (`>=20`).                                                                                                                                                      |
+| `config-folder`    | Which folder Claude Code writes its sessions to and why: `CLAUDE_CONFIG_DIR` when it is set, otherwise `~/.claude` (`%USERPROFILE%\.claude` on Windows). Whether it exists, can be read and has a `projects/` folder.           |
+| `session-roots`    | The folders `list` searches, in its order, how each was found, whether it can be read, and how many sessions it holds.                                                                                                          |
+| `parser`           | Parses the newest sessions (at most `--parse-limit`): lines that are not valid JSON, lines of a type the parser does not use (by type name and count, at most 20 types listed), unreadable sessions, Claude Code versions seen. |
+| `running-registry` | The running-sessions folder (`sessions/`) of each readable config folder, which gives the live status: present, readable, how many sessions it lists and how many of their processes run.                                       |
+| `app-bundle`       | The web app that `open` serves: its `index.html` and every file the page loads.                                                                                                                                                 |
+| `loopback-port`    | That a free port of `127.0.0.1` can be listened on, as `open` needs. The port is closed at once.                                                                                                                                |
+| `history-store`    | Whether `node:sqlite` loads in this Node (a dynamic import; no database is created). Nothing records history today, so a Node without it is skipped, not warned about.                                                          |
+| `hooks`            | Always skipped: Orbitrace has no hooks adapter yet (#30).                                                                                                                                                                       |
+| `remote-sources`   | Always skipped: remote sources are not built yet (#30).                                                                                                                                                                         |
+
+#### Codes
+
+The codes are stable: a script or an agent may depend on them. A code names one finding; its
+status is fixed, except `config-folder-missing`. A code keeps its meaning: a new finding gets a
+new code.
+
+| Check              | Code                                   | Status       | Meaning                                                                                                                                |
+| ------------------ | -------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `node-version`     | `node-version-ok`                      | ok           | Node is in the supported range.                                                                                                        |
+| `node-version`     | `node-version-unsupported`             | fail         | Node is outside the range. Fix: install a supported Node, for example `nvm install --lts`.                                             |
+| `node-version`     | `node-version-range-unknown`           | skipped      | The command names no range, or one doctor cannot read.                                                                                 |
+| `config-folder`    | `config-folder-ok`                     | ok           | The config folder exists, can be read and has a `projects/` folder.                                                                    |
+| `config-folder`    | `config-folder-env-invalid`            | fail         | `CLAUDE_CONFIG_DIR` is set but is not an absolute path, so Orbitrace ignores it.                                                       |
+| `config-folder`    | `config-folder-no-home`                | fail         | `CLAUDE_CONFIG_DIR` is not set and no home folder is known (`HOME`, or `USERPROFILE` on Windows).                                      |
+| `config-folder`    | `config-folder-missing`                | warn or fail | The folder does not exist: `fail` when no other session folder can be read, `warn` when one can (for example a `--config-dir` folder). |
+| `config-folder`    | `config-folder-not-a-folder`           | fail         | A file is where the config folder should be.                                                                                           |
+| `config-folder`    | `config-folder-unreadable`             | fail         | The folder or its `projects/` folder exists but cannot be listed by your account. Fix: `chmod -R u+rX <folder>` (`icacls` on Windows). |
+| `config-folder`    | `config-folder-projects-not-a-folder`  | fail         | A file is where `projects/` should be. Fix: `mv <folder>/projects <folder>/projects.bak` (`move` on Windows), then run `claude`.       |
+| `config-folder`    | `config-folder-no-projects`            | warn         | No `projects/` folder: no session has been recorded there yet.                                                                         |
+| `session-roots`    | `session-roots-ok`                     | ok           | At least one folder can be read and holds sessions.                                                                                    |
+| `session-roots`    | `session-roots-none`                   | fail         | There is no folder to search: no `--config-dir`, no `CLAUDE_CONFIG_DIR`, no home folder.                                               |
+| `session-roots`    | `session-roots-unavailable`            | fail         | None of the folders exists or can be read.                                                                                             |
+| `session-roots`    | `session-roots-config-dir-unavailable` | warn         | A `--config-dir` folder was not found or cannot be read (the warning `list` gives).                                                    |
+| `session-roots`    | `session-roots-empty`                  | warn         | The readable folders hold no sessions.                                                                                                 |
+| `parser`           | `parser-ok`                            | ok           | Every line read was valid JSON. Skipped line types are listed but are not a problem: the parser skips types it does not use by design. |
+| `parser`           | `parser-malformed-lines`               | warn         | Some lines were not valid JSON and were skipped. A session that is being written can end in a half-written line.                       |
+| `parser`           | `parser-unreadable`                    | warn         | Some sessions could not be read. Fix: give your account read access to the session folder.                                             |
+| `parser`           | `parser-no-sessions`                   | skipped      | No sessions were found to parse.                                                                                                       |
+| `running-registry` | `running-registry-ok`                  | ok           | At least one config folder has a running-sessions folder that can be read.                                                             |
+| `running-registry` | `running-registry-missing`             | warn         | No config folder has one, so live status shows as `unknown`. Claude Code writes it while a session runs.                               |
+| `running-registry` | `running-registry-not-a-folder`        | fail         | A file is where the folder should be.                                                                                                  |
+| `running-registry` | `running-registry-unreadable`          | fail         | The folder cannot be listed by your account.                                                                                           |
+| `running-registry` | `running-registry-no-roots`            | skipped      | No config folder can be read.                                                                                                          |
+| `app-bundle`       | `app-bundle-ok`                        | ok           | The page and every file it loads are there.                                                                                            |
+| `app-bundle`       | `app-bundle-missing`                   | fail         | This build has no web app; `open` fails with `app-missing`. Fix: `npm run build`, then run the built command.                          |
+| `app-bundle`       | `app-bundle-incomplete`                | fail         | Files the page loads are missing (named relative to the app folder). Fix: `npm run build`.                                             |
+| `loopback-port`    | `loopback-port-ok`                     | ok           | A free port of `127.0.0.1` was listened on and closed.                                                                                 |
+| `loopback-port`    | `loopback-port-unavailable`            | fail         | Listening failed; `open` cannot start. Fix: allow Node to listen on `127.0.0.1` in the firewall, sandbox or container settings.        |
+| `history-store`    | `history-store-available`              | ok           | `node:sqlite` loads. Not in use yet.                                                                                                   |
+| `history-store`    | `history-store-not-in-use`             | skipped      | `node:sqlite` does not load, but nothing records history yet. A future history store will need Node 22.13 or later.                    |
+| `history-store`    | `history-store-unavailable`            | warn         | Reserved for when a host records history: `node:sqlite` does not load. Fix: install Node 22.13 or later. Not reported today.           |
+| `hooks`            | `hooks-not-built`                      | skipped      | No hooks adapter yet (#30).                                                                                                            |
+| `remote-sources`   | `remote-sources-not-built`             | skipped      | No remote sources yet (#30).                                                                                                           |
+| `any`              | `check-error`                          | fail         | The check itself could not run. The message is fixed text. Fix: run doctor again; if it keeps failing, open an issue with the report.  |
+
+#### JSON shape
+
+`orbitrace doctor --json` writes one line. Formatted, with one of its ten checks shown:
+
+```json
+{
+  "doctor": 1,
+  "orbitrace": "0.0.0",
+  "node": "22.13.0",
+  "platform": "linux",
+  "status": "warn",
+  "summary": { "ok": 7, "warn": 1, "fail": 0, "skipped": 2 },
+  "checks": [
+    {
+      "id": "running-registry",
+      "status": "warn",
+      "code": "running-registry-missing",
+      "message": "No config folder has a running-sessions folder (sessions/), so live status shows as 'unknown'.",
+      "fix": "Update Claude Code ('claude update') and start a session ('claude'); it writes ~/.claude/sessions while a session runs.",
+      "details": {
+        "folders": [
+          { "path": "~/.claude/sessions", "state": "missing", "entries": null, "running": null }
+        ]
+      }
+    }
+  ]
+}
+```
+
+- `doctor` is the version of this shape. It goes up when a field is removed or changes meaning;
+  new fields may be added without it.
+- `orbitrace` is the command's version, `node` the Node version, `platform` as in
+  `process.platform`.
+- `status` is `fail` when a check failed, else `warn` when one warned, else `ok`. `summary`
+  counts the checks with each status.
+- `checks` holds every check once, in the order of the table above. Each has `id`, `status`,
+  `code`, `message` (one line), `fix` (a string for `warn` and `fail`, otherwise `null`) and
+  `details`.
+
+`details` per check (paths are shown as described above; a folder `state` is `ok`, `missing`,
+`not-a-folder` or `unreadable`):
+
+| Check              | `details`                                                                                                                                                                                                                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `node-version`     | `version`, `range` (or `null`), `satisfies` (`true`, `false`, or `null` when not checked).                                                                                                                                                                                                                         |
+| `config-folder`    | `env` (`unset`, `set` or `invalid`: whether `CLAUDE_CONFIG_DIR` is set and usable), `path`, `resolvedBy` (`environment` or `os-default`), `reason` (one sentence), `state`, `projects` (the state of `projects/`, or `null` when the folder itself is not `ok`). The last five are `null` when no folder is known. |
+| `session-roots`    | `roots` (each with `path`, `resolvedBy`, `reason`, `available`, `sessions`), `sessions` (total), `warnings` (as in `list --json`).                                                                                                                                                                                 |
+| `parser`           | `limit`, `checked` (sessions tried), `parsed`, `unreadable`, `lines`, `malformed`, `malformedSessions`, `unknownLines`, `unknownByType` (type name to count, at most 20, most common first), `unknownTypesNotListed`, `versions` (Claude Code versions seen, oldest first; at most the 20 newest).                 |
+| `running-registry` | `folders` (each with `path`, `state`, `entries` and `running`, both `null` unless `state` is `ok`).                                                                                                                                                                                                                |
+| `app-bundle`       | `present` (`index.html` was found), `files` (how many files the page loads), `missing` (those not found, relative to the app folder).                                                                                                                                                                              |
+| `loopback-port`    | `host` (`127.0.0.1`), `bound`, `errorCode` (a system error code such as `EACCES`, or `null`).                                                                                                                                                                                                                      |
+| `history-store`    | `module` (`node:sqlite`), `available`, `inUse` (always `false` for now), `errorCode`.                                                                                                                                                                                                                              |
+| `hooks`            | Empty.                                                                                                                                                                                                                                                                                                             |
+| `remote-sources`   | Empty.                                                                                                                                                                                                                                                                                                             |
+
 ## Where sessions are looked for
 
 The folders are found by `@orbitrace/core`, in this order, with duplicates removed:
@@ -176,6 +334,7 @@ document, not on stderr.
 | `export --json` (stdout)  | `{ "key", "fileName", "output": null, "bytes", "warnings", "options", "replay" }`    |
 | `export --json -o <file>` | `{ "key", "fileName", "output": "<file as typed>", "bytes", "warnings", "options" }` |
 | `open --json`             | `{ "url", "origin", "port", "key", "browser", "warnings" }`                          |
+| `doctor --json`           | `{ "doctor", "orbitrace", "node", "platform", "status", "summary", "checks" }`       |
 
 The `export --json` document is for scripts. It contains the session key, the `-o` path as typed
 and any `--config-dir` path as typed (in a warning), so share the replay file (`-o`) or the
@@ -234,6 +393,7 @@ replayer.
 | 9    | `output-unwritable` | The output file could not be written (missing folder, no permission).         |
 | 10   | `port-unavailable`  | `open --port`: the port is in use or may not be used.                         |
 | 11   | `app-missing`       | `open`: this build of the command has no web app (run `npm run build`).       |
+| 12   | `doctor-failed`     | `doctor`: at least one check failed. The report is still written to stdout.   |
 
 ## Privacy of messages
 
@@ -241,7 +401,8 @@ No message shows an absolute path from your machine unless you typed that path. 
 carry fixed, path-free text. An unexpected error prints a fixed message, never the text of the
 underlying error, because a file system error names the file it failed on. File paths in
 `export` messages are shown as you typed them. Control characters in a project name are replaced
-with `?` before it is printed.
+with `?` before it is printed. `doctor` shows folder paths with your home folder as `~` (see
+[What the report shows](#what-the-report-shows)).
 
 ## The bundled web app
 

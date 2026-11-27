@@ -6,7 +6,14 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { APP_BUNDLE_FOLDER, APP_INDEX_FILE, appBundleDir } from "../src/app-bundle.js";
+import {
+  APP_BUNDLE_FOLDER,
+  APP_INDEX_FILE,
+  appBundleDir,
+  appBundleFolder,
+  appIndexReferences,
+  checkAppBundle,
+} from "../src/app-bundle.js";
 import { makeTempDir, removeTempDirs } from "./helpers.js";
 
 afterAll(() => {
@@ -33,6 +40,77 @@ describe("appBundleDir", () => {
 
   it("returns null when run from the sources, which hold no app", () => {
     expect(appBundleDir()).toBeNull();
+  });
+});
+
+describe("appBundleFolder", () => {
+  it("is the app folder beside the module, whether or not it exists", () => {
+    const dir = makeTempDir();
+    expect(appBundleFolder(pathToFileURL(join(dir, "index.js")))).toBe(
+      join(dir, APP_BUNDLE_FOLDER),
+    );
+    expect(appBundleFolder().endsWith(join("src", APP_BUNDLE_FOLDER))).toBe(true);
+  });
+});
+
+describe("appIndexReferences", () => {
+  it("keeps relative src and href values, normalised and without duplicates", () => {
+    const html = [
+      '<link rel="icon" href="favicon.svg">',
+      "<script type=\"module\" src='./assets/index-example.js?v=1'></script>",
+      '<link rel="stylesheet" href="assets/index-example.css#x">',
+      '<script src="./assets/index-example.js"></script>',
+      '<a href="../outside.js">x</a>',
+    ].join("\n");
+    expect(appIndexReferences(html)).toEqual([
+      "favicon.svg",
+      "assets/index-example.js",
+      "assets/index-example.css",
+      "../outside.js",
+    ]);
+  });
+
+  it("skips links to other origins, absolute paths, fragments and empty values", () => {
+    const html = [
+      '<a href="https://example.com/a.js">',
+      '<script src="//example.com/b.js"></script>',
+      '<img src="data:image/png;base64,AAAA">',
+      '<a href="/root.js">',
+      '<a href="#top">',
+      '<a href="?q=1">',
+      '<a href="">',
+      '<a href="./">',
+    ].join("\n");
+    expect(appIndexReferences(html)).toEqual([]);
+  });
+});
+
+describe("checkAppBundle", () => {
+  it("finds the page and every file it loads", () => {
+    const dir = makeTempDir();
+    mkdirSync(join(dir, "assets"));
+    writeFileSync(join(dir, APP_INDEX_FILE), '<script src="./assets/a.js"></script>');
+    writeFileSync(join(dir, "assets", "a.js"), "");
+    expect(checkAppBundle(dir)).toEqual({
+      present: true,
+      references: ["assets/a.js"],
+      missing: [],
+    });
+  });
+
+  it("names files that are missing or outside the folder, and a missing page", () => {
+    const dir = makeTempDir();
+    mkdirSync(join(dir, "assets"));
+    writeFileSync(
+      join(dir, APP_INDEX_FILE),
+      '<script src="./assets/gone.js"></script><link href="../up.css"><link href="assets">',
+    );
+    expect(checkAppBundle(dir).missing).toEqual(["assets/gone.js", "../up.css", "assets"]);
+    expect(checkAppBundle(join(dir, "nothing"))).toEqual({
+      present: false,
+      references: [],
+      missing: [],
+    });
   });
 });
 

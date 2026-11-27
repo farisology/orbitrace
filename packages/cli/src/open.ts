@@ -47,8 +47,10 @@ export interface OpenRuntime {
 /** What `browser` says in the JSON document. */
 export type BrowserStatus = BrowserOpenResult | "skipped";
 
-const APP_MISSING_MESSAGE = "This build of orbitrace has no web app to serve.";
-const APP_MISSING_HINT = "Build the repository with 'npm run build', then run the built command.";
+/** The `app-missing` message and hint. `orbitrace doctor` gives the same fix. */
+export const APP_MISSING_MESSAGE = "This build of orbitrace has no web app to serve.";
+export const APP_MISSING_HINT =
+  "Build the repository with 'npm run build', then run the built command.";
 
 /** Resolve when `signal` aborts, or, without one, on the process's SIGINT or SIGTERM. */
 export function waitForStop(signal?: AbortSignal): Promise<void> {

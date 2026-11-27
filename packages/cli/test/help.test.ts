@@ -28,6 +28,16 @@ describe("commandHelpText", () => {
     expect(commandHelpText("export")).toContain("-o, --output <file>");
     expect(commandHelpText("list")).toContain("CLAUDE_CONFIG_DIR");
   });
+
+  it("says doctor reads only, how it exits and where its codes are listed", () => {
+    const text = commandHelpText("doctor");
+    expect(text).toContain("Reads only");
+    expect(text).toContain("12 (doctor-failed)");
+    expect(text).toContain("docs/cli.md");
+    expect(text).toContain("--parse-limit <n>");
+    expect(text).toContain("Default: 20.");
+    expect(text).toContain("CLAUDE_CONFIG_DIR");
+  });
 });
 
 describe("helpText", () => {
