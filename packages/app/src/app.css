@@ -412,8 +412,15 @@ kbd {
 
 /* ---- controls ---------------------------------------------------------------------------- */
 
+/*
+ * The Playback row wraps instead of overflowing at every width: a long readout ("1:17:47 of
+ * 1:17:47"), WCAG 1.4.12 text spacing or a font wider than IBM Plex must never push the readout
+ * under the side panel (WCAG 1.4.4). With the scrubber's 80 px minimum, nothing wraps while the row
+ * fits.
+ */
 .controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
@@ -432,6 +439,19 @@ kbd {
 
 .control-icon {
   font-size: 10px;
+}
+
+/* Go live (issue 127): the status colour while it would do something; dim while already following. */
+.control-live {
+  flex: none;
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.control-live[aria-disabled="true"] {
+  color: var(--dim);
+  border-color: var(--rim-hi);
+  cursor: default;
 }
 
 .control-speed {
@@ -867,6 +887,21 @@ kbd {
 }
 .tag-idle .feed-tag {
   color: var(--pulse);
+}
+
+/* ---- medium screens ---------------------------------------------------------------------- */
+
+/*
+ * Up to 960 px wide the two-column layout leaves the dock at most 600 px (the side panel is
+ * 360 px), and in a running session the Playback row (Play, Go live, Speed, scrubber, an hour-long
+ * readout) needs about 560 px. The scrubber takes its own row there, as in the narrow layout, so
+ * the readout is never pushed under the side panel (issue 127; WCAG 1.4.4 at 200% of 1680 px).
+ */
+@media (max-width: 960px) {
+  .control-scrub {
+    order: 3;
+    flex-basis: 100%;
+  }
 }
 
 /* ---- narrow screens ---------------------------------------------------------------------- */

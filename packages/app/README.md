@@ -22,10 +22,25 @@ The page URL takes `?t=<seconds>` (compressed timeline), `?select=<agent id>`,
 ## Use
 
 - **Keyboard:** Space plays and pauses, Left and Right scrub 5 s (30 s with Shift), Home and End
-  jump to the start and end, Escape clears the selection. A focused control keeps the keys it
+  jump to the start and end (in a running session End goes live), Escape clears the selection.
+  A focused control keeps the keys it
   uses itself: Space presses a focused button, arrows move a focused slider or select. There is
   no single-letter shortcut. The first Tab stop is a "Skip to playback controls" button; Up and
   Down move between timeline lane labels; Escape closes the open session list.
+- **Follow a running session:** a session the host lists as running (`busy` or `idle`) opens at
+  the live edge, the newest moment, and follows it: when a new snapshot extends the timeline the
+  playhead moves across the new part in at most one second (never slower than real time), so new
+  calls, dispatches and handbacks are seen happening. Between snapshots it holds at the edge,
+  calls still running are drawn in flight and the orrery keeps its ambient motion. Scrubbing,
+  stepping, Home, pausing or choosing an earlier moment leaves follow and leaves the view paused
+  there (a scrub never starts playback on its own); the Go live button and the End key return
+  to follow, and playing forward into the edge follows again. The Live badge says
+  "following" or how far behind the view is in real time ("Live: idle, 2 min 5 s behind"). When
+  the session ends the view becomes an ordinary replay at its end; a view that was behind stays
+  where it was. A `?t=` or `?paused` in the URL wins over follow for the first session shown. An
+  ended session, a session with an unknown status and the demo open at the start, as before.
+  A new snapshot can cut a new idle gap; the playhead is carried across it through real time, so
+  a paused view stays on the same real moment and a following one never shows an earlier time.
 - **Select an agent** on the canvas or with its timeline lane label. The inspector shows its
   callsign, model family and shape, effort, wave, start and end in real time, token classes and
   tool calls by kind with failures.
@@ -35,11 +50,13 @@ The page URL takes `?t=<seconds>` (compressed timeline), `?select=<agent id>`,
   only; subagent transcripts are separate files and are not read.
 - **Reduced motion:** with `prefers-reduced-motion: reduce`, or in an editor tab when the editor's
   own reduce-motion setting puts `vscode-reduce-motion` on the page body, the replay does not
-  autoplay and the renderer draws still frames.
+  autoplay and the renderer draws still frames. A followed session still opens at the live edge;
+  each new snapshot jumps the playhead to the new edge instead of moving it across.
 - **Screen readers:** the canvas has a short text alternative, and a visually hidden table after
   it lists every agent with its model family and shape, who started it, whether it is running at
   the playhead and its tool calls so far. A polite live region says when a replay loads, when a
-  live session changes state and when it gains agents (at most once every 10 s). What was
+  live session changes state, when it gains agents (at most once every 10 s) and, once per
+  change, when the view starts or stops following the live edge. What was
   checked, how, and what still needs a person with a screen reader is in
   [ACCESSIBILITY.md](ACCESSIBILITY.md).
 
@@ -72,7 +89,10 @@ token, or the session list cannot be read, the app shows a plain error page inst
 With a host, the header has a session picker (a button that shows and hides a list): the
 host's sessions (path-free summaries, newest first) with the shown one marked. A session listed as live (or with an unknown status) is
 followed with `subscribe`; later snapshots go to the renderer's `updateModel`, so the selection
-and time are kept, and the header shows a Live marker. A session listed as ended is read once
+is kept, and the header shows a Live marker. The time is carried to the new snapshot through
+real time, or moved to the new live edge while following (see Use above; the time arithmetic is
+in `src/follow.ts`, the follow states in `src/clock.ts`). Both host transports deliver the same
+updates, so follow works the same in an editor tab and in the browser. A session listed as ended is read once
 with `loadReplay`. The picker is hidden in demo mode.
 
 **Serving the bundle.** Every asset URL in `dist/` is relative (Vite `base: "./"`), chunks load

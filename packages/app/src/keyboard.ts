@@ -6,8 +6,10 @@
  * | Space               | play or pause                  |
  * | Left / Right        | back / forward 5 s             |
  * | Shift+Left / Right  | back / forward 30 s            |
- * | Home / End          | start / end                    |
+ * | Home / End          | start / end (End: go live)     |
  * | Escape              | clear the selection            |
+ *
+ * In a running session End goes live: it jumps to the live edge and follows it (`clock.seekEnd`).
  *
  * Keys typed into a control that uses them itself (a text field, a select, a slider, a button)
  * are left to that control, so space on a focused button presses it once, not twice.

@@ -112,7 +112,7 @@ describe("tab order", () => {
     await showLiveModel(host);
 
     const stops: string[] = [];
-    for (let i = 0; i < 13; i += 1) {
+    for (let i = 0; i < 14; i += 1) {
       await user.tab();
       stops.push(focusedName());
     }
@@ -121,6 +121,8 @@ describe("tab order", () => {
       "Sessions (2)",
       "Open file",
       "Play",
+      // The session is running and the view does not follow it (paused start), so Go live is next.
+      "Go live",
       "Speed",
       "Replay position",
       "skip 10 min: idle skip at 0:30. Jump here.",
@@ -176,6 +178,64 @@ describe("page shortcuts", () => {
     await showLiveModel(host);
     await user.keyboard("k");
     expect(screen.getByRole("button", { name: "Play" })).toBeDefined();
+  });
+});
+
+describe("follow live", () => {
+  const goLive = () => screen.getByRole("button", { name: "Go live" });
+  const badgeText = () => screen.getByText(/^Live: /).textContent;
+
+  it("Go live is a Tab stop after Play, pressed with Enter or Space; focus stays on it", async () => {
+    const user = userEvent.setup();
+    const host = scriptedHost();
+    renderApp(host, { start: { time: 10 } });
+    await showLiveModel(host);
+    expect(badgeText()).toMatch(/behind$/);
+    screen.getByRole("button", { name: "Play" }).focus();
+    await user.tab();
+    expect(document.activeElement).toBe(goLive());
+    expect(goLive().getAttribute("aria-keyshortcuts")).toBe("End");
+    await user.keyboard("{Enter}");
+    expect(badgeText()).toBe("Live: working, following");
+    expect(Number(scrubber().value)).toBe(60);
+    // Following: still focused, marked unavailable, and pressing it again changes nothing.
+    expect(document.activeElement).toBe(goLive());
+    expect(goLive().getAttribute("aria-disabled")).toBe("true");
+    await user.keyboard(" ");
+    expect(badgeText()).toBe("Live: working, following");
+    // Space on the page (not on a button) pauses, which leaves follow; Space on Go live does not.
+    goLive().blur();
+    await user.keyboard(" ");
+    expect(badgeText()).toBe("Live: working, not following");
+    goLive().focus();
+    await user.keyboard(" ");
+    expect(badgeText()).toBe("Live: working, following");
+  });
+
+  it("End goes live from anywhere on the page; Left leaves follow", async () => {
+    const user = userEvent.setup();
+    const host = scriptedHost();
+    renderApp(host, { start: { time: 10 } });
+    await showLiveModel(host);
+    laneButton("main").focus();
+    await user.keyboard("{End}");
+    expect(badgeText()).toBe("Live: working, following");
+    expect(document.activeElement).toBe(laneButton("main"));
+    await user.keyboard("{ArrowLeft}");
+    expect(badgeText()).toMatch(/^Live: working, [45] s behind$/);
+  });
+
+  it("says entering and leaving follow in the live region", async () => {
+    const user = userEvent.setup();
+    const host = scriptedHost();
+    renderApp(host, { start: { time: 10 } });
+    await showLiveModel(host);
+    await user.keyboard("{End}");
+    expect(liveRegion()?.textContent).toBe("Following the live session.");
+    await user.keyboard("{Home}");
+    expect(liveRegion()?.textContent).toBe(
+      "Stopped following the live session. Go live, or press End, to return.",
+    );
   });
 });
 

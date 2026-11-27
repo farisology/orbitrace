@@ -7,6 +7,12 @@
  * `loadReplay`. Errors the host reports are shown. With a session list (from `Root`), a picker
  * in the header switches sessions. A file dropped or picked by the user is read in the page with core
  * and never goes through the transport.
+ *
+ * Follow live (issue 127): a session whose first update says it is running (`busy` or `idle`) opens at
+ * the live edge with follow on, unless the URL asked for a time or for `paused`. Each later
+ * snapshot carries the playhead through real time onto the new timeline (`follow.ts`) and hands
+ * it to the clock, which catches up to the new edge while following (`clock.ts`). The session
+ * ending ends follow. The Live badge says whether the view follows or how far behind it is.
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -18,12 +24,21 @@ import type {
   Unsubscribe,
 } from "@orbitrace/core";
 import {
+  FOLLOW_ANNOUNCEMENTS,
   LIVE_ANNOUNCE_INTERVAL_MS,
+  followAnnouncement,
   liveStatusAnnouncement,
   loadedAnnouncement,
   newAgentsAnnouncement,
 } from "./announce";
-import { createClock, type Clock } from "./clock";
+import { createClock, type Clock, type ClockState } from "./clock";
+import {
+  behindSeconds,
+  followStartTime,
+  followStatusText,
+  isFollowable,
+  remapTime,
+} from "./follow";
 import { Controls } from "./components/Controls";
 import { EventFeed } from "./components/EventFeed";
 import { CLEAR_SELECTION_CLASS, INSPECTOR_HEADING_ID, Inspector } from "./components/Inspector";
@@ -35,7 +50,13 @@ import { loadFile, type DroppedKind, type FileLoadError } from "./load-file";
 import { isTransportError, transportError } from "./no-host-transport";
 import { usePrefersReducedMotion } from "./reduced-motion";
 import type { HostTransport, TransportError } from "./transport";
-import { ClockContext, useClockDriver, type FrameScheduler, browserFrames } from "./use-clock";
+import {
+  ClockContext,
+  useClockDriver,
+  useClockValue,
+  type FrameScheduler,
+  browserFrames,
+} from "./use-clock";
 import { NO_START_OPTIONS, startSelection, type StartOptions } from "./url-state";
 
 export type ReplaySource =
@@ -82,6 +103,31 @@ export function liveLabel(live: LiveStatus): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * The Live badge of a host session: its live status, and while it runs whether the view follows
+ * the live edge or how far behind it is in real time ("Live: working, following", "Live: idle,
+ * 2 min 5 s behind"). Reads the clock itself, so only the badge re-renders when the text changes
+ * (at most once a second while playing behind). Not a live region: it never announces on its own.
+ */
+function LiveBadge({ live, model }: { readonly live: LiveStatus; readonly model: ReplayModel }) {
+  const followable = isFollowable(live);
+  const selectFollow = useCallback(
+    (state: ClockState) => followStatusText(state.following, behindSeconds(model, state.time)),
+    [model],
+  );
+  const follow = useClockValue(selectFollow);
+  const label = liveLabel(live);
+  if (label === null) return null;
+  return (
+    <span className={followable ? "badge badge-live" : "badge"}>
+      <span>
+        {label}
+        {followable ? <span className="badge-follow">, {follow}</span> : null}
+      </span>
+    </span>
+  );
 }
 
 function asTransportError(error: unknown): TransportError {
@@ -141,6 +187,8 @@ export function App({
   const agentsAnnouncedAtRef = useRef(-Infinity);
   const openButtonRef = useRef<HTMLButtonElement>(null);
   const playButtonId = useId();
+  /** The model shown last, so the next snapshot can carry the playhead through real time. */
+  const modelRef = useRef<ReplayModel | null>(null);
 
   const openSummary =
     sessionKey === undefined ? undefined : sessions?.find((entry) => entry.key === sessionKey);
@@ -151,18 +199,27 @@ export function App({
     reducedRef.current = reducedMotion;
   }, [reducedMotion]);
 
-  /** Show a different replay: new generation, clock reset, start options on the first one. */
+  /**
+   * Show a different replay: new generation, clock reset, start options on the first one. A
+   * running host session opens at the live edge, following it, unless the start options name a
+   * time or ask for `paused` (an explicit link position wins).
+   */
   const replaceModel = useCallback(
     (model: ReplayModel, source: ReplaySource) => {
       const options = startRef.current ?? NO_START_OPTIONS;
       startRef.current = null;
       generationRef.current += 1;
+      modelRef.current = model;
+      const live = source.kind === "host" && isFollowable(source.live);
+      const following = live && options.time === null && !options.paused;
       clock.reset({
         duration: model.totals.duration,
         time: options.time ?? 0,
         ...(options.rate !== null ? { rate: options.rate } : {}),
-        // Reduced motion: no autoplay.
+        // Reduced motion: no autoplay. Following holds at the live edge and only jumps.
         playing: !options.paused && !reducedRef.current,
+        live,
+        following,
       });
       setSelected(startSelection(options, model));
       setView({ model, generation: generationRef.current, source });
@@ -170,10 +227,23 @@ export function App({
       announcedLiveRef.current = source.kind === "host" ? source.live : null;
       announcedAgentsRef.current = model.agents.length;
       agentsAnnouncedAtRef.current = -Infinity;
-      setAnnouncement(loadedAnnouncement(sourceLabel(source), model));
+      const loaded = loadedAnnouncement(sourceLabel(source), model);
+      setAnnouncement(following ? `${loaded} ${FOLLOW_ANNOUNCEMENTS.entered}` : loaded);
     },
     [clock],
   );
+
+  // Say once when the view starts or stops following the live edge (not per snapshot).
+  useEffect(() => {
+    let before = clock.getState().following;
+    return clock.subscribe(() => {
+      const state = clock.getState();
+      if (state.following === before) return;
+      const text = followAnnouncement(before, state.following, state.live);
+      before = state.following;
+      if (text !== null) setAnnouncement(text);
+    });
+  }, [clock]);
 
   /** Say that a followed session changed state or gained agents. Rate-limited for agents. */
   const announceLive = useCallback((live: LiveStatus, model: ReplayModel | null) => {
@@ -196,10 +266,29 @@ export function App({
     if (parts.length > 0) setAnnouncement(parts.join(" "));
   }, []);
 
-  /** A newer snapshot of the session already shown. */
+  /**
+   * A newer snapshot of the session already shown. The playhead keeps its real moment: through
+   * real time onto the new timeline, so a new idle cut never moves it backwards. While following,
+   * the clock then catches up to the new edge (a jump under reduced motion).
+   */
   const updateModel = useCallback(
     (model: ReplayModel, live: LiveStatus) => {
-      clock.setDuration(model.totals.duration);
+      const previous = modelRef.current;
+      modelRef.current = model;
+      const state = clock.getState();
+      const time =
+        previous === null
+          ? state.time
+          : state.following
+            ? followStartTime(previous.warps, state.time, model.warps)
+            : remapTime(previous.warps, state.time, model.warps);
+      clock.applySnapshot({
+        duration: model.totals.duration,
+        time,
+        animate: !reducedRef.current,
+      });
+      if (live === "ended") clock.setLive(false);
+      else if (isFollowable(live)) clock.setLive(true);
       setView((current) =>
         current === null || current.source.kind !== "host"
           ? current
@@ -228,6 +317,7 @@ export function App({
           first = false;
           setHostError(null);
         } else if (update.type === "ended") {
+          clock.setLive(false);
           if (announcedLiveRef.current === "busy" || announcedLiveRef.current === "idle") {
             announceLive("ended", null);
           }
@@ -294,7 +384,17 @@ export function App({
       stop?.();
       stopHostRef.current = null;
     };
-  }, [transport, sessionKey, openLabel, openLive, reopen, replaceModel, updateModel, announceLive]);
+  }, [
+    transport,
+    sessionKey,
+    openLabel,
+    openLive,
+    reopen,
+    clock,
+    replaceModel,
+    updateModel,
+    announceLive,
+  ]);
 
   const pickSession = useCallback(
     (key: string) => {
@@ -337,7 +437,9 @@ export function App({
           clock.seekBy(action.delta);
           break;
         case "seekTo":
-          clock.seek(action.to === "start" ? 0 : clock.getState().duration);
+          // End in a running session goes live: the edge, followed.
+          if (action.to === "start") clock.seek(0);
+          else clock.seekEnd();
           break;
         case "clearSelection":
           // The Clear selection button goes away with the selection: keep focus in the inspector.
@@ -383,7 +485,6 @@ export function App({
   };
 
   const source = view?.source;
-  const badge = source?.kind === "host" ? liveLabel(source.live) : null;
   const live = source?.kind === "host" && isLiveStatus(source.live);
 
   return (
@@ -410,8 +511,8 @@ export function App({
           {source !== undefined ? (
             <p className="app-source">
               <span>{sourceLabel(source)}</span>
-              {badge !== null ? (
-                <span className={live ? "badge badge-live" : "badge"}>{badge}</span>
+              {source.kind === "host" && view !== null ? (
+                <LiveBadge live={source.live} model={view.model} />
               ) : null}
               {source.kind === "file" && source.fileKind === "transcript" ? (
                 <span className="muted">{APP_MESSAGES.transcriptNote}</span>
@@ -534,6 +635,12 @@ export function App({
           <span>
             <kbd>Space</kbd> play or pause <kbd>{"←"}</kbd> <kbd>{"→"}</kbd> scrub 5 s (
             <kbd>Shift</kbd> 30 s) <kbd>Esc</kbd> clear selection
+            {live ? (
+              <>
+                {" "}
+                <kbd>End</kbd> go live
+              </>
+            ) : null}
           </span>
           <span>{APP_MESSAGES.notAffiliated}</span>
         </footer>

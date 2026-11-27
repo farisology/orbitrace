@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { appCss, declaration, mediaBlock, rule, topLevel } from "./css";
 
 const NARROW = "(max-width: 820px), (max-height: 480px)";
+const MEDIUM = "(max-width: 960px)";
 
 describe("no text is cut off with an ellipsis", () => {
   it.each([".session-label", ".lane-name"])("%s wraps", (selector) => {
@@ -55,6 +56,30 @@ describe("timeline label column", () => {
     expect(declaration(rule(".timeline", mediaBlock(NARROW)), "--lane-label")).toBe(
       "clamp(112px, 34vw, 148px)",
     );
+  });
+});
+
+describe("the Playback row never runs under the side panel", () => {
+  it("wraps at every width rather than overflowing the dock", () => {
+    expect(declaration(rule(".controls"), "flex-wrap")).toBe("wrap");
+    expect(declaration(rule(".control-scrub"), "min-width")).toBe("80px");
+  });
+
+  it.each([MEDIUM, NARROW])("gives the scrubber its own row at %s", (query) => {
+    const scrub = rule(".control-scrub", mediaBlock(query));
+    expect(declaration(scrub, "order")).toBe("3");
+    expect(declaration(scrub, "flex-basis")).toBe("100%");
+  });
+
+  it("the medium breakpoint leaves the dock room for the whole row (issue 127)", () => {
+    // Two-column layout: the dock is the window minus the side panel. Measured in Chrome, a live
+    // session's row with an hour-long readout needs about 560 px.
+    const side = Number(
+      /minmax\(0, 1fr\) (\d+)px/.exec(declaration(rule(".app-main"), "grid-template-columns"))?.[1],
+    );
+    const medium = Number(/max-width: (\d+)px/.exec(MEDIUM)?.[1]);
+    expect(side).toBe(360);
+    expect(medium - side).toBeGreaterThanOrEqual(560);
   });
 });
 
