@@ -1,6 +1,12 @@
-// One set of display formatters for the renderer and the app (#86).
+// One set of display formatters for the renderer, the app and the hosts (#86, #129).
 import { describe, expect, it } from "vitest";
-import { formatClock, formatDuration, formatDurationShort, formatTokens } from "../../src/index.js";
+import {
+  formatAgo,
+  formatClock,
+  formatDuration,
+  formatDurationShort,
+  formatTokens,
+} from "../../src/index.js";
 
 describe("formatTokens", () => {
   it("uses one precision rule for every unit", () => {
@@ -81,5 +87,45 @@ describe("one rounding rule for clocks and lengths", () => {
       expect(formatDuration(seconds)).toBe(formatDuration(whole));
       expect(formatDurationShort(seconds)).toBe(formatDurationShort(whole));
     }
+  });
+});
+
+describe("formatAgo", () => {
+  const MINUTE = 60_000;
+  const HOUR = 60 * MINUTE;
+  const DAY = 24 * HOUR;
+  const now = Date.UTC(2026, 0, 15, 12, 0, 0);
+
+  it("reads minutes, hours and days, rounded down", () => {
+    expect(formatAgo(now, now)).toBe("just now");
+    expect(formatAgo(now - 30_000, now)).toBe("just now");
+    expect(formatAgo(now - (MINUTE - 1), now)).toBe("just now");
+    expect(formatAgo(now - MINUTE, now)).toBe("1 min ago");
+    expect(formatAgo(now - 12 * MINUTE - 59_999, now)).toBe("12 min ago");
+    expect(formatAgo(now - (HOUR - 1), now)).toBe("59 min ago");
+    expect(formatAgo(now - HOUR, now)).toBe("1 h ago");
+    expect(formatAgo(now - 3 * HOUR, now)).toBe("3 h ago");
+    expect(formatAgo(now - (DAY - 1), now)).toBe("23 h ago");
+    expect(formatAgo(now - 4 * DAY, now)).toBe("4 days ago");
+    expect(formatAgo(now - 50 * DAY, now)).toBe("50 days ago");
+  });
+
+  it("says 1 day at exactly one day and until just before two", () => {
+    expect(formatAgo(now - DAY, now)).toBe("1 day ago");
+    expect(formatAgo(now - (2 * DAY - 1), now)).toBe("1 day ago");
+    expect(formatAgo(now - 2 * DAY, now)).toBe("2 days ago");
+  });
+
+  it("reads a time in the future as just now", () => {
+    expect(formatAgo(now + 5_000, now)).toBe("just now");
+    expect(formatAgo(now + 3 * DAY, now)).toBe("just now");
+  });
+
+  it("reads non-finite input as just now", () => {
+    expect(formatAgo(Number.NaN, now)).toBe("just now");
+    expect(formatAgo(now, Number.NaN)).toBe("just now");
+    expect(formatAgo(Number.NEGATIVE_INFINITY, now)).toBe("just now");
+    expect(formatAgo(now, Number.POSITIVE_INFINITY)).toBe("just now");
+    expect(formatAgo(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY)).toBe("just now");
   });
 });

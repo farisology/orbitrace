@@ -152,6 +152,11 @@ document, not on stderr.
 | `export --json -o <file>` | `{ "key", "fileName", "output": "<file as typed>", "bytes", "warnings" }` |
 | `open --json`             | `{ "url", "origin", "port", "key", "browser", "warnings" }`               |
 
+The `export --json` document is for scripts. It contains the session key, the `-o` path as typed
+and any `--config-dir` path as typed (in a warning), so share the replay file (`-o`) or the
+document's `replay` value, not the whole document (finding F7 of
+[security/export-audit.md](security/export-audit.md)).
+
 A `SessionSummary` has `key`, `runtime`, `projectLabel`, `sessionId`, `lastActivity` (Unix epoch
 milliseconds), `live` (`busy`, `idle`, `ended` or `unknown`) and `subagentCount`. It has no path.
 The project name and the session id are local data: they are shown to you and are not part of an

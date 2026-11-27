@@ -4,7 +4,7 @@
  * 1. Checks that the extension is built (`dist/extension.js` and the app in `dist/app`).
  * 2. Creates a sandbox (`sandbox.ts`): synthetic config tree, empty home, workspace, profile.
  * 3. Downloads VS Code once into `node_modules/.cache/vscode-test/` of this package (see
- *    `downloadCacheDir`) with
+ *    `downloadCacheDir`; `ensureDownloadCacheDir` creates the folder first, #125) with
  *    `@vscode/test-electron` and starts it with the built extension from this package, the
  *    suite bundle (`dist/suite.cjs`), the sandbox's workspace and profile folders, and
  *    `CLAUDE_CONFIG_DIR` / `HOME` pointing into the sandbox.
@@ -31,7 +31,7 @@
  */
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { createWriteStream, existsSync, readFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { APP_BUNDLE_SEGMENTS, APP_INDEX_FILE } from "../src/app-bundle.js";
@@ -102,6 +102,18 @@ export function packageDirFrom(bundleDir: string): string {
  */
 export function downloadCacheDir(packageDir: string): string {
   return join(packageDir, "node_modules", ".cache", "vscode-test");
+}
+
+/**
+ * Create the download cache folder with its parents and return its path (#125).
+ * `@vscode/test-electron` 3 creates `cachePath` with a non-recursive `mkdirSync`, and `npm ci`
+ * does not create `node_modules/.cache`, so without this the first run on a fresh clone fails
+ * with `ENOENT`. Does nothing when the folder exists.
+ */
+export function ensureDownloadCacheDir(packageDir: string): string {
+  const dir = downloadCacheDir(packageDir);
+  mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
 /** The suite bundle the extension host loads. */
@@ -278,7 +290,7 @@ export async function main(packageDir: string): Promise<number> {
   const { downloadAndUnzipVSCode } = await import("@vscode/test-electron");
   const executable = await downloadAndUnzipVSCode({
     version: settings.version,
-    cachePath: downloadCacheDir(packageDir),
+    cachePath: ensureDownloadCacheDir(packageDir),
   });
   const sandbox = createSandbox();
   let passed = false;

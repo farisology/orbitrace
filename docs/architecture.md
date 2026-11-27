@@ -297,7 +297,11 @@ the address bar. Values are percent-encoded outside `A-Z a-z 0-9 - . _ ~ :`.
 | 413    | `bad-request`  | Body larger than 64 KiB.                                                                             |
 | 415    | `bad-request`  | `Content-Type` is not `application/json` (optionally `; charset=utf-8`), or the body is encoded.     |
 | 429    | `unsupported`  | 16 live streams are open already.                                                                    |
+| 500    | `internal`     | An unexpected error in the server. The message is fixed and holds no path.                           |
 | 503    | `internal`     | The server is shutting down.                                                                         |
+
+The table lists every `refuse(...)` call in `packages/cli/src/server/server.ts`; change the two
+together.
 
 ### Checks, in order
 

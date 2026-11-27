@@ -22,6 +22,7 @@
     "build": "vite build && tsc -p tsconfig.types.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "test:e2e-http": "vitest run test/e2e-http",
     "sync": "node scripts/sync-assets.mjs",
     "sync:check": "node scripts/sync-assets.mjs --check"
   },

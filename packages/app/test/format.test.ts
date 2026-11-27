@@ -68,4 +68,8 @@ describe("format", () => {
     expect(formatAgo(now - 50 * 24 * 60 * 60_000, now)).toBe("50 days ago");
     expect(formatAgo(Number.NaN, now)).toBe("just now");
   });
+
+  it("uses core's how-long-ago formatter, as the editor's Sessions view does (#129)", () => {
+    expect(formatAgo).toBe(core.formatAgo);
+  });
 });
