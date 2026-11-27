@@ -8,14 +8,28 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  addedPaths,
+  AUTHOR_LABELS,
+  AUTHOR_RULE,
+  authorProblems,
   checkRange,
   checkRepository,
   COMMIT_MESSAGE_LABEL,
+  DENYLIST_ENV,
+  formatResult,
   headerPath,
+  isAllowedAuthorEmail,
   isAllowedEmail,
   listRangeCommits,
+  loadDenylist,
   parseArgs,
+  parseDenylist,
+  parseNameStatus,
+  PATH_LINE,
+  pathFindings,
+  REDACTED,
   scanPatch,
+  scanPath,
   scanText,
   RULES,
 } from "./privacy-check.mjs";
@@ -63,13 +77,19 @@ const allowed = [
 ];
 
 let tempRoot;
+let savedDenylistEnv;
 
 beforeEach(() => {
   tempRoot = mkdtempSync(join(tmpdir(), "privacy-check-"));
+  // A developer may have the CI variable set; the tests must not depend on it.
+  savedDenylistEnv = process.env[DENYLIST_ENV];
+  delete process.env[DENYLIST_ENV];
 });
 
 afterEach(() => {
   rmSync(tempRoot, { recursive: true, force: true });
+  if (savedDenylistEnv === undefined) delete process.env[DENYLIST_ENV];
+  else process.env[DENYLIST_ENV] = savedDenylistEnv;
 });
 
 function writeFixture(relativePath, lines) {
@@ -85,8 +105,19 @@ function gitInit() {
   writeFixture(".gitignore", [".privacy-denylist.local"]);
 }
 
+/** Run the script in the temporary repository. The denylist variable is unset unless given. */
+function runScriptWithEnv(extraEnv, ...args) {
+  const env = { ...process.env };
+  delete env[DENYLIST_ENV];
+  return spawnSync(process.execPath, [scriptPath, ...args], {
+    cwd: tempRoot,
+    encoding: "utf8",
+    env: { ...env, ...extraEnv },
+  });
+}
+
 function runScript(...args) {
-  return spawnSync(process.execPath, [scriptPath, ...args], { cwd: tempRoot, encoding: "utf8" });
+  return runScriptWithEnv({}, ...args);
 }
 
 describe("scanText", () => {
@@ -217,9 +248,24 @@ describe("parseArgs", () => {
   it.each([[["--range", "abc123..def456"]], [["--range=abc123..def456"]]])(
     "reads a range from %j",
     (args) => {
-      expect(parseArgs(args)).toEqual({ mode: "range", range: "abc123..def456" });
+      expect(parseArgs(args)).toEqual({
+        mode: "range",
+        range: "abc123..def456",
+        strictAuthors: false,
+      });
     },
   );
+
+  it.each([
+    [["--range", "abc123..def456", "--strict-authors"]],
+    [["--strict-authors", "--range=abc123..def456"]],
+  ])("reads --strict-authors from %j", (args) => {
+    expect(parseArgs(args)).toEqual({
+      mode: "range",
+      range: "abc123..def456",
+      strictAuthors: true,
+    });
+  });
 
   it.each([
     [["--range"]],
@@ -230,6 +276,9 @@ describe("parseArgs", () => {
     [["--range", "single-revision"]],
     [["--range", "a.. b"]],
     [["--range="]],
+    [["--strict-authors"]],
+    [["--range", "a..b", "--strict-authors", "--strict-authors"]],
+    [["--range", "a..b", "--range", "c..d"]],
   ])("rejects %j", (args) => {
     expect(() => parseArgs(args)).toThrow(/usage:/);
   });
@@ -320,7 +369,11 @@ describe("checkRange", () => {
     const base = gitInitWithBase();
     writeFixture("src/feature.txt", ["clean feature", "docs@example.com"]);
     const head = commitAll("feat: clean feature");
-    expect(checkRange(tempRoot, `${base}..${head}`)).toEqual({ commits: 1, findings: [] });
+    expect(checkRange(tempRoot, `${base}..${head}`)).toEqual({
+      commits: 1,
+      findings: [],
+      authorWarnings: [],
+    });
   });
 
   it("flags a value added in one commit and removed in a later one", () => {
@@ -413,5 +466,435 @@ describe("npm run privacy -- --range entry point", () => {
     const result = runScript("--range", `${base}..no-such-branch`);
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("privacy check could not run");
+  });
+});
+
+// ---------------------------------------------------------------------------------------
+// Extra patterns from the environment, file paths and commit addresses (#57).
+
+describe("parseDenylist", () => {
+  it("builds one case-insensitive rule per pattern line and skips comments and blanks", () => {
+    const rules = parseDenylist("# comment\n\nsynthetic-codename\r\nother-codename\n", "SOURCE");
+    expect(rules).toHaveLength(2);
+    expect(rules.every((rule) => rule.id === "denylist")).toBe(true);
+    expect(scanText("about SYNTHETIC-CODENAME", rules)).toEqual([{ line: 1, rule: "denylist" }]);
+  });
+
+  it("reports an invalid pattern by source and line number only", () => {
+    const secretPattern = "synthetic-secret-codename (";
+    let message = "";
+    try {
+      parseDenylist(`ok\n# note\n${secretPattern}`, "SOURCE");
+    } catch (error) {
+      message = error.message;
+    }
+    expect(message).toBe("SOURCE:3: not a valid regular expression");
+    expect(message).not.toContain("synthetic-secret-codename");
+  });
+
+  it.each(["a*", "(?:)", "x?"])("rejects %j, which matches the empty string", (pattern) => {
+    expect(() => parseDenylist(pattern, "SOURCE")).toThrow("SOURCE:1: matches the empty string");
+  });
+});
+
+describe("loadDenylist", () => {
+  it("returns nothing without the file or the variable", () => {
+    expect(loadDenylist(tempRoot, {})).toEqual([]);
+    expect(loadDenylist(tempRoot, { [DENYLIST_ENV]: "" })).toEqual([]);
+  });
+
+  it("applies the file and the environment variable together", () => {
+    writeFixture(".privacy-denylist.local", ["file-codename"]);
+    const rules = loadDenylist(tempRoot, { [DENYLIST_ENV]: "# from CI\nenv-codename\n" });
+    expect(rules).toHaveLength(2);
+    expect(scanText("file-codename\nenv-codename\nclean", rules)).toEqual([
+      { line: 1, rule: "denylist" },
+      { line: 2, rule: "denylist" },
+    ]);
+  });
+
+  it("names the variable and the line of a bad pattern from the environment", () => {
+    expect(() => loadDenylist(tempRoot, { [DENYLIST_ENV]: "fine\n[unclosed" })).toThrow(
+      `${DENYLIST_ENV}:2: not a valid regular expression`,
+    );
+  });
+});
+
+describe("isAllowedAuthorEmail", () => {
+  it.each([
+    "12345+synthetic-user@users.noreply.github.com",
+    "noreply" + "@" + "github.com",
+    "tester@example.com",
+    "",
+  ])("allows %j", (address) => {
+    expect(isAllowedAuthorEmail(address)).toBe(true);
+  });
+
+  it("does not allow a personal-looking address", () => {
+    expect(isAllowedAuthorEmail(planted.email)).toBe(false);
+  });
+});
+
+describe("scanPath", () => {
+  it("returns no rules and the path unchanged when nothing matches", () => {
+    expect(scanPath("packages/core/src/widget.ts", RULES)).toEqual({
+      rules: [],
+      redacted: "packages/core/src/widget.ts",
+    });
+  });
+
+  it("redacts every matched part and lists each rule once", () => {
+    const denylist = parseDenylist("synthetic-codename", "SOURCE");
+    const path = `docs/synthetic-codename/${planted.email}/synthetic-codename.md`;
+    const result = scanPath(path, [...RULES, ...denylist]);
+    expect(result.rules).toEqual(["email", "denylist"]);
+    expect(result.redacted).toBe(`docs/${REDACTED}/${REDACTED}/${REDACTED}.md`);
+    expect(result.redacted).not.toContain("synthetic-codename");
+    expect(result.redacted).not.toContain(planted.email);
+  });
+
+  it("merges overlapping matches of different rules into one redaction", () => {
+    const denylist = parseDenylist("synthetic\\.person", "SOURCE");
+    const result = scanPath(`notes/${planted.email}/a.txt`, [...RULES, ...denylist]);
+    expect(result.rules).toEqual(["email", "denylist"]);
+    expect(result.redacted).toBe(`notes/${REDACTED}/a.txt`);
+  });
+
+  it("keeps allowed addresses", () => {
+    expect(scanPath("docs/docs@example.com/readme.txt", RULES).rules).toEqual([]);
+  });
+});
+
+describe("pathFindings", () => {
+  it("returns one finding per rule at the path line with the path redacted", () => {
+    const denylist = parseDenylist("synthetic-codename", "SOURCE");
+    expect(pathFindings("src/synthetic-codename.ts", [...RULES, ...denylist])).toEqual([
+      { file: `src/${REDACTED}.ts`, line: PATH_LINE, rule: "denylist" },
+    ]);
+    expect(pathFindings("src/widget.ts", RULES)).toEqual([]);
+  });
+});
+
+describe("parseNameStatus", () => {
+  it("returns added paths and the new side of renames and copies", () => {
+    const output = [
+      "A",
+      "src/new file.ts",
+      "M",
+      "src/changed.ts",
+      "D",
+      "src/gone.ts",
+      "R087",
+      "src/old-name.ts",
+      "src/new-name.ts",
+      "C100",
+      "src/source.ts",
+      "src/copy.ts",
+      "",
+    ].join("\0");
+    expect(parseNameStatus(output)).toEqual(["src/new file.ts", "src/new-name.ts", "src/copy.ts"]);
+  });
+
+  it("returns nothing for empty output", () => {
+    expect(parseNameStatus("")).toEqual([]);
+  });
+});
+
+describe("checkRepository file paths", () => {
+  it("flags a matching path, redacted, and names a matching file's content findings redacted", () => {
+    gitInit();
+    writeFixture(".privacy-denylist.local", ["synthetic-codename"]);
+    writeFixture("docs/synthetic-codename/notes.txt", ["clean", planted["github-token"]]);
+    const result = checkRepository(tempRoot);
+    expect(result.findings).toEqual([
+      { file: `docs/${REDACTED}/notes.txt`, line: PATH_LINE, rule: "denylist" },
+      { file: `docs/${REDACTED}/notes.txt`, line: 2, rule: "github-token" },
+    ]);
+  });
+
+  it("checks the path of a binary file", () => {
+    gitInit();
+    const fullPath = join(tempRoot, "assets", planted.email, "blob.bin");
+    mkdirSync(dirname(fullPath), { recursive: true });
+    writeFileSync(fullPath, Buffer.from([0, 1, 2, 3]));
+    expect(checkRepository(tempRoot).findings).toEqual([
+      { file: `assets/${REDACTED}/blob.bin`, line: PATH_LINE, rule: "email" },
+    ]);
+  });
+
+  it("applies patterns from the environment through the options", () => {
+    gitInit();
+    writeFixture("notes.txt", ["about env-codename"]);
+    expect(checkRepository(tempRoot, { env: {} }).findings).toEqual([]);
+    expect(checkRepository(tempRoot, { env: { [DENYLIST_ENV]: "env-codename" } }).findings).toEqual(
+      [{ file: "notes.txt", line: 1, rule: "denylist" }],
+    );
+  });
+});
+
+/** Commit everything with the given author and committer addresses. */
+function commitAs(message, { author, committer }) {
+  git("add", "--all");
+  const result = spawnSync(
+    "git",
+    [...GIT_ISOLATION, "commit", "--quiet", "--no-verify", "--allow-empty", "-m", message],
+    {
+      cwd: tempRoot,
+      encoding: "utf8",
+      env: { ...process.env, GIT_AUTHOR_EMAIL: author, GIT_COMMITTER_EMAIL: committer },
+    },
+  );
+  if (result.status !== 0) throw new Error(`git commit failed: ${result.stderr}`);
+  return git("rev-parse", "HEAD");
+}
+
+describe("addedPaths", () => {
+  it("lists added and renamed paths, not modified or deleted ones", () => {
+    gitInitWithBase();
+    writeFixture("src/keep.txt", ["first"]);
+    writeFixture("src/old-name.txt", ["a stable body", "that is long enough", "to be a rename"]);
+    writeFixture("src/remove.txt", ["bye"]);
+    commitAll("feat: files");
+    writeFixture("src/keep.txt", ["second"]);
+    rmSync(join(tempRoot, "src/old-name.txt"));
+    writeFixture("src/new-name.txt", ["a stable body", "that is long enough", "to be a rename"]);
+    rmSync(join(tempRoot, "src/remove.txt"));
+    writeFixture("src/added.txt", ["new"]);
+    const head = commitAll("refactor: rename");
+    expect(addedPaths(tempRoot, head).sort()).toEqual(["src/added.txt", "src/new-name.txt"]);
+  });
+
+  it("lists the files of a root commit", () => {
+    gitInit();
+    const root = commitAll("chore: root");
+    expect(addedPaths(tempRoot, root)).toEqual([".gitignore"]);
+  });
+});
+
+describe("authorProblems", () => {
+  it("names the author and the committer separately", () => {
+    gitInitWithBase();
+    const noreply = "12345+synthetic-user@users.noreply.github.com";
+    const both = commitAs("a", { author: planted.email, committer: planted.email });
+    const authorOnly = commitAs("b", { author: planted.email, committer: noreply });
+    const committerOnly = commitAs("c", { author: noreply, committer: planted.email });
+    const neither = commitAs("d", { author: noreply, committer: "tester@example.com" });
+    expect(authorProblems(tempRoot, both)).toEqual(["author", "committer"]);
+    expect(authorProblems(tempRoot, authorOnly)).toEqual(["author"]);
+    expect(authorProblems(tempRoot, committerOnly)).toEqual(["committer"]);
+    expect(authorProblems(tempRoot, neither)).toEqual([]);
+  });
+});
+
+describe("checkRange file paths and authors", () => {
+  it("flags an added path and a renamed path, redacted", () => {
+    const base = gitInitWithBase();
+    writeFixture(".privacy-denylist.local", ["synthetic-codename"]);
+    writeFixture("src/synthetic-codename.txt", ["clean body"]);
+    const added = commitAll("feat: add");
+    writeFixture("src/plain.txt", ["another clean body", "with a few lines", "to rename"]);
+    commitAll("feat: plain");
+    rmSync(join(tempRoot, "src/plain.txt"));
+    writeFixture("src/synthetic-codename-2.txt", [
+      "another clean body",
+      "with a few lines",
+      "to rename",
+    ]);
+    const renamed = commitAll("refactor: rename");
+    const result = checkRange(tempRoot, `${base}..${renamed}`);
+    expect(result.findings).toEqual([
+      {
+        commit: added.slice(0, 12),
+        file: `src/${REDACTED}.txt`,
+        line: PATH_LINE,
+        rule: "denylist",
+      },
+      {
+        commit: renamed.slice(0, 12),
+        file: `src/${REDACTED}-2.txt`,
+        line: PATH_LINE,
+        rule: "denylist",
+      },
+    ]);
+  });
+
+  it("names a content finding in a matching path redacted", () => {
+    const base = gitInitWithBase();
+    writeFixture("src/synthetic-codename.txt", ["clean"]);
+    commitAll("feat: add");
+    writeFixture("src/synthetic-codename.txt", ["clean", planted["aws-access-key-id"]]);
+    const head = commitAll("feat: change");
+    // The path is only flagged when the denylist names it; it was added before this range.
+    const env = { [DENYLIST_ENV]: "synthetic-codename" };
+    const previous = git("rev-parse", "HEAD~1");
+    expect(checkRange(tempRoot, `${previous}..${head}`, { env }).findings).toEqual([
+      {
+        commit: head.slice(0, 12),
+        file: `src/${REDACTED}.txt`,
+        line: 2,
+        rule: "aws-access-key-id",
+      },
+    ]);
+    expect(checkRange(tempRoot, `${base}..${head}`, { env }).findings).toHaveLength(2);
+  });
+
+  it("warns about non-noreply addresses by default and fails on them with strictAuthors", () => {
+    const base = gitInitWithBase();
+    writeFixture("a.txt", ["clean"]);
+    const personal = commitAs("feat: a", { author: planted.email, committer: planted.email });
+    writeFixture("b.txt", ["clean"]);
+    const head = commitAll("feat: b");
+
+    const loose = checkRange(tempRoot, `${base}..${head}`);
+    expect(loose.findings).toEqual([]);
+    expect(loose.authorWarnings).toEqual([
+      { commit: personal.slice(0, 12), role: "author" },
+      { commit: personal.slice(0, 12), role: "committer" },
+    ]);
+
+    const strict = checkRange(tempRoot, `${base}..${head}`, { strictAuthors: true });
+    expect(strict.authorWarnings).toEqual([]);
+    expect(strict.findings).toEqual([
+      {
+        commit: personal.slice(0, 12),
+        file: AUTHOR_LABELS.author,
+        line: PATH_LINE,
+        rule: AUTHOR_RULE,
+      },
+      {
+        commit: personal.slice(0, 12),
+        file: AUTHOR_LABELS.committer,
+        line: PATH_LINE,
+        rule: AUTHOR_RULE,
+      },
+    ]);
+  });
+
+  it("checks the addresses of a merge commit", () => {
+    const base = gitInitWithBase();
+    git("checkout", "--quiet", "-b", "side");
+    writeFixture("side.txt", ["side"]);
+    commitAll("feat: side");
+    git("checkout", "--quiet", "base-branch");
+    writeFixture("main.txt", ["main"]);
+    commitAll("feat: main");
+    const result = spawnSync(
+      "git",
+      [...GIT_ISOLATION, "merge", "--quiet", "--no-ff", "--no-edit", "side"],
+      {
+        cwd: tempRoot,
+        encoding: "utf8",
+        env: { ...process.env, GIT_COMMITTER_EMAIL: planted.email },
+      },
+    );
+    expect(result.status).toBe(0);
+    const merge = git("rev-parse", "HEAD");
+    expect(checkRange(tempRoot, `${base}..${merge}`).authorWarnings).toEqual([
+      { commit: merge.slice(0, 12), role: "committer" },
+    ]);
+  });
+});
+
+describe("formatResult", () => {
+  it("formats tree findings and a failing summary", () => {
+    const out = formatResult("tree", {
+      scanned: 3,
+      findings: [
+        { file: "a.txt", line: 2, rule: "email" },
+        { file: `docs/${REDACTED}.md`, line: PATH_LINE, rule: "denylist" },
+      ],
+    });
+    expect(out).toEqual({
+      errors: ["a.txt:2: email", `docs/${REDACTED}.md:0: denylist`],
+      warnings: [],
+      summary: "privacy check failed: 2 finding(s)",
+      failed: true,
+    });
+  });
+
+  it("formats author warnings with the sha and role only, and a passing summary", () => {
+    const out = formatResult("range", {
+      commits: 2,
+      findings: [],
+      authorWarnings: [
+        { commit: "aaaaaaaaaaaa", role: "author" },
+        { commit: "aaaaaaaaaaaa", role: "committer" },
+        { commit: "bbbbbbbbbbbb", role: "author" },
+      ],
+    });
+    expect(out.failed).toBe(false);
+    expect(out.errors).toEqual([]);
+    expect(out.warnings).toEqual([
+      "warning: aaaaaaaaaaaa: author email is not a noreply address",
+      "warning: aaaaaaaaaaaa: committer email is not a noreply address",
+      "warning: bbbbbbbbbbbb: author email is not a noreply address",
+      "warning: 2 commit(s) with an author or committer email that is not a noreply address (--strict-authors makes this a failure)",
+    ]);
+    expect(out.summary).toBe("privacy history check passed: 2 commit(s) scanned, 0 findings");
+  });
+
+  it("prefixes range findings with the commit", () => {
+    const out = formatResult("range", {
+      commits: 1,
+      findings: [
+        { commit: "cccccccccccc", file: AUTHOR_LABELS.author, line: 0, rule: AUTHOR_RULE },
+      ],
+    });
+    expect(out.errors).toEqual([`cccccccccccc:${AUTHOR_LABELS.author}:0: ${AUTHOR_RULE}`]);
+    expect(out.summary).toBe("privacy history check failed: 1 finding(s)");
+  });
+});
+
+describe("entry point: paths, environment patterns and authors", () => {
+  it("prints a path finding without the matched text", () => {
+    gitInit();
+    writeFixture(`notes/${planted.email}/a.txt`, ["clean"]);
+    const result = runScript();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(`notes/${REDACTED}/a.txt:0: email`);
+    expect(result.stderr).not.toContain(planted.email);
+  });
+
+  it("applies patterns from the environment variable and never prints them", () => {
+    gitInit();
+    writeFixture("notes.txt", ["about env-codename"]);
+    expect(runScript().status).toBe(0);
+    const result = runScriptWithEnv({ [DENYLIST_ENV]: "env-codename" });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("notes.txt:1: denylist");
+    expect(result.stderr + result.stdout).not.toContain("env-codename");
+  });
+
+  it("exits 2 on a bad pattern in the variable, naming the line only", () => {
+    gitInit();
+    const result = runScriptWithEnv({ [DENYLIST_ENV]: "ok\nenv-codename (" });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain(`${DENYLIST_ENV}:2: not a valid regular expression`);
+    expect(result.stderr).not.toContain("env-codename");
+  });
+
+  it("warns about authors without the address and fails with --strict-authors", () => {
+    const base = gitInitWithBase();
+    writeFixture("a.txt", ["clean"]);
+    const head = commitAs("feat: a", { author: planted.email, committer: "tester@example.com" });
+    const short = head.slice(0, 12);
+
+    const loose = runScript("--range", `${base}..${head}`);
+    expect(loose.status).toBe(0);
+    expect(loose.stderr).toContain(`warning: ${short}: author email is not a noreply address`);
+    expect(loose.stdout).toContain("privacy history check passed: 1 commit(s) scanned");
+    expect(loose.stderr + loose.stdout).not.toContain(planted.email);
+
+    const strict = runScript("--range", `${base}..${head}`, "--strict-authors");
+    expect(strict.status).toBe(1);
+    expect(strict.stderr).toContain(`${short}:${AUTHOR_LABELS.author}:0: ${AUTHOR_RULE}`);
+    expect(strict.stderr).not.toContain(planted.email);
+  });
+
+  it("exits 2 when --strict-authors is given without --range", () => {
+    gitInit();
+    const result = runScript("--strict-authors");
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("--strict-authors needs --range");
   });
 });

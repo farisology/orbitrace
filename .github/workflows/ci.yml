@@ -1,15 +1,20 @@
 # CI: every pull request into dev or main, and every push to dev, is built, linted,
-# type-checked, tested on Node 20 and 22, and scanned by the privacy check.
+# type-checked, tested on Node 20 and 22, and scanned by the privacy check. A separate job
+# runs the VS Code integration test in a real editor (not blocking yet, see that job).
 #
 # Each step calls an npm script from the root package.json, so the commands here are the
 # same ones a contributor runs locally:
 #   npm ci && npm run build && npm run lint && npm run typecheck && npm test
-#   npm run privacy                                  (the files in the tree)
+#   npm run format:check                             (not blocking yet, see the step)
+#   npm run privacy                                  (the files in the tree, paths included)
 #   npm run privacy -- --range <base>..<head>        (what the new commits add)
+#   xvfb-run -a npm run test:integration -w orbitrace-vscode
 #
-# Security: the token is read-only, no secrets are used, pull_request_target is never used,
-# checkout does not keep the token on disk, and third-party actions are pinned to a full
-# commit SHA (the version is in the comment; Dependabot updates both).
+# Security: the token is read-only, pull_request_target is never used, checkout does not
+# keep the token on disk, and third-party actions are pinned to a full commit SHA (the
+# version is in the comment; Dependabot updates both). The only secret is the optional
+# ORBITRACE_PRIVACY_DENYLIST, passed to the privacy check on pushes to dev only. The check
+# never prints its patterns or what they matched.
 
 name: CI
 
@@ -48,11 +53,19 @@ jobs:
           package-manager-cache: false
 
       # On a pull request the checkout is the merge result, so this scans what would land.
+      # The extra private-name patterns come from the repository secret, and only on pushes
+      # to dev: a pull request from a fork gets no secrets, and on a pull request the
+      # variable is empty, so only the built-in patterns apply there. An unset secret is
+      # empty too. The check never prints the patterns or what they matched.
       - name: Scan the files in the tree
+        env:
+          ORBITRACE_PRIVACY_DENYLIST: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' && secrets.ORBITRACE_PRIVACY_DENYLIST || '' }}
         run: npm run privacy
 
       # A value added by one commit and removed by a later one is gone from the tree but
-      # still in the history that the merge publishes.
+      # still in the history that the merge publishes. Author and committer emails that are
+      # not noreply addresses are warnings (short sha only, never the address). Adding
+      # --strict-authors to both range scans makes them failures; the owner decides when.
       - name: Scan the commits of the pull request
         if: github.event_name == 'pull_request'
         env:
@@ -65,6 +78,7 @@ jobs:
         env:
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.sha }}
+          ORBITRACE_PRIVACY_DENYLIST: ${{ github.ref == 'refs/heads/dev' && secrets.ORBITRACE_PRIVACY_DENYLIST || '' }}
         run: |
           # A new branch has no earlier commit, and a force push may point at one that is
           # gone. The tree scan above still covers the pushed content in both cases.
@@ -108,8 +122,78 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Not blocking for now: the formatting on dev does not pass yet. #50 fixes the
+      # formatting and then removes continue-on-error to make this step blocking.
+      - name: Check formatting (not blocking yet)
+        continue-on-error: true
+        run: npm run format:check
+
       - name: Typecheck
         run: npm run typecheck
 
       - name: Test
         run: npm test
+
+  integration:
+    name: VS Code integration test (Node 22, not blocking yet)
+    runs-on: ubuntu-latest
+    # Not blocking for now: a failure here does not fail the workflow or block a merge until
+    # the job has proven stable on GitHub's runners. Remove continue-on-error then, and make
+    # the check required in the branch protection of dev.
+    continue-on-error: true
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # @vscode/test-electron 3 needs Node 22 or later (its engines field).
+      - name: Set up Node 22 with the npm cache
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      # The test downloads "stable" by default, which moves with each VS Code release. Look
+      # the version up once and pass it to the test, so the cache key and the download name
+      # the same version. This is the release list @vscode/test-electron itself reads.
+      - name: Find the current stable VS Code version
+        id: vscode
+        run: |
+          version="$(curl -fsS --retry 3 https://update.code.visualstudio.com/api/releases/stable \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const v=JSON.parse(s)[0];if(!/^\d+\.\d+\.\d+$/.test(v))process.exit(1);console.log(v)})')"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      # After npm ci, which deletes node_modules and with it this folder. The folder is the
+      # one downloadCacheDir() in packages/vscode/test-integration/run.ts names.
+      - name: Cache the VS Code download
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: packages/vscode/node_modules/.cache/vscode-test
+          key: vscode-test-${{ runner.os }}-${{ runner.arch }}-${{ steps.vscode.outputs.version }}
+
+      - name: Build
+        run: npm run build
+
+      # GitHub's Ubuntu images ship Xvfb; install it only if an image ever stops doing so.
+      - name: Make sure xvfb-run is available
+        run: |
+          if ! command -v xvfb-run >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends xvfb
+          fi
+
+      # @vscode/test-electron creates the cache folder without its parents, and nothing
+      # creates packages/vscode/node_modules/.cache (npm ci hoists every dependency of this
+      # package to the root), so on a cache miss the download fails unless it exists first.
+      - name: Run the integration test under a virtual display
+        env:
+          ORBITRACE_VSCODE_VERSION: ${{ steps.vscode.outputs.version }}
+        run: |
+          mkdir -p packages/vscode/node_modules/.cache/vscode-test
+          xvfb-run -a npm run test:integration -w orbitrace-vscode
