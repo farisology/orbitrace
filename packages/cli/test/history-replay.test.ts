@@ -11,6 +11,7 @@ import {
   listSessions,
   toSessionSummary,
   validateReplay,
+  validateReplayModel,
   type SessionRef,
   type SessionSummary,
 } from "@orbitrace/core";
@@ -234,7 +235,7 @@ describe.skipIf(!SQLITE_AVAILABLE)(`sessions only in history${SKIP_NOTE}`, () =>
       refs.map((ref) => ref.key).sort(),
     );
     expect(loaded).toMatchObject({ kind: "result", id: 2 });
-    expect(validateReplay((loaded as { result: unknown }).result)).toBe(true);
+    expect(validateReplayModel((loaded as { result: unknown }).result)).toBe(true);
   }, 60_000);
 });
 

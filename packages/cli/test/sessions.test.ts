@@ -1,6 +1,11 @@
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { validateReplay, type SessionSummary } from "@orbitrace/core";
+import {
+  validateReplay,
+  validateReplayModel,
+  withoutReplyDetails,
+  type SessionSummary,
+} from "@orbitrace/core";
 import type { SessionReplayer } from "@orbitrace/core/node";
 import { CliError } from "../src/errors.js";
 import {
@@ -90,7 +95,9 @@ describe("createReplayer", () => {
     const replayer = createReplayer(roots);
     const sessions = await replayer.list();
     expect(sessions.length).toBeGreaterThan(1);
-    expect(validateReplay(await replayer.load(sessions[0]?.key as string))).toBe(true);
+    const loaded = await replayer.load(sessions[0]?.key as string);
+    expect(validateReplayModel(loaded)).toBe(true);
+    expect(validateReplay(withoutReplyDetails(loaded))).toBe(true);
   });
 });
 

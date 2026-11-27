@@ -21,7 +21,7 @@ import * as vscode from "vscode";
 import {
   EDITOR_HOST_META_VALUE,
   parseTransportMessage,
-  validateReplay,
+  validateReplayModel,
   type SessionSummary,
 } from "@orbitrace/core";
 import {
@@ -457,14 +457,14 @@ function buildSteps(context: Context): Step[] {
         );
         const result = resultOf(await replyTo(record, open.id), `the app's ${open.method}`);
         if (open.method === "loadReplay") {
-          assert(validateReplay(result), "the replay sent to the app is not a valid replay");
+          assert(validateReplayModel(result), "the replay sent to the app is not a valid replay");
         } else {
           const live = await waitFor(() => liveMessages(record, open.id)[0], {
             label: "the first live update for the app",
             timeoutMs: 10_000,
           });
           const replay = liveReplayOf(live, "the first live update for the app");
-          assert(validateReplay(replay), "the live replay is not a valid replay");
+          assert(validateReplayModel(replay), "the live replay is not a valid replay");
         }
         context.log(`            the app sent: listSessions, ${open.method}`);
       },
@@ -485,7 +485,7 @@ function buildSteps(context: Context): Step[] {
 
         record.inject({ id: IDS.load, method: "loadReplay", params: { key: ws.key } });
         const loaded = resultOf(await replyTo(record, IDS.load), "loadReplay");
-        assert(validateReplay(loaded), "loadReplay did not return a valid replay");
+        assert(validateReplayModel(loaded), "loadReplay did not return a valid replay");
 
         record.inject({ id: IDS.unknownMethod, method: "readFile", params: {} });
         const unknown = await replyTo(record, IDS.unknownMethod);
@@ -833,7 +833,7 @@ function buildEditorHistorySteps(context: Context): Step[] {
         assertEqual(record.panel.title, panelTitle({ projectLabel: victim.projectLabel }), "title");
         record.inject({ id: IDS.historyLoad, method: "loadReplay", params: { key: victim.key } });
         const replay = resultOf(await replyTo(record, IDS.historyLoad), "loadReplay from history");
-        assert(validateReplay(replay), "the replay from history is not a valid replay");
+        assert(validateReplayModel(replay), "the replay from history is not a valid replay");
         const text = JSON.stringify(replay);
         assert(!text.includes(sandbox.root), "the replay from history holds a sandbox path");
         const panel = record.panel as unknown as vscode.WebviewPanel;
