@@ -3,7 +3,7 @@
  * folders under the system's temporary folder. HOME (and CLAUDE_CONFIG_DIR where a test sets
  * it) point at temporary folders through the fake host; the doctor never reads `process.env`.
  */
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
@@ -14,11 +14,10 @@ import {
   type SourceAdapter,
   type SourceRoot,
 } from "@orbitrace/core";
-import { CLAUDE_CODE_RUNTIME } from "@orbitrace/core/node";
+import { CLAUDE_CODE_RUNTIME, type HistoryCapability } from "@orbitrace/core/node";
 import {
   CHECK_ERROR_MESSAGE,
   HISTORY_MODULE,
-  HISTORY_STORE_IN_USE,
   UNKNOWN_TYPES_LISTED,
   bindLoopbackPort,
   check,
@@ -32,7 +31,7 @@ import {
   checkRemoteSources,
   checkRunningRegistry,
   checkSessionRoots,
-  loadNodeSqlite,
+  readRecordingState,
   reportTypeName,
   tallySessions,
 } from "../src/doctor/checks.js";
@@ -444,15 +443,16 @@ describe("running-registry", () => {
     ]);
   });
 
-  it("warns when no config folder has one", async () => {
+  it("is ok, as information with no fix, when no config folder has one (lead decision on #184)", async () => {
     const { home } = makeHome();
     mkdirSync(join(home, ".claude"));
     const result = await checkRunningRegistry(fakeHost(home), [
       root(join(home, ".claude"), true, "os-default"),
     ]);
-    expect(result).toMatchObject({ status: "warn", code: "running-registry-missing" });
-    expect(result.fix).toContain("claude update");
-    expect(result.fix).not.toContain(home);
+    expect(result).toMatchObject({ status: "ok", code: "running-registry-missing", fix: null });
+    expect(result.message).toContain("'unknown'");
+    expect(result.message).toContain("desktop-only");
+    expect(result.message).not.toContain(home);
   });
 
   it("fails when it is a file", async () => {
@@ -546,96 +546,118 @@ describe("loopback-port", () => {
   });
 });
 
+/** A capability as core reports it where node:sqlite loads, with invented versions. */
+const LOADS: HistoryCapability = {
+  available: true,
+  engine: "node:sqlite",
+  nodeVersion: "v22.13.0",
+  sqliteVersion: "3.99.0",
+  fts5: false,
+};
+/** A capability as core reports it where node:sqlite is missing. */
+const MISSING: HistoryCapability = {
+  available: false,
+  engine: "node:sqlite",
+  nodeVersion: "v20.19.0",
+  reason: "This Node.js (v20.19.0) has no node:sqlite module. History needs Node 22.13 or later.",
+};
+const OFF = { settings: "missing", recording: false } as const;
+const ON = { settings: "ok", recording: true } as const;
+
 describe("history-store", () => {
-  it("is ok when node:sqlite loads, and says it is not in use yet", async () => {
-    const result = await checkHistoryStore("22.13.0", () =>
-      Promise.resolve({ DatabaseSync: class {} }),
-    );
-    expect(result).toMatchObject({ status: "ok", code: "history-store-available", fix: null });
-    expect(result.details).toEqual({
+  it("is ok when core says the store can run, and says whether recording is on", async () => {
+    const off = await checkHistoryStore("22.13.0", () => Promise.resolve(LOADS), OFF);
+    expect(off).toMatchObject({ status: "ok", code: "history-store-available", fix: null });
+    expect(off.details).toEqual({
       module: HISTORY_MODULE,
       available: true,
       inUse: false,
       errorCode: null,
+      recording: false,
+      settings: "missing",
+      reason: null,
+      sqliteVersion: "3.99.0",
+      fts5: false,
     });
-    expect(result.message).toContain("Not in use yet");
+    expect(off.message).toContain("recording is off");
+    expect(off.message).toContain("orbitrace history enable");
+    const on = await checkHistoryStore("22.13.0", () => Promise.resolve(LOADS), ON);
+    expect(on).toMatchObject({ status: "ok", code: "history-store-available", fix: null });
+    expect(on.details).toMatchObject({ inUse: true, recording: true, settings: "ok" });
+    expect(on.message).toContain("recording is on");
   });
 
-  it("is skipped, with no fix, when node:sqlite cannot be loaded while nothing records history", async () => {
-    expect(HISTORY_STORE_IN_USE).toBe(false);
-    const missing = Object.assign(new Error("No such built-in module: node:sqlite"), {
-      code: "ERR_UNKNOWN_BUILTIN_MODULE",
-    });
-    const result = await checkHistoryStore("20.19.0", () => Promise.reject(missing));
+  it("is skipped, with no fix, when the store cannot run and recording is off", async () => {
+    const result = await checkHistoryStore("20.19.0", () => Promise.resolve(MISSING), OFF);
     expect(result).toMatchObject({
       status: "skipped",
       code: "history-store-not-in-use",
       fix: null,
     });
-    expect(result.details).toMatchObject({ available: false, inUse: false });
-    expect(result.details.errorCode).toBe("ERR_UNKNOWN_BUILTIN_MODULE");
-    expect(result.message).toContain("Not in use yet");
-    expect(result.message).toContain("Node 22.13 or later");
-    const empty = await checkHistoryStore("22.5.0", () => Promise.resolve({}));
-    expect(empty).toMatchObject({
-      status: "skipped",
-      code: "history-store-not-in-use",
-      details: { errorCode: null },
+    expect(result.details).toMatchObject({
+      available: false,
+      inUse: false,
+      errorCode: null,
+      reason: MISSING.reason,
+      sqliteVersion: null,
+      fts5: null,
     });
+    expect(result.message).toContain("Node 22.13 or later");
   });
 
-  it("warns, with a fix, when node:sqlite cannot be loaded once a host records history", async () => {
-    const result = await checkHistoryStore("20.19.0", () => Promise.reject(new Error("x")), true);
+  it("warns, with a fix, when the store cannot run and recording is on", async () => {
+    const result = await checkHistoryStore("20.19.0", () => Promise.resolve(MISSING), ON);
     expect(result).toMatchObject({ status: "warn", code: "history-store-unavailable" });
-    expect(result.details).toMatchObject({ available: false, inUse: true, errorCode: null });
+    expect(result.details).toMatchObject({ available: false, inUse: true, recording: true });
     expect(result.fix).toContain("nvm install 22");
-    expect(result.message).not.toContain("Not in use yet");
-    const loads = await checkHistoryStore(
-      "22.13.0",
-      () => Promise.resolve({ DatabaseSync: class {} }),
-      true,
-    );
-    expect(loads).toMatchObject({ status: "ok", code: "history-store-available", fix: null });
-    expect(loads.message).not.toContain("Not in use yet");
+    expect(result.fix).toContain("orbitrace history disable");
   });
 
-  it("loadNodeSqlite loads the real module only where this Node has it", async () => {
+  it("warns when the settings file cannot be read (recording is then off)", async () => {
+    const result = await checkHistoryStore("22.13.0", () => Promise.resolve(LOADS), {
+      settings: "invalid",
+      recording: false,
+    });
+    expect(result).toMatchObject({ status: "warn", code: "history-store-settings-invalid" });
+    expect(result.fix).toContain("orbitrace history enable");
+  });
+
+  it("suggests only disable, which runs on every Node, for an unreadable settings file where the store cannot run", async () => {
+    const result = await checkHistoryStore("20.19.0", () => Promise.resolve(MISSING), {
+      settings: "invalid",
+      recording: false,
+    });
+    expect(result).toMatchObject({ status: "warn", code: "history-store-settings-invalid" });
+    expect(result.fix).toBe(
+      "Write it again with 'orbitrace history disable' (off). Turning recording on needs Node 22.13 or later.",
+    );
+    expect(result.fix).not.toContain("history enable");
+  });
+
+  it("uses core's real capability check by default", async () => {
     const version = parseVersion(process.versions.node) ?? [0, 0, 0];
     const unflagged = version[0] > 22 || (version[0] === 22 && version[1] >= 13);
     const result = await checkHistoryStore(process.versions.node);
-    const loaded = await loadNodeSqlite().then(
-      (module) => typeof (module as { DatabaseSync?: unknown }).DatabaseSync === "function",
-      () => false,
-    );
-    expect(loaded).toBe(unflagged);
     expect(result.status).toBe(unflagged ? "ok" : "skipped");
+    expect(result.details.available).toBe(unflagged);
   });
 
-  it("loadNodeSqlite holds back the SQLite experimental warning only, and restores emitWarning", async () => {
-    const original = process.emitWarning;
-    const seen: string[] = [];
-    const listener = (warning: Error): void => {
-      seen.push(warning.message);
-    };
-    process.on("warning", listener);
-    try {
-      const value = await loadNodeSqlite((specifier) => {
-        process.emitWarning(
-          "SQLite is an experimental feature and might change at any time",
-          "ExperimentalWarning",
-        );
-        process.emitWarning("synthetic other warning", "ExperimentalWarning");
-        return Promise.resolve({ specifier });
-      });
-      expect(value).toEqual({ specifier: "node:sqlite" });
-      await new Promise((resolve) => setImmediate(resolve));
-      expect(seen).toEqual(["synthetic other warning"]);
-      expect(process.emitWarning).toBe(original);
-      await expect(loadNodeSqlite(() => Promise.reject(new Error("x")))).rejects.toThrow("x");
-      expect(process.emitWarning).toBe(original);
-    } finally {
-      process.off("warning", listener);
-    }
+  it("reads the recording switch from the settings file of the host's data folder, creating nothing", () => {
+    const { home } = makeHome();
+    const data = join(home, "data-folder");
+    const host = fakeHost(home, { ORBITRACE_DATA_DIR: data });
+    expect(readRecordingState(host)).toEqual({ settings: "missing", recording: false });
+    expect(existsSync(data)).toBe(false);
+    mkdirSync(data);
+    writeFileSync(
+      join(data, "settings.json"),
+      JSON.stringify({ settings: 1, historyRecording: true }),
+    );
+    expect(readRecordingState(host)).toEqual({ settings: "ok", recording: true });
+    writeFileSync(join(data, "settings.json"), "not json");
+    expect(readRecordingState(host)).toEqual({ settings: "invalid", recording: false });
+    const nowhere = fakeHost(home, { ORBITRACE_DATA_DIR: "relative/folder" });
+    expect(readRecordingState(nowhere)).toEqual({ settings: "unknown", recording: false });
   });
 });
 

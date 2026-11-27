@@ -1,7 +1,8 @@
 /// <reference types="node" />
 /**
  * The `worker_threads` entry of the history ingest (ticket #25). Built to
- * `dist/history/worker.js`; `runHistoryIngestWorker` starts it.
+ * `dist/history/worker.js`, exported as `@orbitrace/core/history-worker` (#188) so a host can
+ * bundle it as its own file; `runHistoryIngestWorker` starts it.
  *
  * Runs only inside a worker started with a `HistoryWorkerData` as its `workerData`; imported
  * anywhere else it does nothing. It opens the store for writing with the lock token the parent
@@ -15,6 +16,7 @@
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
 import { toHistoryErrorInfo } from "./errors.js";
 import { ingestHistory } from "./ingest.js";
+import { withoutSqliteWarning } from "./quiet.js";
 import { isHistoryWorkerData, type HistoryWorkerMessage } from "./worker-protocol.js";
 import { openHistoryWriterWithLockToken, type HistoryStore } from "./store.js";
 
@@ -25,12 +27,16 @@ async function run(): Promise<void> {
   const post = (message: HistoryWorkerMessage): void => port.postMessage(message);
   let store: HistoryStore | null = null;
   try {
-    store = await openHistoryWriterWithLockToken(
-      {
-        ...(data.dataDir === undefined ? {} : { dataDir: data.dataDir }),
-        ...(data.lockWaitMs === undefined ? {} : { lockWaitMs: data.lockWaitMs }),
-      },
-      data.lockToken,
+    // The first load of node:sqlite in this thread happens here; on Node 22 and 23 it would print
+    // the SQLite experimental warning to the host's stderr.
+    store = await withoutSqliteWarning(() =>
+      openHistoryWriterWithLockToken(
+        {
+          ...(data.dataDir === undefined ? {} : { dataDir: data.dataDir }),
+          ...(data.lockWaitMs === undefined ? {} : { lockWaitMs: data.lockWaitMs }),
+        },
+        data.lockToken,
+      ),
     );
     if (data.testBlockAfterLock === true) {
       // Terminating the worker interrupts the wait.

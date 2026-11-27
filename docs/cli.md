@@ -1,8 +1,9 @@
 # Command line
 
 `orbitrace` lists the Claude Code sessions on your machine, opens one in your browser through a
-local server, exports a structure-only replay of one of them, and checks the set-up with
-`orbitrace doctor`. Orbitrace is not affiliated with Anthropic.
+local server, exports a structure-only replay of one of them, keeps an opt-in history of your
+sessions with `orbitrace history`, and checks the set-up with `orbitrace doctor`. Orbitrace is
+not affiliated with Anthropic.
 
 **Status: not released.** The package is private and not on npm, so `npx orbitrace` does not work
 yet (see [Install](#install)).
@@ -29,6 +30,7 @@ on the repository's synthetic sessions without reading your own.
 | `orbitrace list`             | Lists sessions, newest first.                              |
 | `orbitrace export <key>`     | Writes the replay of one session.                          |
 | `orbitrace export --latest`  | Writes the replay of the session with the newest activity. |
+| `orbitrace history <cmd>`    | Turns history on or off, copies, lists and deletes it.     |
 | `orbitrace doctor`           | Says what is wrong with the set-up and how to fix it.      |
 | `orbitrace help [<command>]` | Shows help. `orbitrace <command> --help` shows the same.   |
 | `orbitrace --version`        | Prints the version and the status of `@orbitrace/core`.    |
@@ -84,6 +86,17 @@ your system, or when your browser is a Snap or Flatpak that cannot read the temp
 Asking the server to open a session in the browser (the app's `openInBrowser` request) answers
 with the `unsupported` error: the browser view is already in the browser.
 
+When history recording is on (`orbitrace history enable`), `open` also copies sessions into the
+history store while it runs: all of them once at the start, and a session the app shows again
+about 2 seconds after it changes. The copy runs in a worker thread, so the server never waits for
+it, and it stops when the server stops (a copy in progress is cut off; what it committed stays).
+It reads the settings file again before each copy, so `orbitrace history disable` also stops a
+running `open` before its next copy (it says so once on stderr); turning recording on again takes
+effect the next time `open` starts. Nothing keeps running after `open` ends. If this run cannot record (this Node has no
+`node:sqlite`, or the build has no history worker), the command says so in a
+`history-not-recorded` warning and serves as usual. Sessions only the history store holds are
+listed and served too (see [`orbitrace history`](#orbitrace-history)).
+
 ### `orbitrace list`
 
 ```text
@@ -103,6 +116,12 @@ folder). The session key is what `export` takes. It is a hash: it holds no path 
 
 A `--config-dir` folder that is missing or cannot be read gives a warning, not an error. Finding no
 sessions is not an error either: the command prints "No sessions found." and exits with 0.
+
+Sessions that only the history store holds (their transcripts were not found in the folders
+searched, for example after Claude Code's cleanup) are listed too. The table then has a `SOURCE`
+column, `history` for them and `files` for the others, and their live status is `ended`. A session
+whose transcript is still found is always read from its files. When a store exists but this Node
+cannot read it, the command lists the files only and gives a `history-unavailable` warning.
 
 ### `orbitrace export`
 
@@ -152,6 +171,81 @@ does not:
 None of them hides the structure: agents, who started whom, waves, tool calls and their kinds,
 failures and replies. The details are in [privacy.md](privacy.md#export-options-opt-in).
 
+A session that only the history store holds is exported from its stored lines, through the same
+parser, replay builder and export as a session read from files. When nothing in it was redacted,
+the file is the same, byte for byte, as an export made from its transcripts before they were
+deleted (a test checks this on the synthetic sessions).
+
+### `orbitrace history`
+
+```text
+orbitrace history status   [--json]
+orbitrace history enable   [--json]
+orbitrace history disable  [--json]
+orbitrace history ingest   [--config-dir <path>]... [--extra-roots] [--json]
+orbitrace history list     [--config-dir <path>]... [--extra-roots] [--limit <n>] [--json]
+orbitrace history delete   (<session-key> | --all) [--yes] [--json]
+orbitrace history where    [--json]
+```
+
+Keeps a copy of your sessions that outlives Claude Code's cleanup, in the history store of
+`@orbitrace/core` (what it keeps, where and how is in
+[privacy.md](privacy.md#history-store-25)). **History is off by default.**
+
+- `status`: whether recording is on, whether this Node can run the store (SQLite version), where
+  the store is, and how many sessions and lines it holds and its size.
+- `enable`: turns recording on. It writes a small settings file, `settings.json`
+  (`{ "settings": 1, "historyRecording": true }`), in the data folder, creating the folder (0700)
+  and the file (0600). From then on `orbitrace open` copies sessions while it runs (see
+  [`orbitrace open`](#orbitrace-open)). It copies nothing itself.
+- `disable`: turns recording off. It writes the settings file only when it exists. A running
+  `orbitrace open` stops copying before its next copy. What is stored stays until you delete it.
+- `ingest`: copies every session under the folders searched (as for `list`) into the store now,
+  once, whether recording is on or off, and creates the store when there is none. A second run
+  copies only what was added since. On a terminal it shows its progress on stderr; with `--json`
+  it writes one document at the end. With no session to copy it writes nothing.
+- `list`: the sessions in the store, newest first, with how many lines each holds and whether its
+  transcript is still found (`found`) or not (`missing`) in the folders searched.
+- `delete <session-key>`: deletes the stored copy of one session (a key from `history list`, or a
+  unique start of one, as for `export`). `delete --all` deletes the whole store (the settings
+  file stays, so recording stays on if it was on). On a terminal it asks first; `--yes` skips the
+  question. Without a terminal, or with `--json`, it deletes nothing without `--yes` and exits
+  with `not-confirmed`. Transcripts are never touched. Where this Node cannot read the store,
+  `delete --all` still deletes its files (the session count is then left out, `null` in JSON).
+- `where`: prints the data folder.
+
+The data folder is `ORBITRACE_DATA_DIR` when it is set (an absolute path), otherwise `.orbitrace`
+in your home folder. It may not be inside a git working tree or a Claude Code config folder
+(`history-failed`). Paths are shown with your home folder as `~`, as `doctor` shows them.
+
+While recording is off, no command creates the data folder, the settings file or the store
+except `history enable` and `history ingest`, which you run to do exactly that (a test runs every
+command with recording off and checks). `list`, `export` and `open` look at the store only when
+its file exists, and only read it.
+
+When a session has ended (its live status is `ended` and nothing was written to it for a minute),
+`ingest` and `open` tell the store so, and a last line Claude Code left without its line break is
+then stored once instead of waiting for the rest of the line.
+
+History needs `node:sqlite`, which Node 22.13 and later have. Where it is missing (Node 20),
+`status`, `enable`, `ingest`, `list` and `delete <session-key>` say why and exit with 13,
+`history-unavailable`; nothing else changes. `disable`, `where` and `delete --all` need no
+`node:sqlite` and work on every Node, so you can always turn recording off, find the store and
+delete it.
+On Node 22 and 23, Node's "SQLite is an experimental feature" warning is held back.
+
+| Exit | When                                                                                                                                                                 |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | Done. Also: nothing to copy, nothing to delete, recording already in the state asked for.                                                                            |
+| 2    | `usage`: no subcommand, an unknown one, or an option the subcommand does not take.                                                                                   |
+| 3, 5 | `delete`: no stored session has that key (`not-found`), or the start matches more (`ambiguous`).                                                                     |
+| 13   | `history-unavailable`: this Node cannot run the store (not `disable`, `where`, `delete --all`).                                                                      |
+| 14   | `history-locked`: another process is writing the store (an `open` that records). `delete` waits up to 3 seconds first.                                               |
+| 15   | `history-failed`: the data folder is not allowed, the file is not a store or is from a newer Orbitrace, the build has no history worker, or a file operation failed. |
+| 16   | `not-confirmed`: `delete` without `--yes` where it cannot ask, or the answer was no.                                                                                 |
+
+The `--json` documents are listed under [JSON output](#json-output).
+
 ### `orbitrace doctor`
 
 ```text
@@ -159,8 +253,9 @@ orbitrace doctor [--config-dir <path>]... [--extra-roots] [--parse-limit <n>] [-
 ```
 
 Checks the set-up and says what is wrong and how to fix it (#31). It reads only: it writes no
-file, creates no folder, changes no setting and opens no database. Each fix is a command to run
-or a setting to change; doctor never runs it. Run it again after a fix to see the result.
+file, creates no folder, changes no setting and opens no database file (the history check asks
+core whether `node:sqlite` works, which opens a database in memory only). Each fix is a command
+to run or a setting to change; doctor never runs it. Run it again after a fix to see the result.
 
 | Option                          | Meaning                                                                                                         |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -176,7 +271,8 @@ writes its document and still exits non-zero.
 Each check reports one status:
 
 - `ok`: nothing to do.
-- `warn`: something works less well than it could, for example live status shows as `unknown`.
+- `warn`: something works less well than it could, for example history recording is on but this
+  Node cannot record.
 - `fail`: something does not work, for example `open` cannot start.
 - `skipped`: there is nothing to check, for example no sessions to parse.
 
@@ -205,7 +301,7 @@ issue.
 | `running-registry` | The running-sessions folder (`sessions/`) of each readable config folder, which gives the live status: present, readable, how many sessions it lists and how many of their processes run.                                       |
 | `app-bundle`       | The web app that `open` serves: its `index.html` and every file the page loads.                                                                                                                                                 |
 | `loopback-port`    | That a free port of `127.0.0.1` can be listened on, as `open` needs. The port is closed at once.                                                                                                                                |
-| `history-store`    | Whether `node:sqlite` loads in this Node (a dynamic import; no database is created). Nothing records history today, so a Node without it is skipped, not warned about.                                                          |
+| `history-store`    | Whether this Node can run the history store (core's `historyCapability()`), and whether history recording is on (the settings file of `orbitrace history enable`). With recording off, a Node without `node:sqlite` is skipped. |
 | `hooks`            | Always skipped: Orbitrace has no hooks adapter yet (#30).                                                                                                                                                                       |
 | `remote-sources`   | Always skipped: remote sources are not built yet (#30).                                                                                                                                                                         |
 
@@ -215,44 +311,45 @@ The codes are stable: a script or an agent may depend on them. A code names one 
 status is fixed, except `config-folder-missing`. A code keeps its meaning: a new finding gets a
 new code.
 
-| Check              | Code                                   | Status       | Meaning                                                                                                                                |
-| ------------------ | -------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `node-version`     | `node-version-ok`                      | ok           | Node is in the supported range.                                                                                                        |
-| `node-version`     | `node-version-unsupported`             | fail         | Node is outside the range. Fix: install a supported Node, for example `nvm install --lts`.                                             |
-| `node-version`     | `node-version-range-unknown`           | skipped      | The command names no range, or one doctor cannot read.                                                                                 |
-| `config-folder`    | `config-folder-ok`                     | ok           | The config folder exists, can be read and has a `projects/` folder.                                                                    |
-| `config-folder`    | `config-folder-env-invalid`            | fail         | `CLAUDE_CONFIG_DIR` is set but is not an absolute path, so Orbitrace ignores it.                                                       |
-| `config-folder`    | `config-folder-no-home`                | fail         | `CLAUDE_CONFIG_DIR` is not set and no home folder is known (`HOME`, or `USERPROFILE` on Windows).                                      |
-| `config-folder`    | `config-folder-missing`                | warn or fail | The folder does not exist: `fail` when no other session folder can be read, `warn` when one can (for example a `--config-dir` folder). |
-| `config-folder`    | `config-folder-not-a-folder`           | fail         | A file is where the config folder should be.                                                                                           |
-| `config-folder`    | `config-folder-unreadable`             | fail         | The folder or its `projects/` folder exists but cannot be listed by your account. Fix: `chmod -R u+rX <folder>` (`icacls` on Windows). |
-| `config-folder`    | `config-folder-projects-not-a-folder`  | fail         | A file is where `projects/` should be. Fix: `mv <folder>/projects <folder>/projects.bak` (`move` on Windows), then run `claude`.       |
-| `config-folder`    | `config-folder-no-projects`            | warn         | No `projects/` folder: no session has been recorded there yet.                                                                         |
-| `session-roots`    | `session-roots-ok`                     | ok           | At least one folder can be read and holds sessions.                                                                                    |
-| `session-roots`    | `session-roots-none`                   | fail         | There is no folder to search: no `--config-dir`, no `CLAUDE_CONFIG_DIR`, no home folder.                                               |
-| `session-roots`    | `session-roots-unavailable`            | fail         | None of the folders exists or can be read.                                                                                             |
-| `session-roots`    | `session-roots-config-dir-unavailable` | warn         | A `--config-dir` folder was not found or cannot be read (the warning `list` gives).                                                    |
-| `session-roots`    | `session-roots-empty`                  | warn         | The readable folders hold no sessions.                                                                                                 |
-| `parser`           | `parser-ok`                            | ok           | Every line read was valid JSON. Skipped line types are listed but are not a problem: the parser skips types it does not use by design. |
-| `parser`           | `parser-malformed-lines`               | warn         | Some lines were not valid JSON and were skipped. A session that is being written can end in a half-written line.                       |
-| `parser`           | `parser-unreadable`                    | warn         | Some sessions could not be read. Fix: give your account read access to the session folder.                                             |
-| `parser`           | `parser-no-sessions`                   | skipped      | No sessions were found to parse.                                                                                                       |
-| `running-registry` | `running-registry-ok`                  | ok           | At least one config folder has a running-sessions folder that can be read.                                                             |
-| `running-registry` | `running-registry-missing`             | warn         | No config folder has one, so live status shows as `unknown`. Claude Code writes it while a session runs.                               |
-| `running-registry` | `running-registry-not-a-folder`        | fail         | A file is where the folder should be.                                                                                                  |
-| `running-registry` | `running-registry-unreadable`          | fail         | The folder cannot be listed by your account.                                                                                           |
-| `running-registry` | `running-registry-no-roots`            | skipped      | No config folder can be read.                                                                                                          |
-| `app-bundle`       | `app-bundle-ok`                        | ok           | The page and every file it loads are there.                                                                                            |
-| `app-bundle`       | `app-bundle-missing`                   | fail         | This build has no web app; `open` fails with `app-missing`. Fix: `npm run build`, then run the built command.                          |
-| `app-bundle`       | `app-bundle-incomplete`                | fail         | Files the page loads are missing (named relative to the app folder). Fix: `npm run build`.                                             |
-| `loopback-port`    | `loopback-port-ok`                     | ok           | A free port of `127.0.0.1` was listened on and closed.                                                                                 |
-| `loopback-port`    | `loopback-port-unavailable`            | fail         | Listening failed; `open` cannot start. Fix: allow Node to listen on `127.0.0.1` in the firewall, sandbox or container settings.        |
-| `history-store`    | `history-store-available`              | ok           | `node:sqlite` loads. Not in use yet.                                                                                                   |
-| `history-store`    | `history-store-not-in-use`             | skipped      | `node:sqlite` does not load, but nothing records history yet. A future history store will need Node 22.13 or later.                    |
-| `history-store`    | `history-store-unavailable`            | warn         | Reserved for when a host records history: `node:sqlite` does not load. Fix: install Node 22.13 or later. Not reported today.           |
-| `hooks`            | `hooks-not-built`                      | skipped      | No hooks adapter yet (#30).                                                                                                            |
-| `remote-sources`   | `remote-sources-not-built`             | skipped      | No remote sources yet (#30).                                                                                                           |
-| `any`              | `check-error`                          | fail         | The check itself could not run. The message is fixed text. Fix: run doctor again; if it keeps failing, open an issue with the report.  |
+| Check              | Code                                   | Status       | Meaning                                                                                                                                                                  |
+| ------------------ | -------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `node-version`     | `node-version-ok`                      | ok           | Node is in the supported range.                                                                                                                                          |
+| `node-version`     | `node-version-unsupported`             | fail         | Node is outside the range. Fix: install a supported Node, for example `nvm install --lts`.                                                                               |
+| `node-version`     | `node-version-range-unknown`           | skipped      | The command names no range, or one doctor cannot read.                                                                                                                   |
+| `config-folder`    | `config-folder-ok`                     | ok           | The config folder exists, can be read and has a `projects/` folder.                                                                                                      |
+| `config-folder`    | `config-folder-env-invalid`            | fail         | `CLAUDE_CONFIG_DIR` is set but is not an absolute path, so Orbitrace ignores it.                                                                                         |
+| `config-folder`    | `config-folder-no-home`                | fail         | `CLAUDE_CONFIG_DIR` is not set and no home folder is known (`HOME`, or `USERPROFILE` on Windows).                                                                        |
+| `config-folder`    | `config-folder-missing`                | warn or fail | The folder does not exist: `fail` when no other session folder can be read, `warn` when one can (for example a `--config-dir` folder).                                   |
+| `config-folder`    | `config-folder-not-a-folder`           | fail         | A file is where the config folder should be.                                                                                                                             |
+| `config-folder`    | `config-folder-unreadable`             | fail         | The folder or its `projects/` folder exists but cannot be listed by your account. Fix: `chmod -R u+rX <folder>` (`icacls` on Windows).                                   |
+| `config-folder`    | `config-folder-projects-not-a-folder`  | fail         | A file is where `projects/` should be. Fix: `mv <folder>/projects <folder>/projects.bak` (`move` on Windows), then run `claude`.                                         |
+| `config-folder`    | `config-folder-no-projects`            | warn         | No `projects/` folder: no session has been recorded there yet.                                                                                                           |
+| `session-roots`    | `session-roots-ok`                     | ok           | At least one folder can be read and holds sessions.                                                                                                                      |
+| `session-roots`    | `session-roots-none`                   | fail         | There is no folder to search: no `--config-dir`, no `CLAUDE_CONFIG_DIR`, no home folder.                                                                                 |
+| `session-roots`    | `session-roots-unavailable`            | fail         | None of the folders exists or can be read.                                                                                                                               |
+| `session-roots`    | `session-roots-config-dir-unavailable` | warn         | A `--config-dir` folder was not found or cannot be read (the warning `list` gives).                                                                                      |
+| `session-roots`    | `session-roots-empty`                  | warn         | The readable folders hold no sessions.                                                                                                                                   |
+| `parser`           | `parser-ok`                            | ok           | Every line read was valid JSON. Skipped line types are listed but are not a problem: the parser skips types it does not use by design.                                   |
+| `parser`           | `parser-malformed-lines`               | warn         | Some lines were not valid JSON and were skipped. A session that is being written can end in a half-written line.                                                         |
+| `parser`           | `parser-unreadable`                    | warn         | Some sessions could not be read. Fix: give your account read access to the session folder.                                                                               |
+| `parser`           | `parser-no-sessions`                   | skipped      | No sessions were found to parse.                                                                                                                                         |
+| `running-registry` | `running-registry-ok`                  | ok           | At least one config folder has a running-sessions folder that can be read.                                                                                               |
+| `running-registry` | `running-registry-missing`             | ok           | No config folder has one, so live status shows as `unknown`. Information only: desktop-only and older set-ups never have it.                                             |
+| `running-registry` | `running-registry-not-a-folder`        | fail         | A file is where the folder should be.                                                                                                                                    |
+| `running-registry` | `running-registry-unreadable`          | fail         | The folder cannot be listed by your account.                                                                                                                             |
+| `running-registry` | `running-registry-no-roots`            | skipped      | No config folder can be read.                                                                                                                                            |
+| `app-bundle`       | `app-bundle-ok`                        | ok           | The page and every file it loads are there.                                                                                                                              |
+| `app-bundle`       | `app-bundle-missing`                   | fail         | This build has no web app; `open` fails with `app-missing`. Fix: `npm run build`, then run the built command.                                                            |
+| `app-bundle`       | `app-bundle-incomplete`                | fail         | Files the page loads are missing (named relative to the app folder). Fix: `npm run build`.                                                                               |
+| `loopback-port`    | `loopback-port-ok`                     | ok           | A free port of `127.0.0.1` was listened on and closed.                                                                                                                   |
+| `loopback-port`    | `loopback-port-unavailable`            | fail         | Listening failed; `open` cannot start. Fix: allow Node to listen on `127.0.0.1` in the firewall, sandbox or container settings.                                          |
+| `history-store`    | `history-store-available`              | ok           | The history store can run here. The message says whether recording is on.                                                                                                |
+| `history-store`    | `history-store-not-in-use`             | skipped      | The store cannot run here (`node:sqlite` is missing), and recording is off, so nothing needs it. History needs Node 22.13 or later.                                      |
+| `history-store`    | `history-store-unavailable`            | warn         | Recording is on, but the store cannot run here, so nothing is recorded. Fix: install Node 22.13 or later, or `orbitrace history disable`.                                |
+| `history-store`    | `history-store-settings-invalid`       | warn         | The history settings file cannot be read, so recording is off. Fix: `orbitrace history enable` or `disable` writes it again (only `disable` where the store cannot run). |
+| `hooks`            | `hooks-not-built`                      | skipped      | No hooks adapter yet (#30).                                                                                                                                              |
+| `remote-sources`   | `remote-sources-not-built`             | skipped      | No remote sources yet (#30).                                                                                                                                             |
+| `any`              | `check-error`                          | fail         | The check itself could not run. The message is fixed text. Fix: run doctor again; if it keeps failing, open an issue with the report.                                    |
 
 #### JSON shape
 
@@ -262,21 +359,27 @@ new code.
 {
   "doctor": 1,
   "orbitrace": "0.0.0",
-  "node": "22.13.0",
+  "node": "20.19.0",
   "platform": "linux",
   "status": "warn",
   "summary": { "ok": 7, "warn": 1, "fail": 0, "skipped": 2 },
   "checks": [
     {
-      "id": "running-registry",
+      "id": "history-store",
       "status": "warn",
-      "code": "running-registry-missing",
-      "message": "No config folder has a running-sessions folder (sessions/), so live status shows as 'unknown'.",
-      "fix": "Update Claude Code ('claude update') and start a session ('claude'); it writes ~/.claude/sessions while a session runs.",
+      "code": "history-store-unavailable",
+      "message": "History recording is on, but node:sqlite cannot be loaded in Node 20.19.0, so nothing is recorded; it needs Node 22.13 or later.",
+      "fix": "Install Node 22.13 or later (for example 'nvm install 22 && nvm use 22'), then run 'orbitrace doctor' again; or turn recording off with 'orbitrace history disable'.",
       "details": {
-        "folders": [
-          { "path": "~/.claude/sessions", "state": "missing", "entries": null, "running": null }
-        ]
+        "module": "node:sqlite",
+        "available": false,
+        "inUse": true,
+        "errorCode": null,
+        "recording": true,
+        "settings": "ok",
+        "reason": "This Node.js (v20.19.0) has no node:sqlite module. History needs Node 22.13 or later.",
+        "sqliteVersion": null,
+        "fts5": null
       }
     }
   ]
@@ -296,18 +399,18 @@ new code.
 `details` per check (paths are shown as described above; a folder `state` is `ok`, `missing`,
 `not-a-folder` or `unreadable`):
 
-| Check              | `details`                                                                                                                                                                                                                                                                                                          |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `node-version`     | `version`, `range` (or `null`), `satisfies` (`true`, `false`, or `null` when not checked).                                                                                                                                                                                                                         |
-| `config-folder`    | `env` (`unset`, `set` or `invalid`: whether `CLAUDE_CONFIG_DIR` is set and usable), `path`, `resolvedBy` (`environment` or `os-default`), `reason` (one sentence), `state`, `projects` (the state of `projects/`, or `null` when the folder itself is not `ok`). The last five are `null` when no folder is known. |
-| `session-roots`    | `roots` (each with `path`, `resolvedBy`, `reason`, `available`, `sessions`), `sessions` (total), `warnings` (as in `list --json`).                                                                                                                                                                                 |
-| `parser`           | `limit`, `checked` (sessions tried), `parsed`, `unreadable`, `lines`, `malformed`, `malformedSessions`, `unknownLines`, `unknownByType` (type name to count, at most 20, most common first), `unknownTypesNotListed`, `versions` (Claude Code versions seen, oldest first; at most the 20 newest).                 |
-| `running-registry` | `folders` (each with `path`, `state`, `entries` and `running`, both `null` unless `state` is `ok`).                                                                                                                                                                                                                |
-| `app-bundle`       | `present` (`index.html` was found), `files` (how many files the page loads), `missing` (those not found, relative to the app folder).                                                                                                                                                                              |
-| `loopback-port`    | `host` (`127.0.0.1`), `bound`, `errorCode` (a system error code such as `EACCES`, or `null`).                                                                                                                                                                                                                      |
-| `history-store`    | `module` (`node:sqlite`), `available`, `inUse` (always `false` for now), `errorCode`.                                                                                                                                                                                                                              |
-| `hooks`            | Empty.                                                                                                                                                                                                                                                                                                             |
-| `remote-sources`   | Empty.                                                                                                                                                                                                                                                                                                             |
+| Check              | `details`                                                                                                                                                                                                                                                                                                                                          |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `node-version`     | `version`, `range` (or `null`), `satisfies` (`true`, `false`, or `null` when not checked).                                                                                                                                                                                                                                                         |
+| `config-folder`    | `env` (`unset`, `set` or `invalid`: whether `CLAUDE_CONFIG_DIR` is set and usable), `path`, `resolvedBy` (`environment` or `os-default`), `reason` (one sentence), `state`, `projects` (the state of `projects/`, or `null` when the folder itself is not `ok`). The last five are `null` when no folder is known.                                 |
+| `session-roots`    | `roots` (each with `path`, `resolvedBy`, `reason`, `available`, `sessions`), `sessions` (total), `warnings` (as in `list --json`).                                                                                                                                                                                                                 |
+| `parser`           | `limit`, `checked` (sessions tried), `parsed`, `unreadable`, `lines`, `malformed`, `malformedSessions`, `unknownLines`, `unknownByType` (type name to count, at most 20, most common first), `unknownTypesNotListed`, `versions` (Claude Code versions seen, oldest first; at most the 20 newest).                                                 |
+| `running-registry` | `folders` (each with `path`, `state`, `entries` and `running`, both `null` unless `state` is `ok`).                                                                                                                                                                                                                                                |
+| `app-bundle`       | `present` (`index.html` was found), `files` (how many files the page loads), `missing` (those not found, relative to the app folder).                                                                                                                                                                                                              |
+| `loopback-port`    | `host` (`127.0.0.1`), `bound`, `errorCode` (a system error code such as `EACCES`, or `null`).                                                                                                                                                                                                                                                      |
+| `history-store`    | `module` (`node:sqlite`), `available`, `inUse` and `recording` (both: whether history recording is on), `settings` (`missing`, `ok`, `invalid`, or `unknown` when no data folder can be worked out), `reason` (why the store cannot run, or `null`), `sqliteVersion` and `fts5` (or `null`), `errorCode` (always `null` since #195; see `reason`). |
+| `hooks`            | Empty.                                                                                                                                                                                                                                                                                                                                             |
+| `remote-sources`   | Empty.                                                                                                                                                                                                                                                                                                                                             |
 
 ## Where sessions are looked for
 
@@ -326,15 +429,23 @@ With `--json`, every command writes exactly one JSON document, on one line, to s
 else. A failure writes nothing to stdout and one JSON object to stderr. Warnings are inside the
 document, not on stderr.
 
-| Command                   | Document on stdout                                                                   |
-| ------------------------- | ------------------------------------------------------------------------------------ |
-| `--version --json`        | `{ "name", "version", "core" }`                                                      |
-| `help --json`             | `{ "name", "version", "commands": [...], "exitCodes": {...} }`                       |
-| `list --json`             | `{ "sessions": [SessionSummary...], "warnings": [...] }`                             |
-| `export --json` (stdout)  | `{ "key", "fileName", "output": null, "bytes", "warnings", "options", "replay" }`    |
-| `export --json -o <file>` | `{ "key", "fileName", "output": "<file as typed>", "bytes", "warnings", "options" }` |
-| `open --json`             | `{ "url", "origin", "port", "key", "browser", "warnings" }`                          |
-| `doctor --json`           | `{ "doctor", "orbitrace", "node", "platform", "status", "summary", "checks" }`       |
+| Command                   | Document on stdout                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| `--version --json`        | `{ "name", "version", "core" }`                                                          |
+| `help --json`             | `{ "name", "version", "commands": [...], "exitCodes": {...} }`                           |
+| `list --json`             | `{ "sessions": [SessionSummary...], "warnings": [...] }`                                 |
+| `export --json` (stdout)  | `{ "key", "fileName", "output": null, "bytes", "warnings", "options", "replay" }`        |
+| `export --json -o <file>` | `{ "key", "fileName", "output": "<file as typed>", "bytes", "warnings", "options" }`     |
+| `open --json`             | `{ "url", "origin", "port", "key", "browser", "warnings" }`                              |
+| `doctor --json`           | `{ "doctor", "orbitrace", "node", "platform", "status", "summary", "checks" }`           |
+| `history status --json`   | `{ "recording", "settings", "capability", "dataDir", "database", "store" }`              |
+| `history enable --json`   | `{ "recording": true, "changed", "settings" }`                                           |
+| `history disable --json`  | `{ "recording": false, "changed", "settings" }` (`settings` is `null` when unwritten)    |
+| `history ingest --json`   | core's ingest result and `{ "database", "warnings" }` (below)                            |
+| `history list --json`     | `{ "sessions": [HistoryListEntry...], "warnings": [...] }`                               |
+| `history delete <key>`    | `{ "key", "deleted": true, "lines", "scrubbed" }`                                        |
+| `history delete --all`    | `{ "all": true, "deleted", "sessions", "recording" }` (`sessions` is `null` when unread) |
+| `history where --json`    | `{ "dataDir", "database", "settings", "exists" }`                                        |
 
 The `export --json` document is for scripts. It contains the session key, the `-o` path as typed
 and any `--config-dir` path as typed (in a warning), so share the replay file (`-o`) or the
@@ -348,14 +459,34 @@ Without the flags it is `{ "names": "as-written", "roundTimes": null, "bucketTok
 A `SessionSummary` has `key`, `runtime`, `projectLabel`, `sessionId`, `lastActivity` (Unix epoch
 milliseconds), `live` (`busy`, `idle`, `ended` or `unknown`) and `subagentCount`. It has no path.
 The project name and the session id are local data: they are shown to you and are not part of an
-export.
+export. In `list --json`, a session that only the history store holds also has `"history": true`;
+the others have no `history` field.
+
+History documents (paths shown with the home folder as `~`):
+
+- `status`: `recording` (boolean), `settings` (`missing`, `ok` or `invalid`), `capability`
+  (`{ "available": true, "engine": "node:sqlite", "nodeVersion", "sqliteVersion", "fts5" }`),
+  `dataDir`, `database`, and `store`:
+  `{ "exists", "sessions", "files", "lines", "bytes", "error" }` (the counts are `null` without a
+  store; `error` is a message when the store could not be read, otherwise `null`).
+- `ingest`: `sessions`, `sessionsSkipped`, `files`, `filesMissing`, `filesReset`, `linesRead`,
+  `linesAdded`, `linesSkipped` (lines not stored because they were not JSON and a secret pattern
+  matched), `redactions`, `durationMs`, `database` (`null` when nothing was copied) and `warnings`.
+- A `HistoryListEntry` has `key`, `runtime`, `sessionId`, `projectLabel`, `lastActivity`,
+  `firstIngestedAt`, `lastIngestedAt`, `subagentCount`, `lineCount` and `transcript` (`found` or
+  `missing`).
+- `delete <key>`: `scrubbed` is `false` when another program had the store open, so old copies of
+  the deleted lines stay in the store's WAL file until it closes it.
 
 For `open`, the document is written once the server listens, and the command keeps running
 after it. `url` is the link with the token. `key` is the session key in the link, or `null` for
 the session list. `browser` is `opened`, `failed` (the opener could not start) or `skipped`
 (`--no-browser`).
 
-A warning is `{ "code": "config-dir-unavailable", "message" }`.
+A warning is `{ "code", "message" }`. The codes: `config-dir-unavailable` (a `--config-dir`
+folder was not found or cannot be read), `history-unavailable` (a history store exists but this
+Node cannot read it, so the sessions only it holds are not listed) and `history-not-recorded`
+(`open`: recording is on, but this run cannot record).
 
 An error on stderr:
 
@@ -379,21 +510,25 @@ The codes are stable: a script may depend on them. `not-found`, `unreadable`, `i
 `internal` are the `TransportErrorCode` values of `@orbitrace/core`, passed on from its session
 replayer.
 
-| Exit | Code                | Meaning                                                                       |
-| ---- | ------------------- | ----------------------------------------------------------------------------- |
-| 0    | `ok`                | Success. Not an error code; listed for completeness.                          |
-| 1    | `internal`          | Something unexpected went wrong.                                              |
-| 2    | `usage`             | Unknown command or option, missing or bad value, key and `--latest` together. |
-| 3    | `not-found`         | No session has that key or key start.                                         |
-| 4    | `no-sessions`       | `--latest` was given and no session was found.                                |
-| 5    | `ambiguous`         | The key start matches more than one session.                                  |
-| 6    | `unreadable`        | The session transcript could not be read.                                     |
-| 7    | `invalid`           | The replay did not pass the replay format check.                              |
-| 8    | `output-exists`     | The output file exists and `--force` was not given.                           |
-| 9    | `output-unwritable` | The output file could not be written (missing folder, no permission).         |
-| 10   | `port-unavailable`  | `open --port`: the port is in use or may not be used.                         |
-| 11   | `app-missing`       | `open`: this build of the command has no web app (run `npm run build`).       |
-| 12   | `doctor-failed`     | `doctor`: at least one check failed. The report is still written to stdout.   |
+| Exit | Code                  | Meaning                                                                                                                  |
+| ---- | --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 0    | `ok`                  | Success. Not an error code; listed for completeness.                                                                     |
+| 1    | `internal`            | Something unexpected went wrong.                                                                                         |
+| 2    | `usage`               | Unknown command or option, missing or bad value, key and `--latest` together.                                            |
+| 3    | `not-found`           | No session has that key or key start.                                                                                    |
+| 4    | `no-sessions`         | `--latest` was given and no session was found.                                                                           |
+| 5    | `ambiguous`           | The key start matches more than one session.                                                                             |
+| 6    | `unreadable`          | The session transcript could not be read.                                                                                |
+| 7    | `invalid`             | The replay did not pass the replay format check.                                                                         |
+| 8    | `output-exists`       | The output file exists and `--force` was not given.                                                                      |
+| 9    | `output-unwritable`   | The output file could not be written (missing folder, no permission).                                                    |
+| 10   | `port-unavailable`    | `open --port`: the port is in use or may not be used.                                                                    |
+| 11   | `app-missing`         | `open`: this build of the command has no web app (run `npm run build`).                                                  |
+| 12   | `doctor-failed`       | `doctor`: at least one check failed. The report is still written to stdout.                                              |
+| 13   | `history-unavailable` | `history` (not `disable`, `where`, `delete --all`): this Node cannot run the history store (Node 22.13 or later needed). |
+| 14   | `history-locked`      | `history`: another process is writing the history store.                                                                 |
+| 15   | `history-failed`      | `history`: the store or its folder or settings could not be used (see message).                                          |
+| 16   | `not-confirmed`       | `history delete`: no `--yes` where it cannot ask, or the answer was no.                                                  |
 
 ## Privacy of messages
 
@@ -407,7 +542,9 @@ with `?` before it is printed. `doctor` shows folder paths with your home folder
 ## The bundled web app
 
 The build bundles the command and `@orbitrace/core` into one file, `packages/cli/dist/index.js`
-(#120), and copies the built web app (`packages/app/dist`, without its type declarations) into
+(#120), bundles core's history worker (the package export `@orbitrace/core/history-worker`, #188)
+into a second file beside it, `packages/cli/dist/history-worker.js`, which the command starts as a
+worker thread for `history ingest` and recording, and copies the built web app (`packages/app/dist`, without its type declarations) into
 `packages/cli/dist/app`, so the package carries it for the browser view. The package needs no
 other package at run time: its tarball installs on its own (see
 [releasing.md](releasing.md#try-the-artefacts)). See the decision on #76

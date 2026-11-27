@@ -12,14 +12,24 @@
  *   `doctor-failed`) when one of its checks failed.
  */
 
-import { exportReplay, type ExportOptions, type ReplayModel } from "@orbitrace/core";
+import {
+  exportReplay,
+  listSessions,
+  toSessionSummary,
+  type ExportOptions,
+  type ReplayModel,
+} from "@orbitrace/core";
 import { parseCommandLine, wantsJson, type ExportFlags, type ParsedCommand } from "./args.js";
 import { runDoctorCommand, type DoctorRuntime } from "./doctor/run.js";
 import { EXIT_OK, errorToJson, errorToText, toCliError } from "./errors.js";
 import { helpJson, helpText } from "./help.js";
+import { runHistoryCommand } from "./history/commands.js";
+import type { HistoryRuntime } from "./history/context.js";
+import { historySearch, isHistoryRef } from "./history/source.js";
 import { runOpen, type OpenRuntime } from "./open.js";
-import { formatSessionTable, writeOutputFile } from "./output.js";
+import { formatSessionTable, writeOutputFile, type ListedSession } from "./output.js";
 import {
+  CLI_ADAPTERS,
   chooseSession,
   createReplayer,
   resolveRoots,
@@ -35,18 +45,27 @@ export interface CliIo {
 }
 
 /**
- * What `open` and `doctor` take from the process. `appDir` is shared: `doctor` checks the same
- * web app folder `open` serves.
+ * What `open`, `doctor` and `history` take from the process. `appDir` is shared: `doctor` checks
+ * the same web app folder `open` serves. `history` (the store's capability check, the worker
+ * file, the terminal) is shared by the history commands, `open`, `list`, `export` and `doctor`.
  */
 export interface CliRuntime extends OpenRuntime {
   readonly doctor?: DoctorRuntime;
 }
 
-/** The doctor's runtime: its own fields, and `open`'s app folder unless it names one itself. */
+/**
+ * The doctor's runtime: its own fields, and `open`'s app folder and the history capability check
+ * unless it names its own.
+ */
 export function doctorRuntime(runtime: CliRuntime): DoctorRuntime {
   const own = runtime.doctor ?? {};
-  if (own.appDir !== undefined || runtime.appDir === undefined) return own;
-  return { ...own, appDir: runtime.appDir };
+  const appDir =
+    own.appDir !== undefined || runtime.appDir === undefined ? {} : { appDir: runtime.appDir };
+  const capability =
+    own.historyCapability !== undefined || runtime.history?.capability === undefined
+      ? {}
+      : { historyCapability: runtime.history.capability };
+  return { ...own, ...appDir, ...capability };
 }
 
 function writeJson(io: CliIo, value: unknown): void {
@@ -83,10 +102,20 @@ async function runList(
   command: Extract<ParsedCommand, { kind: "list" }>,
   io: CliIo,
   host: HostContext,
+  history: HistoryRuntime,
 ): Promise<number> {
-  const { roots, warnings } = await resolveRoots(host, command.sources);
-  const sessions = await createReplayer(roots).list(
+  const resolved = await resolveRoots(host, command.sources);
+  const search = await historySearch(host, history, CLI_ADAPTERS);
+  const roots = search.root === null ? resolved.roots : [...resolved.roots, search.root];
+  const warnings = [...resolved.warnings, ...search.warnings];
+  const refs = await listSessions(
+    roots,
+    search.adapters,
     command.limit === undefined ? undefined : { limit: command.limit },
+  );
+  // A session only the history store holds is marked; the others keep the plain summary.
+  const sessions: ListedSession[] = refs.map((ref) =>
+    isHistoryRef(ref) ? { ...toSessionSummary(ref), history: true } : toSessionSummary(ref),
   );
   if (command.json) {
     writeJson(io, { sessions, warnings });
@@ -101,10 +130,16 @@ async function runExport(
   command: Extract<ParsedCommand, { kind: "export" }>,
   io: CliIo,
   host: HostContext,
+  history: HistoryRuntime,
 ): Promise<number> {
-  const { roots, warnings } = await resolveRoots(host, command.sources);
+  const resolved = await resolveRoots(host, command.sources);
+  // A session only the history store holds is exported from its stored lines, through the same
+  // replayer, parser, builder and export allow-list (#195).
+  const search = await historySearch(host, history, CLI_ADAPTERS);
+  const roots = search.root === null ? resolved.roots : [...resolved.roots, search.root];
+  const warnings = [...resolved.warnings, ...search.warnings];
   if (!command.json) writeWarnings(io, warnings);
-  const replayer = createReplayer(roots);
+  const replayer = createReplayer(roots, search.adapters);
   const key = await chooseSession(
     replayer,
     command.key === undefined ? { latest: true } : { key: command.key },
@@ -170,11 +205,13 @@ async function runCommand(
       else io.stdout(`${statusLine()}\n`);
       return EXIT_OK;
     case "list":
-      return runList(command, io, host);
+      return runList(command, io, host, runtime.history ?? {});
     case "export":
-      return runExport(command, io, host);
+      return runExport(command, io, host, runtime.history ?? {});
     case "open":
       return runOpen(command, io, host, runtime);
+    case "history":
+      return runHistoryCommand(command, io, host, runtime.history ?? {});
     case "doctor":
       return runDoctorCommand(command, io, host, doctorRuntime(runtime));
   }

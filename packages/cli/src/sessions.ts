@@ -33,9 +33,14 @@ export interface HostContext {
   readonly cwd: string;
 }
 
-/** A problem that does not stop the command. The message shows only what the user typed. */
+/**
+ * A problem that does not stop the command. The message shows only what the user typed, or
+ * core's path-free reason (`history-unavailable`: the history store is there but cannot be read
+ * in this Node, so the sessions only it holds are not listed; `history-not-recorded`: recording
+ * is on, but `open` cannot record in this run).
+ */
 export interface CliWarning {
-  readonly code: "config-dir-unavailable";
+  readonly code: "config-dir-unavailable" | "history-unavailable" | "history-not-recorded";
   readonly message: string;
 }
 

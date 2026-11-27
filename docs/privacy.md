@@ -109,14 +109,44 @@ replay that session, because it keeps no record of its own (next section).
 
 ## History store (#25)
 
-**Built in core, not used by any command yet.** `@orbitrace/core/node` has a history store that
-keeps a copy of your sessions so they outlive Claude Code's cleanup. No host (the CLI, the editor
-extension, the app) calls it, so today nothing is recorded; the statement under
-[What Orbitrace stores](#what-orbitrace-stores) still describes every command. Recording is
-opt-in: nothing is written unless a program opens the store for writing and asks it to copy
-sessions. How it works is in [architecture.md](architecture.md#history-store-25).
+**Off by default.** `@orbitrace/core/node` has a history store that keeps a copy of your
+sessions so they outlive Claude Code's cleanup. The `orbitrace` command can use it since #195;
+the editor extension and the app do not yet. Nothing is recorded until you turn it on or ask for
+a copy. How it works is in [architecture.md](architecture.md#history-store-25); the commands are
+in [cli.md](cli.md#orbitrace-history).
 
-What it would store, once a host turns it on:
+### Turning it on and off
+
+- `orbitrace history enable` turns recording on. It writes one small file, `settings.json`
+  (`{ "settings": 1, "historyRecording": true }`, readable by your account only), in the data
+  folder below. `orbitrace history disable` turns it off again; what is already stored stays.
+  `disable` also stops an `orbitrace open` that is already running before its next copy: `open`
+  reads the settings file again before each copy. Turning recording on again takes effect the
+  next time `open` starts. `orbitrace history status` says which it is.
+- While recording is off, no command creates the data folder, the settings file or the store,
+  except `orbitrace history enable` and `orbitrace history ingest`. A test runs every command with
+  recording off and checks that nothing was created.
+- History needs Node 22.13 or later (`node:sqlite`). On Node 20 the `history` commands that read
+  or write the store say so and exit with 13; nothing is recorded or read. `disable`, `where` and
+  `delete --all` need no `node:sqlite` and work on every Node, so turning recording off and
+  deleting a store made on another Node always work.
+
+### When it copies
+
+- With recording on, only while `orbitrace open` runs: every session once when it starts, and a
+  session you are viewing again about 2 seconds after it changes. The copy runs in a background
+  thread of that process and stops when you stop `open`. There is no daemon and no timer: when no
+  `orbitrace open` runs, nothing is copied.
+- `orbitrace history ingest` copies every session it finds once, now, whether recording is on or
+  off.
+- Each copy adds only the lines written since the last one. A last line Claude Code is still
+  writing is left for the next copy, unless the session has ended (its live status is `ended` and
+  nothing was written for a minute); then it is stored once as it is.
+- A session kept only in the store is listed by `orbitrace list` (marked `history`) and can be
+  exported and opened. Its replay goes through the same export as any other session and holds
+  structure only, as described under [What a shared replay contains](#what-a-shared-replay-contains).
+
+What it stores:
 
 - Each line of each session's main transcript and subagent transcripts, as JSON text after
   redaction (below), and each subagent's meta file, also redacted. That is your content (prompts,
@@ -130,8 +160,8 @@ What it would store, once a host turns it on:
 Where and how:
 
 - In `ORBITRACE_DATA_DIR` if set (an absolute path), otherwise in `.orbitrace` in your home folder:
-  `history.sqlite`, SQLite's `history.sqlite-wal` and `history.sqlite-shm`, and `history.lock`
-  while a writer runs.
+  `history.sqlite`, SQLite's `history.sqlite-wal` and `history.sqlite-shm`, `history.lock`
+  while a writer runs, and `settings.json` once you have run `orbitrace history enable`.
 - The folder is set to 0700 and the files to 0600 (your account only). On Windows, Node cannot set
   these and the folder's inherited permissions apply.
 - It refuses a folder inside a git working tree (so it cannot end up in a commit) or inside a
@@ -190,6 +220,13 @@ It can also replace harmless text that looks like a secret (for example a type a
 `password: string`).
 
 ### Deleting
+
+From the command line: `orbitrace history delete <session-key>` deletes one stored session and
+`orbitrace history delete --all` deletes the whole store. Both ask first on a terminal and need
+`--yes` anywhere else. `orbitrace history where` prints the folder. Deleting the store keeps the
+settings file, so recording stays on if it was on; turn it off with `orbitrace history disable`
+first, and a running `orbitrace open` copies nothing more, so it does not start a new store.
+Underneath:
 
 - One session: `deleteSession` removes its rows with SQLite's `secure_delete` on, so its pages are
   overwritten with zeros, then empties the WAL file, **but only when no reader has the store open

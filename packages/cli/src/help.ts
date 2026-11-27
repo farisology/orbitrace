@@ -47,6 +47,16 @@ export function mainHelpText(): string {
 export function commandHelpText(name: CommandName): string {
   const spec = COMMANDS[name];
   const lines = [spec.summary, "", "Usage:", `  ${spec.usage}`];
+  if (spec.subcommands !== undefined) {
+    lines.push(
+      "",
+      "Commands:",
+      ...table(spec.subcommands.map((sub) => [sub.name, sub.summary] as const)),
+      "",
+      "Usage of each:",
+      ...spec.subcommands.map((sub) => `  ${sub.usage}`),
+    );
+  }
   if (spec.arguments.length > 0) {
     lines.push(
       "",
@@ -80,12 +90,39 @@ export function commandHelpText(name: CommandName): string {
       "The server listens on 127.0.0.1 only and runs until Ctrl+C. The link holds a token for",
       "this run: anyone with it can read your sessions while the server runs, so do not share it.",
       "Without --json the link is the only line on stdout.",
+      "",
+      "When history recording is on ('orbitrace history enable'), it also copies sessions into",
+      "the history store in a background thread while it runs, and stops when the server stops.",
+    );
+  }
+  if (name === "list" || name === "export" || name === "open") {
+    lines.push(
+      "",
+      "Sessions that are only in the history store (their transcripts are gone) are listed too,",
+      "marked as history, and can be exported and opened like the others.",
+    );
+  }
+  if (name === "history") {
+    lines.push(
+      "",
+      "History is off by default. 'enable' writes a small settings file in the data folder;",
+      "from then on 'orbitrace open' copies sessions into the store in a background thread when",
+      "it starts and when a session it shows changes. 'disable' also stops a running 'open'",
+      "before its next copy. 'ingest' copies them once, now. While recording is off, no command",
+      "except 'enable' and 'ingest' creates the data folder or the store. The store keeps your",
+      "content (prompts, replies, tool inputs and outputs) with known secret formats redacted:",
+      "treat it as being as sensitive as the transcripts.",
+      "",
+      "The data folder is ORBITRACE_DATA_DIR when set (an absolute path), otherwise .orbitrace in",
+      "your home folder. History needs Node 22.13 or later; on an older Node 'disable', 'where'",
+      "and 'delete --all' still work, and the other history commands exit with",
+      "13 (history-unavailable). The codes are listed in docs/cli.md.",
     );
   }
   if (name === "doctor") {
     lines.push(
       "",
-      "Reads only: no file is written, no folder created, no database opened. Each check reports",
+      "Reads only: no file is written, no folder created, no database file opened. Each check reports",
       "ok, warn, fail or skipped with a stable code, a one-line message and, for warn and fail, a",
       "fix to run. Exits with 0 when no check failed and with 12 (doctor-failed) when one did; the",
       "report goes to stdout either way. Folder paths show your home folder as ~. The codes and",
@@ -119,6 +156,16 @@ function commandJson(spec: CommandSpec): Record<string, unknown> {
       multiple: option.multiple === true,
       description: option.description,
     })),
+    ...(spec.subcommands === undefined
+      ? {}
+      : {
+          subcommands: spec.subcommands.map((sub) => ({
+            name: sub.name,
+            usage: sub.usage,
+            summary: sub.summary,
+            options: ["--json", ...sub.options.map((option) => `--${option}`)],
+          })),
+        }),
   };
 }
 

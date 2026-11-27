@@ -5,7 +5,7 @@
  *
  * Opt-in by design. Importing this module does nothing. Nothing is written until a caller opens a
  * store with `mode: "write"` (which creates the folder and the file) and calls `ingestHistory`.
- * No host calls either yet.
+ * The CLI does so only after the user turned recording on or asked for an ingest (#195).
  *
  * Schema version 1 (`PRAGMA user_version`), one table per level:
  * - `sessions`: one row per session key (`SessionRef.key`), with the runtime, the runtime's
@@ -33,6 +33,7 @@
 import { closeSync, existsSync, openSync, rmdirSync, statSync, unlinkSync } from "node:fs";
 import type { RawSubagentInput, RawSubagentMeta, SessionInput } from "../model/raw.js";
 import { RUNTIME_IDS, type RuntimeId } from "../model/sources.js";
+import { claudeCodeSubagentFileName } from "../sources/claude-code/adapter.js";
 import type { ProcessAliveCheck } from "../sources/claude-code/registry.js";
 import { sqliteEngine, type SqlDatabase, type SqlStatement, type SqlValue } from "./engine.js";
 import { HistoryStoreError } from "./errors.js";
@@ -237,11 +238,6 @@ function str(value: SqlValue | undefined): string | null {
 
 function isRuntimeId(value: string | null): value is RuntimeId {
   return value !== null && (RUNTIME_IDS as readonly string[]).includes(value);
-}
-
-/** Sort key of a subagent, as the Claude Code adapter sorts its files. */
-function subagentFileName(agentId: string): string {
-  return `agent-${agentId}.jsonl`;
 }
 
 function parseMeta(text: string | null): RawSubagentMeta | null {
@@ -525,9 +521,10 @@ export class SqliteHistoryStore implements HistoryStore {
         lines: linesOf(fileId),
       });
     }
+    // Sorted by file name, as the Claude Code adapter sorts its files.
     subagents.sort((a, b) => {
-      const x = subagentFileName(a.agentId);
-      const y = subagentFileName(b.agentId);
+      const x = claudeCodeSubagentFileName(a.agentId);
+      const y = claudeCodeSubagentFileName(b.agentId);
       return x < y ? -1 : x > y ? 1 : 0;
     });
     return { main, subagents };

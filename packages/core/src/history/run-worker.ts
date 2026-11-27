@@ -13,7 +13,9 @@
  *
  * The caller passes the worker file's location as `workerUrl`. There is no default: a bundler moves
  * this module away from the worker file, and the CommonJS bundle of the editor extension has no
- * `import.meta.url` to find it by. See docs/architecture.md.
+ * `import.meta.url` to find it by. The entry is the package export `@orbitrace/core/history-worker`
+ * (#188); the CLI bundles it as `dist/history-worker.js` beside its own bundle. See
+ * docs/architecture.md.
  *
  * Node only. Exported from `@orbitrace/core/node` through `history/index.ts`.
  */
@@ -47,8 +49,15 @@ export interface HistoryWorkerOptions {
   readonly onProgress?: (progress: HistoryIngestProgress) => void;
   /** Terminates the worker. Committed lines stay; the promise rejects with `aborted`. */
   readonly signal?: AbortSignal;
-  /** For tests only: the worker blocks once it holds the lock, until it is terminated. */
-  readonly testHooks?: { readonly blockAfterLock?: boolean };
+}
+
+/**
+ * Hooks for core's own tests. Internal: not part of `HistoryWorkerOptions` and not exported from
+ * `@orbitrace/core/node`; tests reach them through `runHistoryIngestWorkerWithTestHooks`.
+ */
+export interface HistoryWorkerTestHooks {
+  /** The worker blocks once it holds the lock, until it is terminated. */
+  readonly blockAfterLock?: boolean;
 }
 
 function unlinkQuietly(file: string): void {
@@ -96,6 +105,18 @@ export function runHistoryIngestWorker(
   request: HistoryIngestRequest,
   options: HistoryWorkerOptions,
 ): Promise<HistoryIngestResult> {
+  return runHistoryIngestWorkerWithTestHooks(request, options, undefined);
+}
+
+/**
+ * `runHistoryIngestWorker` with core's test hooks. Internal: for core's own tests only, not
+ * exported from `@orbitrace/core/node`.
+ */
+export function runHistoryIngestWorkerWithTestHooks(
+  request: HistoryIngestRequest,
+  options: HistoryWorkerOptions,
+  testHooks: HistoryWorkerTestHooks | undefined,
+): Promise<HistoryIngestResult> {
   return new Promise((resolve, reject) => {
     if (options.signal?.aborted === true) {
       reject(new HistoryStoreError("aborted", "The history ingest was stopped."));
@@ -106,7 +127,7 @@ export function runHistoryIngestWorker(
       kind: HISTORY_WORKER_KIND,
       request,
       lockToken: token,
-      ...(options.testHooks?.blockAfterLock === true ? { testBlockAfterLock: true } : {}),
+      ...(testHooks?.blockAfterLock === true ? { testBlockAfterLock: true } : {}),
       ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }),
       ...(options.lockWaitMs === undefined ? {} : { lockWaitMs: options.lockWaitMs }),
       ...(options.batchLines === undefined ? {} : { batchLines: options.batchLines }),

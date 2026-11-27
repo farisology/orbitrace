@@ -9,6 +9,14 @@ import type { HistoryIngestProgress, HistoryIngestRequest, HistoryIngestResult }
 /** Marks `workerData` meant for the history worker. */
 export const HISTORY_WORKER_KIND = "orbitrace-history-ingest" as const;
 
+/**
+ * The package export of the worker entry (#188): `@orbitrace/core/history-worker`, which is
+ * `dist/history/worker.js`. A host bundler takes it as a separate entry point and ships the
+ * output as its own file beside the host bundle (never inlined: a worker is started from a file),
+ * then passes that file's URL to `runHistoryIngestWorker` as `workerUrl`.
+ */
+export const HISTORY_WORKER_EXPORT = "@orbitrace/core/history-worker" as const;
+
 /** The `workerData` the worker entry expects. */
 export interface HistoryWorkerData {
   readonly kind: typeof HISTORY_WORKER_KIND;

@@ -9,6 +9,7 @@ import { claudeCodeAdapter, ingestHistory, openHistoryStore } from "../../src/so
 import {
   copyAllFixtures,
   directLineCount,
+  DIST_INGEST,
   DIST_NODE_ENTRY,
   requireDist,
   sandboxSessions,
@@ -32,18 +33,19 @@ describe.skipIf(!SQLITE_AVAILABLE)(`history writer killed mid-transaction${SKIP_
     const script = `
         const { writeSync } = await import("node:fs");
         const core = await import(${JSON.stringify(pathToFileURL(DIST_NODE_ENTRY).href)});
+        // The test hooks are internal: not on @orbitrace/core/node, only in the ingest module.
+        const internal = await import(${JSON.stringify(pathToFileURL(DIST_INGEST).href)});
         const root = JSON.parse(process.argv[1]);
         const store = await core.openHistoryStore({ mode: "write" });
         let commits = 0;
-        await core.ingestHistory(store, { roots: [root] }, {
-          batchLines: 40,
-          testHooks: { beforeCommit() {
+        await internal.ingestHistoryWithTestHooks(store, { roots: [root] }, { batchLines: 40 }, {
+          beforeCommit() {
             commits += 1;
             if (commits === 3) {
               writeSync(1, "inside-transaction\\n");
               Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
             }
-          } },
+          },
         });
         writeSync(1, "finished\\n");
       `;

@@ -11,13 +11,19 @@
 //    dependency cannot ship without its licence being reviewed and noted (see NOTICE at the
 //    repository root);
 // 3. copies the built web app into dist/app (scripts/copy-app.mjs), and fails when its script
-//    bundles have no THIRD-PARTY-NOTICES.txt beside them (#143).
+//    bundles have no THIRD-PARTY-NOTICES.txt beside them (#143);
+// 4. bundles the history ingest worker of @orbitrace/core (its package export
+//    `@orbitrace/core/history-worker`, #188) as a second, separate file, dist/history-worker.js,
+//    beside dist/index.js. A worker thread is started from a file, so it must never be inlined
+//    into dist/index.js; the command finds it next to itself (#195). The same third-party check
+//    covers it.
 //
 // The workspace build runs @orbitrace/core and @orbitrace/app before this package, because the
 // CLI lists both as devDependencies (scripts/run-workspaces.mjs orders by that). esbuild
 // resolves @orbitrace/core through its package exports, that is from packages/core/dist.
 
 import { chmodSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
@@ -25,20 +31,49 @@ import { copyAppBundle, noticesProblem } from "./copy-app.mjs";
 
 const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** The one JavaScript file the build writes, relative to the package folder. */
+/** The command's JavaScript file, relative to the package folder. */
 export const BUNDLE_FILE = "dist/index.js";
 
+/** The history worker's file, beside the command (#188, #195), relative to the package folder. */
+export const WORKER_FILE = "dist/history-worker.js";
+
+/** The package export of core's history worker entry (core's `HISTORY_WORKER_EXPORT`). */
+export const WORKER_EXPORT = "@orbitrace/core/history-worker";
+
 /**
- * The esbuild options for the command, for a package folder.
+ * The file core's worker export resolves to from a package folder, through core's package
+ * exports, as Node resolves it (symbolic links followed, so a workspace package is reported by
+ * its real path and not counted as third-party).
  * @param {string} dir the package folder
+ * @returns {string}
+ */
+export function resolveWorkerEntry(dir) {
+  try {
+    return createRequire(join(dir, "package.json")).resolve(WORKER_EXPORT);
+  } catch {
+    throw new Error(
+      `${WORKER_EXPORT} was not found. Build @orbitrace/core first (npm run build at the repository root).`,
+    );
+  }
+}
+
+/**
+ * The esbuild options for the command, for a package folder: two entry points, the command and
+ * the history worker, written as two separate files with no code shared between them.
+ * @param {string} dir the package folder
+ * @param {string} workerEntry the worker's entry file (`resolveWorkerEntry`)
  * @returns {import("esbuild").BuildOptions & { metafile: true }}
  */
-export function esbuildOptions(dir) {
+export function esbuildOptions(dir, workerEntry) {
   return {
     absWorkingDir: dir,
-    entryPoints: [join(dir, "src", "index.ts")],
-    outfile: join(dir, BUNDLE_FILE),
+    entryPoints: [
+      { in: join(dir, "src", "index.ts"), out: "index" },
+      { in: workerEntry, out: "history-worker" },
+    ],
+    outdir: join(dir, "dist"),
     bundle: true,
+    splitting: false,
     platform: "node",
     format: "esm",
     // engines.node of this package is >=20.
@@ -82,13 +117,16 @@ export function bundledWorkspaces(metafile) {
 }
 
 /**
- * Bundle the command, check what went into it, make it executable and copy the web app.
+ * Bundle the command and its history worker, check what went into them, make the command
+ * executable and copy the web app.
  * @param {string} dir the package folder
+ * @param {{ workerEntry?: string }} [options] the worker's entry file; default `resolveWorkerEntry(dir)`
  * @returns {Promise<{ workspaces: string[], appFiles: number }>}
  */
-export async function buildCli(dir) {
+export async function buildCli(dir, options = {}) {
+  const workerEntry = options.workerEntry ?? resolveWorkerEntry(dir);
   rmSync(join(dir, "dist"), { recursive: true, force: true });
-  const result = await build(esbuildOptions(dir));
+  const result = await build(esbuildOptions(dir, workerEntry));
   const thirdParty = thirdPartyInputs(result.metafile);
   if (thirdParty.length > 0) {
     throw new Error(
@@ -106,7 +144,7 @@ async function main() {
   try {
     const { workspaces, appFiles } = await buildCli(packageDir);
     console.log(
-      `build: bundled ${BUNDLE_FILE} (${workspaces.join(", ")}) and copied ${appFiles} app file(s)`,
+      `build: bundled ${BUNDLE_FILE} and ${WORKER_FILE} (${workspaces.join(", ")}) and copied ${appFiles} app file(s)`,
     );
   } catch (error) {
     console.error(`build: ${error instanceof Error ? error.message : String(error)}`);
