@@ -1,28 +1,34 @@
 # Architecture
 
 Orbitrace reads the transcripts Claude Code already writes and replays a session as an orrery:
-the main agent in the centre, subagents in orbit, tool calls around them.
+the main agent in the centre, subagents in orbit, tool calls around them. Orbitrace is an
+independent project and is not affiliated with Anthropic.
 
-This page describes the package boundaries, the data flow, and which interface each ticket
-implements. Ticket #2 wrote the interfaces. Most of what they describe is not built yet; each
-section says what exists.
+This page describes the package boundaries, the data flow, where each piece lives and which
+ticket built it. Ticket #2 wrote the contract; the parser, source resolution, the replay
+builder, export, the renderer, the app, the editor extension and the command line with its
+loopback server are built on `dev`. What is not built is listed in [Not built yet](#not-built-yet).
+Nothing is published to npm or a marketplace; see [getting-started.md](getting-started.md).
 
 ## Packages
 
-| Package               | Folder              | Role                                                                                      | Depends on                          |
-| --------------------- | ------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------- |
-| `@orbitrace/core`     | `packages/core`     | Raw and parsed types, replay model and schema, source adapters, parser, builder, export.  | nothing                             |
-| `@orbitrace/renderer` | `packages/renderer` | Framework-free Canvas 2D engine that draws one replay model.                              | core (types only)                   |
-| `@orbitrace/app`      | `packages/app`      | React and Vite shell: inspector, timeline, controls, feed. Hosts the renderer.            | core (types), renderer (later)      |
-| `orbitrace-vscode`    | `packages/vscode`   | Editor extension: opens the app in an editor tab and serves it over the host transport.   | nothing yet                         |
-| `orbitrace`           | `packages/cli`      | Command line: lists sessions, opens the app in a browser over a loopback server, exports. | core; app and renderer (dev, types) |
+| Package               | Folder              | Role                                                                                                                                                                                                                                                                       | Depends on at run time                                                                                                                                         |
+| --------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@orbitrace/core`     | `packages/core`     | Raw, parsed and replay types; the replay v1 schema; the parser, source resolution, the replay builder and feed, export and validation. The Node-only parts (the Claude Code adapter, its file watcher and the session replayer) are on the `@orbitrace/core/node` subpath. | nothing (Ajv is a dev dependency)                                                                                                                              |
+| `@orbitrace/renderer` | `packages/renderer` | Framework-free Canvas 2D engine that draws one replay model: `createOrrery`, and `createOrreryWithEnvironment` for an injected frame scheduler, pixel ratio and sprite surfaces.                                                                                           | core (`toRealSeconds`, `KNOWN_MODEL_FAMILIES`, types)                                                                                                          |
+| `@orbitrace/app`      | `packages/app`      | React and Vite shell: orrery, inspector, timeline, controls, event feed and session picker. Talks to its host only through `HostTransport`. Private.                                                                                                                       | core (`parseSession`, `buildReplay`, `validateReplay`, `describeReplayProblems`, `replayFeed`, `toRealSeconds`); renderer (`createOrrery`)                     |
+| `@orbitrace/fixtures` | `packages/fixtures` | Seeded generator of synthetic transcripts, the paths of the files in `fixtures/`, and the golden replay files. Used by tests and for the demo. Private.                                                                                                                    | core                                                                                                                                                           |
+| `orbitrace-vscode`    | `packages/vscode`   | Editor extension: a Sessions view, four commands and one editor tab per session, answered by the editor side of `HostTransport`. Private.                                                                                                                                  | core, bundled into `dist/extension.js`; the built app, copied into `dist/app` (both are devDependencies, see [below](#how-the-extension-ships-the-web-app-87)) |
+| `orbitrace`           | `packages/cli`      | Command line: `list`, `export` and `open`; `open` serves the app over a loopback server. Private.                                                                                                                                                                          | core; the built app, copied into `dist/app` (a devDependency, see [below](#how-the-cli-ships-the-web-app-76))                                                  |
 
 Rules:
 
-- `core` has no editor dependency and no DOM dependency. Its interfaces use only ES2022 types,
-  so a dropped file in a browser and a file read in Node go through the same parser.
+- `core` has no editor dependency. Its main entry has no Node or DOM dependency and uses only
+  ES2022 types, so a dropped file in a browser and a file read in Node go through the same
+  parser. See [The two entries of core](#the-two-entries-of-core).
 - `renderer` has no framework dependency. It reads nothing but the replay model it is given.
-- `app` never reads files. It talks to its host only through `HostTransport`.
+- `app` never reads files from disk. It talks to its host only through `HostTransport`. A file
+  the user drops or picks is read inside the page.
 - Only a `ReplayModel`, `SessionSummary` values and path-free `{ code, message }` errors cross
   from a host to the app. Raw lines, parsed sessions, paths and locators stay on the host side,
   inside the session replayer from `@orbitrace/core/node` (#75).
@@ -30,90 +36,173 @@ Rules:
 ## Data flow
 
 ```text
-files on disk / dropped file
-        |
-        |  SourceAdapter.resolveRoots, listSessions, openSession        (#7)
-        v
-SessionInput            raw lines + subagent meta              core/src/model/raw.ts
+files on disk (host side)                                dropped or picked file (in the app)
+        |                                                          |
+        |  SourceAdapter.resolveRoots, listSessions,               |  .jsonl: whole text as one item
+        |  openSession, watchSession                  (#7, #74)    |  .replay.json: validateReplay
+        v                                                          v
+SessionInput            raw lines + subagent meta           core/src/model/raw.ts
         |
         |  parseSession                                                 (#6)
         v
-ParsedSession           merged replies, paired calls,          core/src/model/parsed.ts
+ParsedSession           merged replies, paired calls,       core/src/model/parsed.ts
         |               linked subagent runs, line counts
         |  buildReplay                                                  (#8)
         v
-ReplayModel v1          structure only, schema-checked         core/src/model/replay.ts
-        |                                                              core/schema/replay-v1.schema.json
-        +--> exportReplay -> .replay.json                               (#18)
+ReplayModel v1          structure only, schema-checked      core/src/model/replay.ts
+        |                                                   core/schema/replay-v1.schema.json
+        +--> exportReplay -> orbitrace.replay.json                      (#18)
         |
-        +--> HostTransport (editor messages or loopback HTTP)           (#11, #12, #16)
+        +--> HostTransport: editor messages (#12) or loopback HTTP (#17)
                  |
                  v
              app  --setModel / updateModel / setTime-->  renderer (OrreryHandle)  (#11, #10)
 ```
+
+On the host side, the session replayer from `@orbitrace/core/node` (#75) runs the chain from
+`openSession` to the schema check, so the editor extension and the command line build replays
+the same way.
 
 Each arrow narrows the data. `SessionInput` can hold any user content, because it is the raw
 transcript. `ParsedSession` keeps local ids (session id, runtime agent ids, tool use ids) so runs
 can be linked, but no text, inputs, outputs, paths, branch, title or subagent description.
 `ReplayModel` keeps no ids from the runtime at all.
 
-## Interfaces and who implements them
+## The two entries of core
 
-All core interfaces are exported from `@orbitrace/core`. Renderer types are exported from
-`@orbitrace/renderer`. The transport messages (`TransportRequest`, `TransportMessage`) are defined in
-core (`core/src/model/transport.ts`), with `TransportErrorCode` (`core/src/model/errors.ts`) and
-the shared request checks and wire layout (`core/src/protocol/`); `@orbitrace/app/transport`
-re-exports the message types beside `HostTransport`.
+- `@orbitrace/core` (`dist/index.js`) is browser-safe: nothing reachable from it imports a Node
+  module. The app uses it in the browser and in the editor webview.
+- `@orbitrace/core/node` maps through the `exports` field of `packages/core/package.json`
+  (`./node`) to `dist/sources/node.js`. It holds the Claude Code adapter (#7), the session file
+  watcher behind `watchSession` (#74), the session replayer (`createSessionReplayer`,
+  `createNodeSessionReplayer`, #75) and `nodeResolveContext`. Hosts (the CLI, the editor
+  extension) import these from here and everything else from `@orbitrace/core`. The replayer's
+  update types (`SessionReplayUpdate`, `SessionReplayListener`) are also exported from the main
+  entry, as types only (#84).
+- The main entry must stay free of Node imports. Two tests guard this:
+  `packages/core/test/sources/entry-points.test.ts` walks the imports of `src/index.ts` and
+  checks which entry exports what, and `packages/fixtures/test/generator.test.ts` checks that the
+  generator and the core files it reaches have no Node import. The TypeScript configuration does
+  not enforce the split yet (#72).
 
-| Ticket | Implements                                                                                  | Against                                                                                            | File                                                    |
-| ------ | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| #6     | `parseSession: ParseSession`                                                                | `SessionInput`, `RawLine`, `RawSubagentMeta` in; `ParsedSession` out                               | `core/src/api.ts`, `core/src/model/raw.ts`, `parsed.ts` |
-| #7     | Claude Code `SourceAdapter`; `resolveSources: ResolveSources`; `listSessions: ListSessions` | `SourceRoot`, `SessionRef`, `ResolveRootsContext`, `RawLiveRegistryEntry`                          | `core/src/model/sources.ts`, `core/src/api.ts`          |
-| #8     | `buildReplay: BuildReplay`                                                                  | `ParsedSession` in; `ReplayModel` out; `BuildReplayOptions`, `REPLAY_BUILD_DEFAULTS`               | `core/src/api.ts`, `core/src/model/replay.ts`           |
-| #9     | Synthetic transcript and replay fixtures                                                    | `RawLine` and `RawSubagentMeta` shapes; replays must validate against the v1 schema                | `fixtures/`                                             |
-| #10    | `createOrrery: CreateOrrery`                                                                | `OrreryHandle`, `OrreryOptions`, `OrreryEvents`; draws a `ReplayModel`                             | `renderer/src/api.ts`                                   |
-| #11    | The app, coded against `HostTransport`                                                      | `HostTransport`, `LiveUpdate`, `TransportError`; drives `OrreryHandle`                             | `app/src/transport.ts`                                  |
-| #12    | The editor side of `HostTransport`                                                          | `TransportRequest` in, `TransportMessage` out; uses `SourceAdapter`, `parseSession`, `buildReplay` | `core/src/model/transport.ts`                           |
-| #16    | The browser side of `HostTransport` (loopback server) and commands                          | `HostTransport` semantics over HTTP; uses the core functions                                       | `app/src/transport.ts`, `core/src/api.ts`               |
-| #18    | `exportReplay: ExportReplay`, `validateReplay: ValidateReplay`                              | `ReplayModel`, `ExportOptions`, `ExportResult`; the v1 schema                                      | `core/src/api.ts`, `core/schema/replay-v1.schema.json`  |
+## Where each piece lives
 
-Each implementing ticket exports a value of the given type, for example
-`export const parseSession: ParseSession = async (input) => { ... }`, and re-exports it from the
-package entry. `CoreApi` in `core/src/api.ts` lists the whole core surface.
+Core functions are exported from `@orbitrace/core` unless the table says
+`@orbitrace/core/node`. Renderer types and functions are exported from `@orbitrace/renderer`.
+The transport messages (`TransportRequest`, `TransportMessage`) are defined in core
+(`core/src/model/transport.ts`), with `TransportErrorCode` (`core/src/model/errors.ts`) and the
+wire layout (meta tag names, fragment parameters, routes, request and message checks,
+`core/src/protocol/`) (#96). `@orbitrace/app/transport` exports `HostTransport`, `LiveUpdate` and
+`TransportError` and re-exports the message types and `TransportErrorCode`; `@orbitrace/app`
+re-exports the wire layout.
 
-Notes for implementers:
+| Ticket | What                                                                                                           | Where                                                                     |
+| ------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| #2     | The contract: types, constants, the replay v1 schema, `minimal.replay.json`                                    | `core/src/model/`, `core/src/api.ts`, `core/schema/replay-v1.schema.json` |
+| #6     | `parseSession`                                                                                                 | `core/src/parser/`                                                        |
+| #7     | `resolveSources`, `listSessions`; the Claude Code adapter (`@orbitrace/core/node`)                             | `core/src/sources/`                                                       |
+| #8     | `buildReplay`, `replayFeed`, `DEFAULT_REPLY_PADDING_SECONDS`                                                   | `core/src/replay/`                                                        |
+| #9     | Fixture generator and committed fixtures                                                                       | `packages/fixtures`, `fixtures/`                                          |
+| #10    | `createOrrery`, `createOrreryWithEnvironment`                                                                  | `packages/renderer`                                                       |
+| #11    | The app, coded against `HostTransport`; the no-host transport (`createNoHostTransport`, `createDemoTransport`) | `packages/app`                                                            |
+| #12    | The editor side of `HostTransport`: the message host                                                           | `packages/vscode/src/message-host.ts`                                     |
+| #16    | The `orbitrace` commands                                                                                       | `packages/cli/src/`                                                       |
+| #17    | The loopback server and its routes                                                                             | `packages/cli/src/server/`                                                |
+| #18    | `exportReplay`, `validateReplay`, `describeReplayProblems`, `assertReplay`                                     | `core/src/export/`                                                        |
+| #71    | `toRealSeconds`                                                                                                | `core/src/replay/real-time.ts`                                            |
+| #73    | Golden replay files and their test, moved out of core                                                          | `packages/fixtures`, `fixtures/replays/`                                  |
+| #74    | `watchSession` of the Claude Code adapter and `watchSessionFiles` (`@orbitrace/core/node`)                     | `core/src/sources/claude-code/watch.ts`, `adapter.ts`                     |
+| #75    | `findSessionByKey`; the session replayer (`@orbitrace/core/node`)                                              | `core/src/sources/index.ts`, `core/src/host/session-replayer.ts`          |
+| #85    | The wire layout shared by the app and both hosts                                                               | exported as `@orbitrace/app`                                              |
+| #87    | How the extension ships the web app                                                                            | `packages/vscode/scripts/`                                                |
+| #96    | One host protocol and one set of display formatters, shared from core                                          | `core/src/model/transport.ts`, `core/src/protocol/`, `core/src/format/`   |
 
-- #6: a transcript line whose `type` is not known is still a valid `RawLine`. Skip it and count
-  it in `ParsedSession.lines.unknownByType`. Merge assistant lines by `message.id`: take the
-  maximum of each usage field and the union of `tool_use` blocks by block id. Keeping only the
-  first line per message id undercounts tool calls.
-- #7: root resolution order is user setting, `CLAUDE_CONFIG_DIR`, per-OS default, opt-in extra
-  roots, hook paths. A dropped file is always accepted (`resolvedBy: "dropped-file"`). The live
-  registry is undocumented; treat it as optional and check that its process is alive.
-- #8: agent ids in a replay are `main`, `a1`, `a2`, ... in the order of the parent `Agent` call
-  (see [Agent ids](replay-format.md#agent-ids)). With `BuildReplayOptions.previous`, the
-  [append-stability rules](replay-format.md#append-stability-live-view) must hold. `family` is the
+`CoreApi` in `core/src/api.ts` lists the function signatures of the core surface.
+
+### Contract notes
+
+- Parser (#6): a transcript line whose `type` is not known is still a valid `RawLine`. It is
+  skipped and counted in `ParsedSession.lines.unknownByType`. Blank lines are skipped and not
+  counted; lines that are not a JSON object are counted as `malformed`. Assistant lines are
+  merged by `message.id`: the maximum of each usage field and the union of `tool_use` blocks by
+  block id.
+- Sources (#7): root resolution order is user setting, `CLAUDE_CONFIG_DIR`, per-OS default,
+  opt-in extra roots, hook paths (`SOURCE_RESOLUTIONS` in `core/src/model/sources.ts`). A
+  dropped file is not a source root and has no `resolvedBy` value: it bypasses source resolution
+  and is parsed by the app. The live registry is undocumented; the adapter treats it as optional
+  and checks that its process is alive.
+- Builder (#8): agent ids in a replay are `main`, `a1`, `a2`, ... in the order of the parent
+  `Agent` call (see [Agent ids](replay-format.md#agent-ids)). With `BuildReplayOptions.previous`,
+  the [append-stability rules](replay-format.md#append-stability-live-view) hold. `family` is the
   derived word even when the renderer does not know it. MCP tool names become `mcp:<server>`. The
-  rules in [replay-format.md](replay-format.md#rules-the-schema-cannot-express) must hold.
-- #10: the host owns the clock. The renderer never advances replay time on its own; the host
-  calls `setTime` every frame while playing. `play`, `pause` and `setSpeed` only control motion
-  that is not tied to replay time. `setModel` loads a different replay and clears selection and
-  per-agent state; `updateModel` takes a newer snapshot of the same session and keeps both, keyed
-  by agent id. Draw a `family` outside `KNOWN_MODEL_FAMILIES` as `unknown`.
-- #11: follow a live session with `subscribe` only. Its first update is the current state, then
-  each change; pass the first model to `setModel` and later ones to `updateModel`.
-- #12 and #16: each `subscribe` call is its own subscription. In editor messages the `subscribe`
-  request's `id` is the subscription id; `unsubscribe` takes `{ subscriptionId }`, and every `live`
-  message carries `subscriptionId` as well as `key`. Build replays with the session replayer from
-  `@orbitrace/core/node` (`createNodeSessionReplayer`, #75): `list` gives the session summaries,
-  `load` a one-off replay, and `follow` the snapshots of a watched session, each built with the
-  last one as `previous`. Its updates have the shape of `LiveUpdate`, and its errors carry a
-  `TransportErrorCode` with a path-free message.
-- #12 and #16: the HTTP route layout for the browser host is defined in
-  [Loopback server and routes](#loopback-server-and-routes-17) (lead's decision on #17). It
-  carries the same request and reply shapes as the editor messages.
-- #18: Ajv is a dev dependency of core today (used only by the schema test). Export will need a
-  validator at run time.
+  default `replyPaddingSeconds` is 3 (`DEFAULT_REPLY_PADDING_SECONDS`).
+- Renderer (#10): the host owns the clock. The renderer never advances replay time on its own;
+  the host calls `setTime` every frame while playing. `play`, `pause` and `setSpeed` only control
+  motion that is not tied to replay time. `setModel` loads a different replay and clears
+  selection and per-agent state; `updateModel` takes a newer snapshot of the same session and
+  keeps both, keyed by agent id. A `family` outside `KNOWN_MODEL_FAMILIES` is drawn as `unknown`.
+- App (#11): a session listed as live, or with an unknown status, is followed with `subscribe`;
+  its first update goes to `setModel` and later ones to `updateModel`. A session listed as ended
+  is read once with `loadReplay`.
+- Hosts (#12, #17): each `subscribe` call is its own subscription. In editor messages the
+  `subscribe` request's `id` is the subscription id; `unsubscribe` takes `{ subscriptionId }`, and
+  every `live` message carries `subscriptionId` as well as `key`. The loopback server carries the
+  same request and reply shapes over HTTP; see
+  [Loopback server and routes](#loopback-server-and-routes-17).
+
+## Session replayer and live updates (#75, #74)
+
+`createNodeSessionReplayer(options)` from `@orbitrace/core/node` returns a `SessionReplayer`
+over the Claude Code adapter and this process's roots (resolved again on every listing, so a
+config folder created after start-up is found). Both hosts use it.
+
+- `list` gives path-free `SessionSummary` values, newest first, and remembers each session.
+- `load(key)` builds one replay: `openSession`, `parseSession`, `buildReplay`, then the schema
+  check.
+- `follow(key, listener)` sends the current state, then a rebuilt replay after each change the
+  adapter's `watchSession` reports, each built with the last one as `previous`. Changes that
+  arrive during a build are merged into one more build. With an adapter that has no
+  `watchSession`, the current state is followed by `ended`.
+- Every failure becomes a `TransportErrorCode` (`not-found`, `unreadable`, `invalid`,
+  `internal`) with a fixed, path-free message.
+
+The Claude Code adapter's `watchSession` watches the folders of the main transcript, the
+session's `subagents/` folder and the live registry folder. The default mode, `auto`, uses
+`fs.watch` events and keeps a polling check every 5 s beside them, because on network drives and
+in some containers `fs.watch` starts without error and then reports nothing. A host that wants
+polling only (for example for sessions on a network drive) passes
+`adapters: [createClaudeCodeAdapter({ watch: { mode: "poll" } })]` to
+`createNodeSessionReplayer`. No core change is needed. Neither host offers this as a setting yet.
+
+## Export and validation (#18)
+
+`exportReplay` builds a new value from an allow-list of the replay fields, checks it against the
+replay v1 schema and writes JSON with keys in a fixed order. The file name is always
+`orbitrace.replay.json`. What export guarantees and what it does not is in
+[privacy.md](privacy.md#what-a-shared-replay-contains).
+
+Export and validation use a validator precompiled from the schema,
+`packages/core/src/export/replay-v1-validator.generated.ts`, made with Ajv's standalone code and
+the same options as the schema test (`strictTuples` off). So they need no Ajv, no schema file and
+no `new Function` at run time, and run in Node, a browser and an editor webview alike. Ajv stays a
+dev dependency. `test/export/validator-source.test.ts` fails when the generated file no longer
+matches the schema. To regenerate, from `packages/core`:
+
+```sh
+npx vitest run -u test/export/validator-source.test.ts
+```
+
+## Renderer commands (#10)
+
+Run from `packages/renderer`, after `npm run build` at the repository root:
+
+```sh
+npm run dev             # demo page with a synthetic session (Vite, 127.0.0.1)
+npm run bench:browser   # the demo benchmark in headless Chrome (CHROME_PATH to override)
+```
+
+`bench:browser` needs Node 22 or later (it uses the global `WebSocket`) and a Chrome or Chromium
+install. The renderer's own README describes the demo page parameters and the module layout.
 
 ## How the CLI ships the web app (#76)
 
@@ -126,7 +215,8 @@ Decision by the lead on #76: option (a). Implemented by #16.
 - `@orbitrace/app` stays a devDependency of the CLI. That is enough for
   `scripts/run-workspaces.mjs` to build the app before the CLI. The app does not need to be
   published or to export its build output.
-- `files` in `packages/cli/package.json` is `dist`, so the one published package carries the app.
+- `files` in `packages/cli/package.json` is `dist`, so a packed CLI carries the app. The package
+  is marked private and is not published yet.
 - At run time `appBundleDir()` (`packages/cli/src/app-bundle.ts`, compiled to
   `dist/app-bundle.js`) returns the `app/` folder beside it, or `null` when it holds no
   `index.html`. The loopback server (#17) serves from that folder. A test imports the built
@@ -135,6 +225,32 @@ Decision by the lead on #76: option (a). Implemented by #16.
 Option (b), publishing `@orbitrace/app` with its assets as a runtime dependency and resolving
 them with `import.meta.resolve`, was not chosen: it adds a second published package and an
 export for static files.
+
+## How the extension ships the web app (#87)
+
+The same approach as the CLI (decision on #76); the extension keeps its own copy step, because
+packages do not import each other's build scripts.
+
+- `@orbitrace/core` and `@orbitrace/app` are devDependencies of `orbitrace-vscode`, so
+  `scripts/run-workspaces.mjs` builds both before the extension.
+- `npm run build` in `packages/vscode` runs `scripts/build.mjs`: it syncs the copied assets
+  (the activity-bar icon and the licence), then esbuild bundles `src/extension.ts` with core into
+  one CommonJS file, `dist/extension.js`, for Node 20, with `vscode` external and no source maps.
+  Then `scripts/copy-app.mjs` copies the app's `dist` into `dist/app`, without `types/` and
+  without `*.map` files. It fails when the app's `index.html` is missing.
+- Each editor tab is a webview with `localResourceRoots` limited to `dist/app`. The page is the
+  app's `index.html` with a `<base href>` set to `asWebviewUri(dist/app)`, so the app's relative
+  asset URLs resolve, and the host meta tags: `orbitrace-host` = `editor`, and `orbitrace-session`
+  with the session key. The demo tab carries neither tag, so the app serves its bundled demo.
+- The page's Content-Security-Policy allows scripts, styles, images and fonts only from the
+  webview resource origin, with no inline script or style, and blocks every network request
+  (`connect-src 'none'`), frames, workers, objects and forms (`src/webview-html.ts`).
+- `test/build.test.ts` requires the built bundle in Node with a fake `vscode` module, activates
+  it, opens the demo tab and checks that the page carries the policy and the app's script. It
+  also checks that the bundle requires nothing but `vscode` and Node built-ins, holds no build
+  path, and that `dist/` has no type declarations or source maps.
+- `files` in `packages/vscode/package.json` limits a `.vsix` to `dist/extension.js`, `dist/app`,
+  `media`, `LICENSE` and `README.md`.
 
 ## Loopback server and routes (#17)
 
@@ -163,8 +279,9 @@ the address bar. Values are percent-encoded outside `A-Z a-z 0-9 - . _ ~ :`.
   error too: follow a session with `/api/live`. `unsubscribe` ends the `/api/live` stream whose
   `id` it names.
 - `/api/live` ends after an `ended` or `error` update. The client aborting the request is the
-  unsubscribe: the server stops following the session and stops its watch. While the Claude Code
-  adapter has no `watchSession`, every stream is the current state followed by `ended`.
+  unsubscribe: the server stops following the session and stops its watch. The CLI uses the
+  Claude Code adapter, whose `watchSession` reports changes, so a stream follows the session
+  until it is aborted or fails.
 - A request the server refuses before there is a `TransportMessage` gets a non-200 status and the
   JSON body `{ "error": { "code": <TransportErrorCode>, "message": "…" } }`, with fixed,
   path-free messages:
@@ -271,7 +388,8 @@ What the token does **not** protect against:
 Claude Code is the only runtime. To add one:
 
 1. Add its id to `RUNTIME_IDS` in `core/src/model/sources.ts` (`RuntimeId` is derived from it).
-2. Write a `SourceAdapter` for it that produces a `SessionInput`.
+2. Write a `SourceAdapter` for it that produces a `SessionInput`. Put it behind
+   `@orbitrace/core/node` if it reads files.
 3. If its transcript lines differ from Claude Code's, give it a parser that returns a
    `ParsedSession`.
 
@@ -279,7 +397,17 @@ Nothing in the replay model, the renderer, the app or the transport refers to a 
 
 ## Not built yet
 
-At the end of ticket #2 the repository has the contract only: types, constants, the replay v1
-schema, one synthetic replay fixture and tests for them. There is no parser, no source adapter,
-no replay builder, no renderer, no transport implementation and no export. The app still shows a
-placeholder page.
+- **Publishing.** No package is on npm, and the extension is not on the VS Code Marketplace or
+  Open VSX. `@orbitrace/app`, `@orbitrace/fixtures`, `orbitrace` and `orbitrace-vscode` are
+  marked private.
+- **A history record** that outlives Claude Code's cleanup. There is no database and nothing is
+  stored (issues #24 and #25).
+- **Hooks.** Core resolves roots from hook-reported transcript paths, but no host passes any.
+- **Host settings.** The extension has no settings: it reads `CLAUDE_CONFIG_DIR` or the default
+  config folder only, with no extra roots and no polling mode. The command line takes
+  `--config-dir` and `--extra-roots`.
+- **Opening a session in the browser from the editor.** The editor host answers `openInBrowser`
+  with `unsupported`.
+- **Export from the app or the extension.** Only `orbitrace export` writes a replay file.
+- **The TypeScript split of core's two entries** (#72). Tests check the imports today.
+- **A Claude Code plugin package.**

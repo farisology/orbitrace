@@ -9,10 +9,17 @@ A replay is meant to be safe to share. It holds structure and timing only.
 - TypeScript types: `packages/core/src/model/replay.ts` (exported from `@orbitrace/core`).
 - JSON Schema (draft 2020-12): `packages/core/schema/replay-v1.schema.json` (exported as
   `@orbitrace/core/schema/replay-v1.schema.json`).
-- Example: `fixtures/replays/minimal.replay.json`, hand-written and synthetic.
+- Hand-written example: `fixtures/replays/minimal.replay.json`, synthetic.
+- Generated examples: `fixtures/replays/<scenario>.replay.json`, one golden replay per synthetic
+  fixture session, written by the real pipeline (the Claude Code adapter, `parseSession`,
+  `buildReplay`, `validateReplay`, `exportReplay`). `demo.replay.json` is the demo the app and
+  the editor extension show when there is no session. Goldens are never edited by hand; after a
+  change to the parser, the builder, the export or the generator, rewrite them with
+  `npm run build && npm run goldens -w @orbitrace/fixtures` and review the diff.
 
-Status: the types, the schema and the example exist. Nothing produces a replay yet. The replay
-builder is ticket #8 and export is ticket #18.
+Status: built. `buildReplay` (#8) produces replays, `exportReplay` (#18) writes them, and
+`validateReplay` checks them. `orbitrace export` writes a replay file from the command line, and
+the app and the editor extension draw replays. Nothing is published yet.
 
 ## What a replay never contains
 
@@ -44,8 +51,9 @@ that is, after idle gaps were cut. Decimals are allowed.
 Idle gaps are cut by the replay builder. The rule taken from the prototype: build busy intervals
 from subagent lifetimes, tool call spans and a few seconds around each reply; merge them; cut any
 gap longer than 45 s down to 8 s; record each cut as a warp. These are the defaults in
-`REPLAY_BUILD_DEFAULTS` (`idleGapSeconds`, `idleKeepSeconds`); the padding around replies is left
-to ticket #8.
+`REPLAY_BUILD_DEFAULTS` (`idleGapSeconds`, `idleKeepSeconds`). The padding around each reply
+(`replyPaddingSeconds`) defaults to 3 s, exported as `DEFAULT_REPLY_PADDING_SECONDS`;
+`REPLAY_BUILD_DEFAULTS_RESOLVED` holds every default together.
 
 To turn a compressed time `t` into real seconds from the session start, add `skipped` of every
 warp whose `at` is less than `t`. `toRealSeconds(warps, t)` from `@orbitrace/core` does this.
@@ -168,7 +176,8 @@ Session totals: the same fields summed over all agents, plus `agents` (number of
 
 ## Rules the schema cannot express
 
-A replay builder must also keep these. The example fixture's test checks them.
+A replay builder must also keep these. The example fixture's test checks them, and the builder's
+tests check them on every replay they build (`packages/core/test/replay/helpers.ts`).
 
 - Each agent's `totals` equal the sums over its `tools` and `replies`.
 - Session `totals` equal the sums over all agents; `agents` equals the number of agents.
@@ -220,7 +229,12 @@ use names only as labels.
 
 ## Validating with Ajv
 
-The test validates with Ajv 8 (`ajv/dist/2020.js`, class `Ajv2020`) with `strict: true`,
+`validateReplay`, `describeReplayProblems`, `assertReplay` and `exportReplay` use a validator
+precompiled from the schema (`packages/core/src/export/replay-v1-validator.generated.ts`), so
+they need no Ajv at run time. A reader in another language can validate against the schema file
+with any draft 2020-12 validator.
+
+The schema test validates with Ajv 8 (`ajv/dist/2020.js`, class `Ajv2020`) with `strict: true`,
 `allowUnionTypes: true` and `strictTuples: false`. `strictTuples` is off because `agents` is an
 open tuple on purpose: `prefixItems` fixes the main agent first and `items` allows any number of
 subagents after it.

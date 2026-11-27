@@ -2,7 +2,7 @@
 
 These rules apply to every coding agent working in this repository. Humans can read them too: this is the detailed form of [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**Status: nothing is released yet.** The workspace scaffold (issue #1) is not merged, so some commands below do not run yet. When one does not run, say so in your pull request.
+**Status: nothing is released yet.** Nothing is on npm or an extension marketplace. Every command below is a script in the root `package.json`, and CI runs them. How the packages fit together is in [docs/architecture.md](docs/architecture.md); how to build and try them is in [docs/getting-started.md](docs/getting-started.md).
 
 ## 1. Privacy rules (hard rules)
 
@@ -20,7 +20,8 @@ Why: Orbitrace exists to show agent sessions without exposing what was in them. 
 ## 2. Synthetic fixtures
 
 - Tests and demos use invented data only: invented agent types, file names, tool calls, prompts, timings and ids. Make it obviously fake, for example `example-project` or `src/widget.ts`.
-- If you need a sample transcript line, write it by hand with invented values. A seeded fixture generator is planned in issue #9 and is not built yet.
+- If you need a synthetic transcript, use the seeded generator in `packages/fixtures` (`@orbitrace/fixtures`): `generateSession` from `@orbitrace/fixtures/generator` for a session in memory, or the committed sessions under `fixtures/config` through `fixturePaths`. A single line may also be written by hand with invented values. See `packages/fixtures/README.md`.
+- Never point a source resolver, the CLI or a test at your own Claude Code config folder. Pass an explicit synthetic folder, such as `fixtures/config` or one the generator wrote to a temporary folder.
 - `.gitignore` ignores every `*.jsonl` file except those in the root `fixtures/` folder or in any `test/fixtures/` folder. Put transcript fixtures there. A `fixtures/` folder anywhere else is still ignored.
 - Do not rely on `.gitignore` alone. Run `git status` before each commit and confirm every file you add is synthetic.
 
@@ -45,14 +46,16 @@ npm run privacy
 ```
 
 - If a command fails, fix the cause or report the failure in the pull request. Do not hide it or skip it.
-- If a command does not exist yet, write "not built yet" in the pull request.
-- `npm run privacy` fails when forbidden strings appear (scaffold ticket, #1). Until it exists, check the privacy rules above by hand. Passing it does not prove a change is clean; it only catches known patterns.
+- If you could not run a command, say so and why. Never report a result you did not see.
+- `npm run privacy` fails when forbidden strings appear in the files. `npm run privacy -- --range <base>..<head>` checks every line your commits add and every commit message; CI runs both (`.github/workflows/ci.yml`). Passing them does not prove a change is clean; they only catch known patterns, so also check the privacy rules above by hand.
+- Use a Node version that matches `engines` in the root `package.json` (`.nvmrc` names the lowest).
 - Fill in every box of the privacy checklist in [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md).
 
 ## 5. Keep changes inside one package
 
-- Work inside one package where possible: `core`, `renderer`, `app`, `vscode` or `cli`.
+- Work inside one package where possible: `core`, `renderer`, `app`, `fixtures`, `vscode` or `cli`.
 - `core` has no editor dependency. `renderer` has no UI framework dependency. Do not add one.
+- The main entry of `core` imports no Node module; Node-only code goes behind `@orbitrace/core/node`. Tests in `packages/core` and `packages/fixtures` fail otherwise.
 - If a change has to cross packages, say why in the pull request description.
 - Stay inside the issue you were given. Do not build features that belong to another issue. Do not edit root files unless your issue requires it.
 
