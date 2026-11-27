@@ -13,7 +13,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { connect } from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { validateReplay } from "@orbitrace/core";
+import { validateReplayModel } from "@orbitrace/core";
 import type { TransportMessage } from "@orbitrace/app/transport";
 import { BIN, fakeEnv, makeFakeMachine, removeTempDirs, type FakeMachine } from "./helpers.js";
 import { openLive, rpc, send } from "./server-helpers.js";
@@ -130,7 +130,7 @@ describe.skipIf(process.platform === "win32")(
       const first = lines[0] as Extract<TransportMessage, { kind: "live" }>;
       const update = first.update as Extract<typeof first.update, { type: "replay" }>;
       expect(update.type).toBe("replay");
-      expect(validateReplay(update.replay)).toBe(true);
+      expect(validateReplayModel(update.replay)).toBe(true);
 
       // A stream still open when the user stops the command: its watch is stopped and the
       // process exits by itself.

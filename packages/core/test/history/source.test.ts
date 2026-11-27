@@ -4,7 +4,13 @@
 import { rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { validateReplay, type SessionRef, type SourceAdapter } from "../../src/index.js";
+import {
+  validateReplay,
+  validateReplayModel,
+  withoutReplyDetails,
+  type SessionRef,
+  type SourceAdapter,
+} from "../../src/index.js";
 import {
   claudeCodeAdapter,
   createSessionReplayer,
@@ -123,7 +129,10 @@ describe(`a session whose transcript is gone, read from history${SKIP_NOTE}`, ()
       expect(stored.live).toBe("ended");
       expect(stored.locator).toBe(`${HISTORY_LOCATOR_PREFIX}${gone?.s.key}`);
       const replay = await replayer.load(gone?.s.key ?? "");
-      expect(validateReplay(replay)).toBe(true);
+      // The replayer hands out an in-memory model with reply details (#203); without them it is
+      // plain replay v1.
+      expect(validateReplayModel(replay)).toBe(true);
+      expect(validateReplay(withoutReplyDetails(replay))).toBe(true);
       // The same replay as from its files.
       expect(replay).toEqual(fromFiles);
 

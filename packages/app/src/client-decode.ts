@@ -5,13 +5,21 @@
  *
  * Session summaries are copied field by field, so nothing beyond `SessionSummary` (a path or a
  * locator sent by mistake) is kept app-side.
+ *
+ * A replay from a host is checked as an in-memory model (issue 203): the hosts build it with each
+ * reply's details (`ReplayReplyDetails`: cache writes by lifetime and the reply's own model id),
+ * which the ledger prices exactly. `validateReplayModel` type-checks those details and holds the
+ * rest of the model to the strict replay v1 check, so any other unknown property is still
+ * refused. A model without details, such as one built without `replyDetails`, passes the same
+ * check. A replay file the user opens is checked by `load-file.ts` with the exact file check
+ * instead.
  */
 
 import {
   LIVE_STATUSES,
   RUNTIME_IDS,
-  describeReplayProblems,
-  validateReplay,
+  describeReplayModelProblems,
+  validateReplayModel,
   type LiveStatus,
   type ReplayModel,
   type RuntimeId,
@@ -66,21 +74,24 @@ export function decodeSessions(value: unknown): readonly SessionSummary[] {
 }
 
 function invalidReplay(value: unknown): TransportError {
-  const problems = describeReplayProblems(value);
+  const problems = describeReplayModelProblems(value);
   const detail = problems.length > 0 ? ` ${problems.slice(0, 3).join("; ")}` : "";
   return transportError("invalid", `${CLIENT_MESSAGES.badReplay}${detail}`);
 }
 
-/** The result of `loadReplay`. Throws an `invalid` `TransportError` when it is not a valid replay. */
+/**
+ * The result of `loadReplay`: a replay v1 whose replies may carry reply details. Throws an
+ * `invalid` `TransportError` when it is not one.
+ */
 export function decodeReplay(value: unknown): ReplayModel {
-  if (validateReplay(value)) return value;
+  if (validateReplayModel(value)) return value;
   throw invalidReplay(value);
 }
 
 /** A live update as the app may show it: a `replay` whose model is not valid becomes an `error`. */
 export function decodeLiveUpdate(update: LiveUpdate): LiveUpdate {
   if (update.type !== "replay") return update;
-  if (validateReplay(update.replay)) return update;
+  if (validateReplayModel(update.replay)) return update;
   return { type: "error", error: invalidReplay(update.replay) };
 }
 

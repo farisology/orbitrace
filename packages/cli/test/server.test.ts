@@ -10,7 +10,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   listSessions,
   toSessionSummary,
-  validateReplay,
+  validateReplayModel,
   type SessionSummary,
 } from "@orbitrace/core";
 import { claudeCodeAdapter, type SessionReplayer } from "@orbitrace/core/node";
@@ -562,7 +562,7 @@ describe("POST /api/rpc", () => {
     const message = JSON.parse(reply.body) as Extract<TransportMessage, { kind: "result" }>;
     expect(message.kind).toBe("result");
     expect(message.id).toBe(8);
-    expect(validateReplay(message.result)).toBe(true);
+    expect(validateReplayModel(message.result)).toBe(true);
     expect(reply.body).not.toContain(fixtures.machine.root);
   });
 
@@ -651,7 +651,7 @@ describe("POST /api/live", () => {
       expect(live.headers["cache-control"]).toBe("no-store");
       const [first] = (await live.lines(1)) as LiveLine[];
       expect(first).toMatchObject({ kind: "live", subscriptionId: 11, key });
-      expect(validateReplay(replayOf(first).replay)).toBe(true);
+      expect(validateReplayModel(replayOf(first).replay)).toBe(true);
       // The Claude Code adapter watches the session, so the stream is not ended.
       await new Promise((resolve) => setTimeout(resolve, 200));
       expect(server.liveStreamCount()).toBe(1);
@@ -677,7 +677,7 @@ describe("POST /api/live", () => {
     expect(first.update.type).toBe("replay");
     const update = first.update as Extract<typeof first.update, { type: "replay" }>;
     expect(update.type).toBe("replay");
-    expect(validateReplay(update.replay)).toBe(true);
+    expect(validateReplayModel(update.replay)).toBe(true);
     expect(last).toEqual({ kind: "live", subscriptionId: 11, key, update: { type: "ended" } });
     await eventually(() => server.liveStreamCount() === 0);
   });
@@ -702,7 +702,7 @@ describe("POST /api/live", () => {
         const lines = (await within(live.lines(2), 20_000)) as LiveLine[];
         expect(lines).toHaveLength(2);
         const second = replayOf(lines[1]);
-        expect(validateReplay(second.replay)).toBe(true);
+        expect(validateReplayModel(second.replay)).toBe(true);
         expect(second.replay.totals.toolCalls).toBe(before + 1);
         expect(JSON.stringify(lines)).not.toContain(own.machine.root);
       } finally {
