@@ -11,7 +11,6 @@ import {
   followStatusText,
   isFollowable,
   remapTime,
-  toCompressedSeconds,
 } from "../src/follow";
 import { makeModel } from "./helpers";
 
@@ -20,29 +19,6 @@ const WARPS: readonly ReplayWarp[] = [
   { at: 30, skipped: 600 },
   { at: 50, skipped: 120 },
 ];
-
-describe("toCompressedSeconds", () => {
-  it("is the inverse of toRealSeconds at every compressed time", () => {
-    for (const t of [0, 1, 29.999, 30, 30.001, 42, 50, 50.5, 77]) {
-      expect(toCompressedSeconds(WARPS, toRealSeconds(WARPS, t))).toBeCloseTo(t, 9);
-    }
-  });
-
-  it("maps a real time inside a removed range to that cut", () => {
-    expect(toCompressedSeconds(WARPS, 31)).toBe(30);
-    expect(toCompressedSeconds(WARPS, 629.9)).toBe(30);
-    expect(toCompressedSeconds(WARPS, 630)).toBe(30);
-    expect(toCompressedSeconds(WARPS, 640)).toBe(40);
-    expect(toCompressedSeconds(WARPS, 700)).toBe(50);
-    expect(toCompressedSeconds(WARPS, 800)).toBe(80);
-  });
-
-  it("is the identity with no warps, and 0 for a bad or negative time", () => {
-    expect(toCompressedSeconds([], 12.5)).toBe(12.5);
-    expect(toCompressedSeconds(WARPS, Number.NaN)).toBe(0);
-    expect(toCompressedSeconds([], -3)).toBe(0);
-  });
-});
 
 describe("remapTime and followStartTime", () => {
   it("keep a time before any new cut where it was", () => {

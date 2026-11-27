@@ -415,6 +415,116 @@ describe("when the session ends", () => {
   });
 });
 
+describe("when the process exits without a file change (#139)", () => {
+  // The host sends the same replay again with only the live status changed.
+  async function followingAt(index: number) {
+    const host = scriptedHost();
+    const app = renderApp(host);
+    await subscribed(host);
+    act(() => host.push(replayUpdate(snapshot(index), "busy")));
+    expect(badge()).toBe("Live: working, following");
+    return { host, ...app };
+  }
+
+  it("an ended update with an unchanged replay ends follow at the edge", async () => {
+    const { host, runFrames } = await followingAt(4);
+    act(() => host.push(replayUpdate(snapshot(4), "ended")));
+    runFrames(13);
+    expect(position()).toBe(snapshot(4).totals.duration);
+    expect(playButton().textContent).toContain("Play");
+    expect(badge()).toBe("Replay");
+    expect(screen.queryByRole("button", { name: GO_LIVE_LABEL })).toBeNull();
+    expect(liveRegion()?.textContent).toBe("Live session ended.");
+  });
+
+  it("a catch-up under way finishes before the view becomes a replay", async () => {
+    const { host, runFrames } = await followingAt(1);
+    act(() => host.push(replayUpdate(snapshot(2), "busy")));
+    act(() => host.push(replayUpdate(snapshot(2), "ended")));
+    expect(position()).toBeLessThan(snapshot(2).totals.duration);
+    runFrames(13);
+    expect(position()).toBe(snapshot(2).totals.duration);
+    expect(playButton().textContent).toContain("Play");
+    expect(badge()).toBe("Replay");
+  });
+
+  it("a user who was behind is not moved, and focus on Go live moves to Play", async () => {
+    const { host } = await followingAt(4);
+    fireEvent.change(scrubber(), { target: { value: "100" } });
+    goLive().focus();
+    act(() => host.push(replayUpdate(snapshot(4), "ended")));
+    expect(position()).toBe(100);
+    expect(badge()).toBe("Replay");
+    expect(document.activeElement).toBe(playButton());
+  });
+});
+
+describe("when liveness cannot be told (status unknown, decided on #127)", () => {
+  const anyBadge = () => screen.queryByText(/^Live: |^Replay$/);
+  const footerText = () => document.querySelector(".app-footer")?.textContent ?? "";
+
+  async function followingAt(index: number) {
+    const host = scriptedHost();
+    const app = renderApp(host);
+    await subscribed(host);
+    act(() => host.push(replayUpdate(snapshot(index), "busy")));
+    expect(badge()).toBe("Live: working, following");
+    return { host, ...app };
+  }
+
+  it("leaves follow, hides the badge and Go live, and the clock is no longer live", async () => {
+    const { host, runFrames } = await followingAt(1);
+    act(() => host.push(replayUpdate(snapshot(1), "unknown")));
+    expect(anyBadge()).toBeNull();
+    expect(screen.queryByRole("button", { name: GO_LIVE_LABEL })).toBeNull();
+    expect(playButton().textContent).toContain("Play");
+    expect(position()).toBe(snapshot(1).totals.duration);
+    // Not live: End only seeks, and the footer no longer offers it as go live.
+    expect(footerText()).not.toContain("go live");
+    fireEvent.keyDown(document.body, { key: "Home" });
+    fireEvent.keyDown(document.body, { key: "End" });
+    expect(position()).toBe(snapshot(1).totals.duration);
+    expect(playButton().textContent).toContain("Play");
+    runFrames(5);
+    expect(position()).toBe(snapshot(1).totals.duration);
+  });
+
+  it("a catch-up under way finishes, then the clock stops", async () => {
+    const { host, runFrames } = await followingAt(1);
+    act(() => host.push(replayUpdate(snapshot(2), "busy")));
+    act(() => host.push(replayUpdate(snapshot(2), "unknown")));
+    runFrames(13);
+    expect(position()).toBe(snapshot(2).totals.duration);
+    expect(playButton().textContent).toContain("Play");
+    expect(anyBadge()).toBeNull();
+  });
+
+  it("focus on Go live moves to the play button when the button goes away", async () => {
+    const { host } = await followingAt(1);
+    goLive().focus();
+    act(() => host.push(replayUpdate(snapshot(1), "unknown")));
+    expect(screen.queryByRole("button", { name: GO_LIVE_LABEL })).toBeNull();
+    expect(document.activeElement).toBe(playButton());
+  });
+
+  it("brings the badge and Go live back when the session runs again, without following", async () => {
+    const { host, runFrames } = await followingAt(1);
+    act(() => host.push(replayUpdate(snapshot(1), "unknown")));
+    act(() => host.push(replayUpdate(snapshot(FIRST_CUT_INDEX + 1), "idle")));
+    expect(badge()).toMatch(/^Live: idle, \d+ min \d+ s behind$/);
+    expect(goLive().getAttribute("aria-disabled")).toBe("false");
+    expect(footerText()).toContain("End go live");
+    // Not re-entered by itself: the playhead stays where it was.
+    runFrames(20);
+    expect(position()).toBe(snapshot(1).totals.duration);
+    expect(playButton().textContent).toContain("Play");
+    // Go live returns to follow as usual.
+    fireEvent.click(goLive());
+    expect(position()).toBe(snapshot(FIRST_CUT_INDEX + 1).totals.duration);
+    expect(badge()).toBe("Live: idle, following");
+  });
+});
+
 describe("both host transports", () => {
   it("follows over the editor webview transport", async () => {
     const webview = fakeWebview();

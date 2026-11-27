@@ -8,6 +8,7 @@ import type {
   CoreApi,
   DescribeReplayProblems,
   FindSessionByKey,
+  ToCompressedSeconds,
   ToRealSeconds,
   ExportReplay,
   ForbiddenReplayKey,
@@ -141,6 +142,7 @@ describe("api signatures", () => {
     expectTypeOf<CoreApi["describeReplayProblems"]>().toEqualTypeOf<DescribeReplayProblems>();
     expectTypeOf<CoreApi["assertReplay"]>().toEqualTypeOf<AssertReplay>();
     expectTypeOf<CoreApi["toRealSeconds"]>().toEqualTypeOf<ToRealSeconds>();
+    expectTypeOf<CoreApi["toCompressedSeconds"]>().toEqualTypeOf<ToCompressedSeconds>();
     expectTypeOf<CoreApi["findSessionByKey"]>().toEqualTypeOf<FindSessionByKey>();
   });
 
@@ -158,6 +160,7 @@ describe("api signatures", () => {
       "describeReplayProblems",
       "assertReplay",
       "toRealSeconds",
+      "toCompressedSeconds",
     ];
     for (const name of names) expect(typeof api[name]).toBe("function");
   });

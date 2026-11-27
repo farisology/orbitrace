@@ -13,6 +13,10 @@
  * snapshot carries the playhead through real time onto the new timeline (`follow.ts`) and hands
  * it to the clock, which catches up to the new edge while following (`clock.ts`). The session
  * ending ends follow. The Live badge says whether the view follows or how far behind it is.
+ * A snapshot whose status is `unknown` also ends follow and hides the badge and Go live; when a
+ * later one says the session runs, they come back, but follow is not re-entered by itself
+ * (issue 139). The host reports a session as ended when its process exits, even without a file
+ * change.
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -287,8 +291,10 @@ export function App({
         time,
         animate: !reducedRef.current,
       });
-      if (live === "ended") clock.setLive(false);
-      else if (isFollowable(live)) clock.setLive(true);
+      // Running: live again, but follow is not re-entered by itself (Go live or End does that).
+      // Ended, or `unknown` (liveness cannot be told, decided on issue 127): no longer live, which
+      // ends follow and hides Go live; a catch-up under way finishes, a user behind stays put.
+      clock.setLive(isFollowable(live));
       setView((current) =>
         current === null || current.source.kind !== "host"
           ? current

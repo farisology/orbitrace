@@ -1,10 +1,11 @@
 /**
  * Replay model builder (ticket #8): `buildReplay` turns a `ParsedSession` into a
  * `ReplayModel` v1, and `replayFeed` derives feed events from a replay. `toRealSeconds`
- * (ticket #71) maps compressed replay time to real seconds. `agentPhase` (#108) is the one
- * rule for whether an agent is waiting, running or finished at a time.
+ * (ticket #71) maps compressed replay time to real seconds, and `toCompressedSeconds` (#135) maps
+ * it back. `agentPhase` (#108) is the one rule for whether an agent is waiting, running or
+ * finished at a time.
  */
-export { toRealSeconds } from "./real-time.js";
+export { toCompressedSeconds, toRealSeconds } from "./real-time.js";
 export { AGENT_PHASES, agentPhase, type AgentPhase, type AgentSpan } from "./phase.js";
 export {
   buildReplay,

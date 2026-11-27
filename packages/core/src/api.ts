@@ -152,6 +152,14 @@ export type AssertReplay = (value: unknown) => asserts value is ReplayModel;
 export type ToRealSeconds = (warps: readonly ReplayWarp[], t: ReplaySeconds) => number;
 
 /**
+ * Ticket #135. The inverse of `ToRealSeconds`: compressed time for `real` seconds from the
+ * session start. A real time inside a removed range maps to that warp's `at` (the rule
+ * `Timeline.compress` uses). Warps are in `at` order. A non-finite input gives 0. For every
+ * compressed `t`, `toCompressedSeconds(w, toRealSeconds(w, t)) === t`.
+ */
+export type ToCompressedSeconds = (warps: readonly ReplayWarp[], real: number) => ReplaySeconds;
+
+/**
  * Ticket #75. The session with this key under the given roots, or `null` when no root has it.
  * Lists the sessions with `ListSessions` (no `since`, no `limit`) and picks the one whose `key`
  * matches; a key is opaque, so there is no faster lookup that works for every adapter.
@@ -178,4 +186,5 @@ export interface CoreApi {
   readonly describeReplayProblems: DescribeReplayProblems;
   readonly assertReplay: AssertReplay;
   readonly toRealSeconds: ToRealSeconds;
+  readonly toCompressedSeconds: ToCompressedSeconds;
 }
