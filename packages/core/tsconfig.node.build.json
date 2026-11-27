@@ -1,0 +1,17 @@
+// Emits the ./node entry into dist/, with Node's types. The browser-side files it imports
+// come from tsconfig.browser.build.json. See tsconfig.build.json.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "tsBuildInfoFile": "node_modules/.cache/tsc/node.tsbuildinfo"
+  },
+  "include": ["src/sources/node.ts", "src/sources/claude-code"],
+  "references": [{ "path": "./tsconfig.browser.build.json" }]
+}

@@ -1,0 +1,13 @@
+// Emits the browser-safe main entry into dist/. See tsconfig.build.json.
+{
+  "extends": "./tsconfig.browser.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    // Outside dist/, so the published files do not change. Git-ignored (*.tsbuildinfo).
+    "tsBuildInfoFile": "node_modules/.cache/tsc/browser.tsbuildinfo"
+  }
+}

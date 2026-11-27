@@ -5,6 +5,7 @@
 # Each step calls an npm script from the root package.json, so the commands here are the
 # same ones a contributor runs locally:
 #   npm ci && npm run build && npm run lint && npm run typecheck && npm test
+#   node scripts/release/check-package.mjs           (after the build: the npm tarballs)
 #   npm run format:check                             (not blocking yet, see the step)
 #   npm run privacy                                  (the files in the tree, paths included)
 #   npm run privacy -- --range <base>..<head>        (what the new commits add)
@@ -119,6 +120,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Packs the core, renderer and cli tarballs and checks them against their allow-lists.
+      # npm test runs the same check (scripts/release/check-package.test.mjs); this step
+      # shows the file lists and sizes in the log.
+      - name: Check the npm packages
+        run: node scripts/release/check-package.mjs
+
       - name: Lint
         run: npm run lint
 
@@ -188,12 +195,7 @@ jobs:
             sudo apt-get install -y --no-install-recommends xvfb
           fi
 
-      # @vscode/test-electron creates the cache folder without its parents, and nothing
-      # creates packages/vscode/node_modules/.cache (npm ci hoists every dependency of this
-      # package to the root), so on a cache miss the download fails unless it exists first.
       - name: Run the integration test under a virtual display
         env:
           ORBITRACE_VSCODE_VERSION: ${{ steps.vscode.outputs.version }}
-        run: |
-          mkdir -p packages/vscode/node_modules/.cache/vscode-test
-          xvfb-run -a npm run test:integration -w orbitrace-vscode
+        run: xvfb-run -a npm run test:integration -w orbitrace-vscode

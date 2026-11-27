@@ -1,12 +1,12 @@
+// Emits dist/ from two projects: the browser-safe main entry (no Node types) and the ./node
+// entry (Node types), which reads the first one's declarations instead of compiling it
+// again. Run with `tsc -b tsconfig.build.json --force` (the build script): --force rebuilds
+// every time, because the build info lives outside dist/ and tsc -b would otherwise skip a
+// deleted dist/.
 {
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "noEmit": false,
-    "rootDir": "src",
-    "outDir": "dist",
-    "declaration": true,
-    "declarationMap": false,
-    "sourceMap": false
-  },
-  "include": ["src"]
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.browser.build.json" },
+    { "path": "./tsconfig.node.build.json" }
+  ]
 }
