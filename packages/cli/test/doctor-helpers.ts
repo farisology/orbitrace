@@ -95,7 +95,14 @@ export function healthyRuntime(appDir: string): DoctorRuntime {
     nodeVersion: "22.13.0",
     nodeRange: ">=20",
     appDir,
-    loadSqlite: () => Promise.resolve({ DatabaseSync: class {} }),
+    historyCapability: () =>
+      Promise.resolve({
+        available: true,
+        engine: "node:sqlite",
+        nodeVersion: "v22.13.0",
+        sqliteVersion: "3.99.0",
+        fts5: true,
+      }),
     bindLoopback: () => Promise.resolve(),
   };
 }

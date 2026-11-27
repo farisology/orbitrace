@@ -116,7 +116,39 @@ function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
 export const CLAUDE_CODE_RUNTIME = "claude-code" as const;
 
 const TRANSCRIPT_SUFFIX = ".jsonl";
+
+/*
+ * The subagent file layout of a Claude Code session (#189), shared with the history ingest
+ * (`history/ingest.ts`), which reads the same files by byte offset: a session's subagent
+ * transcripts are `<dirname(locator)>/<sessionId>/subagents/agent-<agentId>.jsonl`, each with
+ * `agent-<agentId>.meta.json` beside it. Only the layout is shared, not the readers.
+ */
+
+/** The folder, inside a session's own folder, that holds its subagent transcripts. */
+export const CLAUDE_CODE_SUBAGENTS_FOLDER = "subagents";
+
 const SUBAGENT_FILE = /^agent-(.+)\.jsonl$/;
+
+/** The folder of a session's subagent transcripts, for its main transcript path and session id. */
+export function claudeCodeSubagentsDir(locator: string, sessionId: string): string {
+  const p = pathApiForPath(locator);
+  return p.join(p.dirname(locator), sessionId, CLAUDE_CODE_SUBAGENTS_FOLDER);
+}
+
+/** The agent id of a subagent transcript file name (`agent-<id>.jsonl`), or null for any other name. */
+export function claudeCodeSubagentId(fileName: string): string | null {
+  return SUBAGENT_FILE.exec(fileName)?.[1] ?? null;
+}
+
+/** The transcript file name of a subagent: `agent-<agentId>.jsonl`. */
+export function claudeCodeSubagentFileName(agentId: string): string {
+  return `agent-${agentId}${TRANSCRIPT_SUFFIX}`;
+}
+
+/** The meta file name of a subagent: `agent-<agentId>.meta.json`. */
+export function claudeCodeSubagentMetaName(agentId: string): string {
+  return `agent-${agentId}.meta.json`;
+}
 /** Transcript heads read per project folder when looking for its working directory. */
 const HEAD_READS_PER_PROJECT = 3;
 
@@ -329,9 +361,9 @@ export function createClaudeCodeAdapter(options: ClaudeCodeAdapterOptions = {}):
     if (mainTime === null) return null;
     let lastActivity = mainTime;
     let subagentCount = 0;
-    const subagentDir = p.join(p.dirname(locator), sessionId, "subagents");
+    const subagentDir = claudeCodeSubagentsDir(locator, sessionId);
     for (const entry of (await tryReadDir(fs, subagentDir)) ?? []) {
-      if (!entry.isFile || !SUBAGENT_FILE.test(entry.name)) continue;
+      if (!entry.isFile || claudeCodeSubagentId(entry.name) === null) continue;
       subagentCount += 1;
       const time = await tryMtime(fs, p.join(subagentDir, entry.name));
       if (time !== null && time > lastActivity) lastActivity = time;
@@ -442,18 +474,18 @@ export function createClaudeCodeAdapter(options: ClaudeCodeAdapterOptions = {}):
     if ((await tryMtime(fs, ref.locator)) === null) {
       throw new Error("Session transcript not found or not readable.");
     }
-    const subagentDir = p.join(p.dirname(ref.locator), ref.sessionId, "subagents");
+    const subagentDir = claudeCodeSubagentsDir(ref.locator, ref.sessionId);
     const entries = ((await tryReadDir(fs, subagentDir)) ?? [])
       .filter((entry) => entry.isFile)
       .sort(byName);
     const subagents: RawSubagentInput[] = [];
     for (const entry of entries) {
-      const agentId = SUBAGENT_FILE.exec(entry.name)?.[1];
-      if (agentId === undefined) continue;
+      const agentId = claudeCodeSubagentId(entry.name);
+      if (agentId === null) continue;
       let meta: RawSubagentMeta | null;
       try {
         const parsed: unknown = JSON.parse(
-          await fs.readText(p.join(subagentDir, `agent-${agentId}.meta.json`)),
+          await fs.readText(p.join(subagentDir, claudeCodeSubagentMetaName(agentId))),
         );
         meta = isMetaObject(parsed) ? parsed : null;
       } catch {
@@ -557,7 +589,7 @@ export function createClaudeCodeAdapter(options: ClaudeCodeAdapterOptions = {}):
       {
         transcript: ref.locator,
         sessionDir,
-        subagentsDir: p.join(sessionDir, "subagents"),
+        subagentsDir: claudeCodeSubagentsDir(ref.locator, ref.sessionId),
         registryDir: p.join(ref.source.root, "sessions"),
       },
       (change) => {

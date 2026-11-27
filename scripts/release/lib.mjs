@@ -54,7 +54,8 @@ export const DENIED_PATHS = [
  *
  * Source maps: core and renderer build without them (tsconfig.build.json), so no map can point
  * at `src/`, which they do not ship. The CLI bundles itself and @orbitrace/core into one file,
- * dist/index.js, with no source map and no declarations (#120). See docs/releasing.md.
+ * dist/index.js, with no source map and no declarations (#120), and core's history worker into a
+ * second one beside it, dist/history-worker.js (#188). See docs/releasing.md.
  *
  * `selfContained` (the CLI only): globs of the files that run in Node. Each may import only
  * Node.js built-ins and files shipped beside it, and the manifest may declare no dependencies,
@@ -95,6 +96,8 @@ export const NPM_PACKAGES = [
       "README.md",
       "LICENSE",
       "dist/index.js",
+      // The history ingest worker, bundled from @orbitrace/core beside the command (#188, #195).
+      "dist/history-worker.js",
       "dist/app/index.html",
       "dist/app/THIRD-PARTY-NOTICES.txt",
       "dist/app/third-party-modules.json",
@@ -102,8 +105,14 @@ export const NPM_PACKAGES = [
       "dist/app/assets/*.js",
       "dist/app/assets/*.css",
     ],
-    require: ["README.md", "LICENSE", "dist/index.js", "dist/app/index.html"],
-    selfContained: ["dist/index.js"],
+    require: [
+      "README.md",
+      "LICENSE",
+      "dist/index.js",
+      "dist/history-worker.js",
+      "dist/app/index.html",
+    ],
+    selfContained: ["dist/index.js", "dist/history-worker.js"],
     installCheck: true,
   },
 ];

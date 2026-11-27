@@ -1,6 +1,7 @@
 /**
  * The checks of `orbitrace doctor` (#31). Every check reads only: nothing here writes a file,
- * creates a folder or opens a database. Source resolution and listing are the same calls `list`
+ * creates a folder or opens a database file (the history check's capability probe opens an
+ * in-memory database). Source resolution and listing are the same calls `list`
  * makes (`resolveRoots` in sessions.ts, core's `listSessions`); parsing is core's
  * `parseSession`.
  */
@@ -23,12 +24,21 @@ import {
   defaultConfigRoot,
   envValue,
   environmentConfigRoot,
+  historyCapability,
   isProcessAlive,
   pathApiFor,
   pathApiForPath,
   readLiveRegistry,
+  withoutSqliteWarning,
+  type HistoryCapability,
 } from "@orbitrace/core/node";
 import { appBundleFolder, checkAppBundle } from "../app-bundle.js";
+import { tryHistoryLocation } from "../history/context.js";
+import {
+  historySettingsFile,
+  readHistorySettings,
+  type HistorySettingsState,
+} from "../history/settings.js";
 import { APP_MISSING_HINT } from "../open.js";
 import type { CliWarning, HostContext } from "../sessions.js";
 import { satisfiesRange } from "./engines.js";
@@ -561,11 +571,13 @@ export async function checkRunningRegistry(
   }
   const present = folders.filter((folder) => folder.state === "ok");
   if (present.length === 0) {
+    // Lead decision on #184: informational, not a warning. Desktop-only and older set-ups never
+    // have this folder; live status then shows as 'unknown' and everything else works.
     return finding(
-      "warn",
+      "ok",
       "running-registry-missing",
-      `No config folder has a running-sessions folder (sessions/), so live status shows as 'unknown'.`,
-      `Update Claude Code ('claude update') and start a session ('claude'); it writes ${folders[0]!.path} while a session runs.`,
+      `No config folder has a running-sessions folder (sessions/), so live status shows as 'unknown'. Claude Code writes ${folders[0]!.path} while a session runs; desktop-only and older set-ups have none.`,
+      null,
       details,
     );
   }
@@ -678,81 +690,82 @@ export const HISTORY_MODULE = "node:sqlite";
 /** The first Node versions that load `node:sqlite` without a flag. */
 export const HISTORY_NODE_VERSIONS = "22.13 or later";
 
-function isSqliteWarning(warning: unknown, rest: readonly unknown[]): boolean {
-  const text = warning instanceof Error ? `${warning.name} ${warning.message}` : String(warning);
-  const type = typeof rest[0] === "string" ? rest[0] : "";
-  return /sqlite/i.test(text) && (/Experimental/.test(type) || /Experimental/.test(text));
-}
-
-/** A dynamic import. The specifier is a variable, so neither tsc nor the bundler resolves it. */
-function dynamicImport(specifier: string): Promise<unknown> {
-  return import(specifier) as Promise<unknown>;
+/** Whether the user turned history recording on, as the settings file says (#195). */
+export interface HistoryRecordingState {
+  /** `missing` (off, the default), `ok`, `invalid` (off), or `unknown` (no data folder). */
+  readonly settings: HistorySettingsState | "unknown";
+  readonly recording: boolean;
 }
 
 /**
- * Load `node:sqlite` with a dynamic import. Creates no database. While the import runs, Node's
- * "SQLite is an experimental feature" warning is held back, so it does not reach stderr; any
- * other warning passes. `importModule` is for tests.
+ * The recording switch of this host: the settings file in the data folder, read without
+ * creating anything. `unknown` when no data folder can be worked out.
  */
-export async function loadNodeSqlite(
-  importModule: (specifier: string) => Promise<unknown> = dynamicImport,
-): Promise<unknown> {
-  const original = process.emitWarning;
-  process.emitWarning = function (this: unknown, warning: unknown, ...rest: unknown[]) {
-    if (isSqliteWarning(warning, rest)) return;
-    return (original as (...args: unknown[]) => void).call(process, warning, ...rest);
-  } as typeof process.emitWarning;
-  try {
-    return await importModule(HISTORY_MODULE);
-  } finally {
-    process.emitWarning = original;
-  }
+export function readRecordingState(host: HostContext): HistoryRecordingState {
+  const location = tryHistoryLocation(host);
+  if (location === null) return { settings: "unknown", recording: false };
+  const { state, recording } = readHistorySettings(historySettingsFile(location, host.platform));
+  return { settings: state, recording };
 }
 
-/** Whether a host records history today. None does yet, so a missing `node:sqlite` is no fault. */
-export const HISTORY_STORE_IN_USE = false;
-
 /**
- * Whether this Node can run the history store: `node:sqlite` loads and has `DatabaseSync`.
- * Feature detection only; no database is created. While no host records history (`inUse` is
- * false), a Node without it is `skipped`, not a warning: nothing needs it yet.
+ * Whether this Node can run the history store, from core's `historyCapability()` (#184), and
+ * whether recording is on (#195). Core loads `node:sqlite` and opens an in-memory database to
+ * read its version; no database file is opened or created. With recording off, a Node without
+ * `node:sqlite` is `skipped`: nothing needs it. With recording on, it is a warning.
  */
 export async function checkHistoryStore(
   nodeVersion: string,
-  load: () => Promise<unknown> = () => loadNodeSqlite(),
-  inUse: boolean = HISTORY_STORE_IN_USE,
+  capability: () => Promise<HistoryCapability> = () => withoutSqliteWarning(historyCapability),
+  state: HistoryRecordingState = { settings: "missing", recording: false },
 ): Promise<Finding> {
-  let available = false;
-  let errorCode: string | null = null;
-  try {
-    const module = (await load()) as { DatabaseSync?: unknown } | null;
-    available = typeof module?.DatabaseSync === "function";
-  } catch (error) {
-    errorCode = nodeErrorCode(error);
+  const found = await capability();
+  const details = {
+    module: HISTORY_MODULE,
+    available: found.available,
+    inUse: state.recording,
+    errorCode: null,
+    recording: state.recording,
+    settings: state.settings,
+    reason: found.available ? null : found.reason,
+    sqliteVersion: found.available ? found.sqliteVersion : null,
+    fts5: found.available ? found.fts5 : null,
+  };
+  if (state.settings === "invalid") {
+    return finding(
+      "warn",
+      "history-store-settings-invalid",
+      "The history settings file could not be read, so history recording is off.",
+      // `history enable` needs node:sqlite; `history disable` runs on every Node.
+      found.available
+        ? "Write it again with 'orbitrace history enable' (recording on) or 'orbitrace history disable' (off)."
+        : `Write it again with 'orbitrace history disable' (off). Turning recording on needs Node ${HISTORY_NODE_VERSIONS}.`,
+      details,
+    );
   }
-  const details = { module: HISTORY_MODULE, available, inUse, errorCode };
-  if (!available && !inUse) {
+  if (!found.available && !state.recording) {
     return finding(
       "skipped",
       "history-store-not-in-use",
-      `Not in use yet: nothing records history today. ${HISTORY_MODULE} cannot be loaded in Node ${nodeVersion}; a future history store will need Node ${HISTORY_NODE_VERSIONS}.`,
+      `History recording is off, so nothing needs it. ${HISTORY_MODULE} cannot be loaded in Node ${nodeVersion}; history needs Node ${HISTORY_NODE_VERSIONS}.`,
       null,
       details,
     );
   }
-  if (!available) {
+  if (!found.available) {
     return finding(
       "warn",
       "history-store-unavailable",
-      `${HISTORY_MODULE} cannot be loaded in Node ${nodeVersion}, so the history store cannot record; it needs Node ${HISTORY_NODE_VERSIONS}.`,
-      "Install Node 22.13 or later (for example 'nvm install 22 && nvm use 22'), then run 'orbitrace doctor' again.",
+      `History recording is on, but ${HISTORY_MODULE} cannot be loaded in Node ${nodeVersion}, so nothing is recorded; it needs Node ${HISTORY_NODE_VERSIONS}.`,
+      // `history disable` needs no node:sqlite, so it works on this Node.
+      "Install Node 22.13 or later (for example 'nvm install 22 && nvm use 22'), then run 'orbitrace doctor' again; or turn recording off with 'orbitrace history disable'.",
       details,
     );
   }
   return finding(
     "ok",
     "history-store-available",
-    `${HISTORY_MODULE} loads in Node ${nodeVersion}, so the history store can run here.${inUse ? "" : " Not in use yet: nothing records history today."}`,
+    `${HISTORY_MODULE} loads in Node ${nodeVersion} (SQLite ${found.sqliteVersion}), so the history store can run here. ${state.recording ? "History recording is on." : "History recording is off; turn it on with 'orbitrace history enable'."}`,
     null,
     details,
   );

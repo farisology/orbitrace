@@ -22,6 +22,8 @@ export const FIXTURES_DIR = join(REPO_DIR, "fixtures");
 export const DIST_NODE_ENTRY = join(PACKAGE_DIR, "dist", "sources", "node.js");
 export const DIST_MAIN_ENTRY = join(PACKAGE_DIR, "dist", "index.js");
 export const DIST_WORKER = join(PACKAGE_DIR, "dist", "history", "worker.js");
+/** The built ingest module, for the internal test hooks (not on the ./node entry). */
+export const DIST_INGEST = join(PACKAGE_DIR, "dist", "history", "ingest.js");
 
 /** Whether `node:sqlite` loads in this Node, and why not. Checked once, before any test runs. */
 const probe = await loadSqlite();

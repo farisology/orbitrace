@@ -16,6 +16,7 @@ import {
 } from "../../src/sources/node.js";
 import { FAKE, plantedMarkers } from "./secrets.js";
 import { loadSqlite } from "../../src/history/engine.js";
+import { ingestHistoryWithTestHooks } from "../../src/history/ingest.js";
 import {
   copyAllFixtures,
   copyFixtureSession,
@@ -492,17 +493,14 @@ describe.skipIf(!SQLITE_AVAILABLE)(`history ingest${SKIP_NOTE}`, () => {
       const box2 = await deleteAndReopen(store);
       const controller = new AbortController();
       let commits = 0;
-      const run = ingestHistory(
+      const run = ingestHistoryWithTestHooks(
         box2,
         { roots: [box.root] },
+        { batchLines: 10, signal: controller.signal },
         {
-          batchLines: 10,
-          signal: controller.signal,
-          testHooks: {
-            beforeCommit: () => {
-              commits += 1;
-              if (commits === 2) controller.abort();
-            },
+          beforeCommit: () => {
+            commits += 1;
+            if (commits === 2) controller.abort();
           },
         },
       );
@@ -563,10 +561,11 @@ describe.skipIf(!SQLITE_AVAILABLE)(`history store${SKIP_NOTE}`, () => {
         expect(reader.totals().lines).toBe(5);
         await appendFile(ref.locator, lines(5, 8));
         let seenInside = -1;
-        await ingestHistory(
+        await ingestHistoryWithTestHooks(
           store,
           { sessions: [ref] },
-          { testHooks: { beforeCommit: () => (seenInside = reader.totals().lines) } },
+          {},
+          { beforeCommit: () => (seenInside = reader.totals().lines) },
         );
         expect(seenInside).toBe(5);
         expect(reader.totals().lines).toBe(8);

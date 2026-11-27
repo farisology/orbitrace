@@ -29,16 +29,38 @@ export interface ArgumentSpec {
   readonly description: string;
 }
 
+/** One subcommand of a command with subcommands (`history`). */
+export interface SubcommandSpec {
+  readonly name: string;
+  readonly usage: string;
+  readonly summary: string;
+  /** The command's options this subcommand takes besides `--json` and `--help`. */
+  readonly options: readonly string[];
+}
+
 export interface CommandSpec {
   readonly name: CommandName;
   readonly summary: string;
   readonly usage: string;
   readonly arguments: readonly ArgumentSpec[];
   readonly options: readonly OptionSpec[];
+  readonly subcommands?: readonly SubcommandSpec[];
 }
 
-export const COMMAND_NAMES = ["open", "list", "export", "doctor", "help"] as const;
+export const COMMAND_NAMES = ["open", "list", "export", "history", "doctor", "help"] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
+
+/** The subcommands of `orbitrace history` (#195). */
+export const HISTORY_ACTIONS = [
+  "status",
+  "enable",
+  "disable",
+  "ingest",
+  "list",
+  "delete",
+  "where",
+] as const;
+export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
 
 /** Sessions the `doctor` parser check reads, newest first, without `--parse-limit`. */
 export const DOCTOR_DEFAULT_PARSE_LIMIT = 20;
@@ -193,6 +215,101 @@ export const COMMANDS: Readonly<Record<CommandName, CommandSpec>> = {
       HELP_OPTION,
     ],
   },
+  history: {
+    name: "history",
+    summary:
+      "Keep a copy of your sessions that outlives Claude Code's cleanup. Off until you turn it on.",
+    usage: "orbitrace history <status|enable|disable|ingest|list|delete|where> [options] [--json]",
+    arguments: [
+      {
+        name: "command",
+        optional: false,
+        description: `One of: ${HISTORY_ACTIONS.join(", ")}.`,
+      },
+      {
+        name: "session-key",
+        optional: true,
+        description:
+          "For delete: a key from 'orbitrace history list', or a unique start of it (at least 4 characters of the part after 'claude-code:').",
+      },
+    ],
+    options: [
+      {
+        name: "all",
+        type: "boolean",
+        description: "For delete: delete the whole history store.",
+      },
+      {
+        name: "yes",
+        short: "y",
+        type: "boolean",
+        description:
+          "For delete: do not ask. Needed when not on a terminal, and with --json; without it nothing is deleted.",
+      },
+      ...SOURCE_OPTIONS.map((option) => ({
+        ...option,
+        description: `For ingest and list: ${option.description[0]?.toLowerCase() ?? ""}${option.description.slice(1)}`,
+      })),
+      {
+        name: "limit",
+        type: "string",
+        value: "n",
+        description: "For list: show at most n sessions.",
+      },
+      JSON_OPTION,
+      HELP_OPTION,
+    ],
+    subcommands: [
+      {
+        name: "status",
+        usage: "orbitrace history status [--json]",
+        summary:
+          "Whether recording is on, whether this Node can run the store, where it is, and what it holds.",
+        options: [],
+      },
+      {
+        name: "enable",
+        usage: "orbitrace history enable [--json]",
+        summary:
+          "Turn recording on: from then on 'orbitrace open' copies sessions into the store in the background.",
+        options: [],
+      },
+      {
+        name: "disable",
+        usage: "orbitrace history disable [--json]",
+        summary: "Turn recording off. What is stored stays until you delete it.",
+        options: [],
+      },
+      {
+        name: "ingest",
+        usage: "orbitrace history ingest [--config-dir <path>]... [--extra-roots] [--json]",
+        summary:
+          "Copy every session found into the store now, once. Works whether recording is on or off.",
+        options: ["config-dir", "extra-roots"],
+      },
+      {
+        name: "list",
+        usage:
+          "orbitrace history list [--config-dir <path>]... [--extra-roots] [--limit <n>] [--json]",
+        summary:
+          "List the sessions in the store, newest first, and whether their transcripts are still found.",
+        options: ["config-dir", "extra-roots", "limit"],
+      },
+      {
+        name: "delete",
+        usage: "orbitrace history delete (<session-key> | --all) [--yes] [--json]",
+        summary:
+          "Delete one stored session, or the whole store. Asks first on a terminal. Transcripts are not touched.",
+        options: ["all", "yes"],
+      },
+      {
+        name: "where",
+        usage: "orbitrace history where [--json]",
+        summary: "Print the folder the store is in.",
+        options: [],
+      },
+    ],
+  },
   doctor: {
     name: "doctor",
     summary: "Check the set-up: say what is wrong and how to fix it. Changes nothing.",
@@ -273,6 +390,21 @@ export type ParsedCommand =
       readonly sources: SourceFlags;
       /** Most sessions the parser check reads, newest first. */
       readonly parseLimit: number;
+    }
+  | {
+      readonly kind: "history";
+      readonly json: boolean;
+      readonly action: HistoryAction;
+      /** `ingest` and `list`: the folders to search. */
+      readonly sources: SourceFlags;
+      /** `delete`: the session key or key start. */
+      readonly key?: string;
+      /** `delete --all`. */
+      readonly all: boolean;
+      /** `delete --yes`. */
+      readonly yes: boolean;
+      /** `list --limit`. */
+      readonly limit?: number;
     };
 
 /**
@@ -388,6 +520,66 @@ export function parsePort(value: string): number {
     throw usageError("--port needs a whole number from 1 to 65535.", "open");
   }
   return port;
+}
+
+export function isHistoryAction(value: string): value is HistoryAction {
+  return (HISTORY_ACTIONS as readonly string[]).includes(value);
+}
+
+/** Options every history subcommand takes. */
+const HISTORY_COMMON_OPTIONS = new Set(["json", "help"]);
+
+/** `orbitrace history <action> ...`: the action, its argument and the options it allows. */
+function parseHistory(
+  values: Values,
+  positionals: readonly string[],
+  json: boolean,
+): ParsedCommand {
+  const choices = HISTORY_ACTIONS.join(", ");
+  const action = positionals[0];
+  if (action === undefined) {
+    throw usageError(`Give a history command: ${choices}.`, "history");
+  }
+  if (!isHistoryAction(action)) {
+    throw usageError(
+      `Unknown history command '${action}'. History commands: ${choices}.`,
+      "history",
+    );
+  }
+  const spec = COMMANDS.history.subcommands?.find((entry) => entry.name === action);
+  const allowed = new Set([...HISTORY_COMMON_OPTIONS, ...(spec?.options ?? [])]);
+  for (const [name, value] of Object.entries(values)) {
+    if (value === undefined || allowed.has(name)) continue;
+    throw usageError(`history ${action} does not take --${name}.`, "history");
+  }
+  const rest = positionals.slice(1);
+  const all = values.all === true;
+  const yes = values.yes === true;
+  let key: string | undefined;
+  if (action === "delete") {
+    if (rest.length > 1) throw usageError("history delete takes one session key.", "history");
+    key = rest[0];
+    if (key !== undefined && all) {
+      throw usageError("Give a session key or --all, not both.", "history");
+    }
+    if (key === undefined && !all) throw usageError("Give a session key or --all.", "history");
+    if (key !== undefined && key.trim() === "") {
+      throw usageError("The session key is empty.", "history");
+    }
+  } else if (rest.length > 0) {
+    throw usageError(`history ${action} takes no arguments, got '${rest[0]}'.`, "history");
+  }
+  const limit = typeof values.limit === "string" ? parseLimit(values.limit, "history") : undefined;
+  return {
+    kind: "history",
+    json,
+    action,
+    sources: sourceFlags(values, "history"),
+    ...(key === undefined ? {} : { key }),
+    all,
+    yes,
+    ...(limit === undefined ? {} : { limit }),
+  };
 }
 
 /** The command a bare `orbitrace` runs: `open` with its defaults. */
@@ -522,6 +714,8 @@ export function parseCommandLine(argv: readonly string[]): ParsedCommand {
         ...(port === undefined ? {} : { port }),
       };
     }
+    case "history":
+      return parseHistory(values, positionals, commandJson);
     case "doctor": {
       if (positionals.length > 0) {
         throw usageError(`doctor takes no arguments, got '${positionals[0]}'.`, "doctor");

@@ -151,6 +151,7 @@ describe("orbitrace (built binary): version and help", () => {
       "open",
       "list",
       "export",
+      "history",
       "doctor",
       "help",
     ]);

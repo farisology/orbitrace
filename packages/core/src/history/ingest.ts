@@ -6,7 +6,10 @@
  * Per transcript file (the main transcript and each `subagents/agent-<id>.jsonl`):
  * - The file row keeps the byte offset read up to. A run reads from there to the end and stores
  *   each complete line (one ending in `\n`). A last line without its `\n` is left for the next
- *   run, so a line Claude Code is still writing is never stored half done.
+ *   run, so a line Claude Code is still writing is never stored half done. When the host says a
+ *   session has ended (`HistoryIngestRequest.endedSessionKeys`), nothing more will be written to
+ *   its files, so such a last line is taken as it is and the offset moves past it: it is stored
+ *   once, and a later run does not read it again (#195).
  * - Before reading, the file is checked against what was stored: its device and inode, its size
  *   against the offset, and hashes of its first and last 4 KiB before the offset. A different
  *   inode or changed bytes means the file was replaced; a size below the offset means it was
@@ -43,7 +46,13 @@ import {
   readSync,
 } from "node:fs";
 import type { SessionRef, SourceRoot } from "../model/sources.js";
-import { claudeCodeAdapter, CLAUDE_CODE_RUNTIME } from "../sources/claude-code/adapter.js";
+import {
+  claudeCodeAdapter,
+  claudeCodeSubagentId,
+  claudeCodeSubagentMetaName,
+  claudeCodeSubagentsDir,
+  CLAUDE_CODE_RUNTIME,
+} from "../sources/claude-code/adapter.js";
 import { pathApiForPath } from "../sources/claude-code/paths.js";
 import { listSessions } from "../sources/index.js";
 import { HistoryStoreError } from "./errors.js";
@@ -61,6 +70,14 @@ export interface HistoryIngestRequest {
   readonly sessions?: readonly SessionRef[];
   /** Every session under these roots, listed with the Claude Code adapter. */
   readonly roots?: readonly SourceRoot[];
+  /**
+   * Keys (`SessionRef.key`) of sessions the host knows have ended, so nothing more will be written
+   * to their files. For these, a last line without its `\n` (in the main transcript or a subagent
+   * transcript) is stored as it is, once, instead of being left for a later run. Only pass a key
+   * when the session has really ended: a line that was still being written would be stored cut
+   * off. Default: none.
+   */
+  readonly endedSessionKeys?: readonly string[];
 }
 
 /** Progress after each session. */
@@ -101,8 +118,15 @@ export interface HistoryIngestOptions {
   readonly batchLines?: number;
   /** Clock for the ingest times, Unix epoch milliseconds. Default `Date.now`. */
   readonly now?: () => number;
-  /** For tests only: called inside each transaction, just before it commits. */
-  readonly testHooks?: { readonly beforeCommit?: () => void };
+}
+
+/**
+ * Hooks for core's own tests. Internal: not part of `HistoryIngestOptions` and not exported from
+ * `@orbitrace/core/node`; tests reach them through `ingestHistoryWithTestHooks`.
+ */
+export interface HistoryIngestTestHooks {
+  /** Called inside each transaction, just before it commits. */
+  readonly beforeCommit?: () => void;
 }
 
 /** A line ready to store, or a line that must not be stored. */
@@ -119,7 +143,6 @@ const WINDOW_BYTES = 4096;
 const CHUNK_BYTES = 1 << 20;
 const NEWLINE = 0x0a;
 const BYTE_ORDER_MARK = 0xfeff;
-const SUBAGENT_FILE = /^agent-(.+)\.jsonl$/;
 
 function sha256(data: string | Uint8Array): string {
   return createHash("sha256").update(data).digest("hex");
@@ -205,6 +228,8 @@ async function ingestFile(
   filePath: string,
   counters: Counters,
   options: HistoryIngestOptions,
+  hooks: HistoryIngestTestHooks | undefined,
+  ended: boolean,
 ): Promise<void> {
   let fd: number;
   try {
@@ -276,7 +301,7 @@ async function ingestFile(
           }
         }
         store.setFileState(row.id, state);
-        options.testHooks?.beforeCommit?.();
+        hooks?.beforeCommit?.();
         return count;
       });
       counters.linesAdded += added;
@@ -329,16 +354,26 @@ async function ingestFile(
       if (from < bytesRead) partial.push(Buffer.from(data.subarray(from)));
       position += bytesRead;
     }
+    if (ended && partial.length > 0) {
+      // The session has ended: its last line will never get its `\n`. Take it as it is and move
+      // the offset past it, so it is stored once and not read again.
+      take(Buffer.concat(partial), lineStart);
+      lineStart = position;
+      stateDirty = true;
+    }
     if (batch.length > 0 || stateDirty || lineStart !== offset) await commit(lineStart);
   } finally {
     closeSync(fd);
   }
 }
 
-/** The subagent transcripts of a Claude Code session: agent id, transcript and meta paths. */
+/**
+ * The subagent transcripts of a Claude Code session: agent id, transcript and meta paths. The
+ * layout is the adapter's (#189); only the reading differs, since ingest reads by byte offset.
+ */
 function subagentFiles(ref: SessionRef): { agentId: string; transcript: string; meta: string }[] {
   const p = pathApiForPath(ref.locator);
-  const dir = p.join(p.dirname(ref.locator), ref.sessionId, "subagents");
+  const dir = claudeCodeSubagentsDir(ref.locator, ref.sessionId);
   let names: string[];
   try {
     names = readdirSync(dir, { withFileTypes: true })
@@ -350,12 +385,12 @@ function subagentFiles(ref: SessionRef): { agentId: string; transcript: string; 
   }
   const result: { agentId: string; transcript: string; meta: string }[] = [];
   for (const name of names) {
-    const agentId = SUBAGENT_FILE.exec(name)?.[1];
-    if (agentId === undefined) continue;
+    const agentId = claudeCodeSubagentId(name);
+    if (agentId === null) continue;
     result.push({
       agentId,
       transcript: p.join(dir, name),
-      meta: p.join(dir, `agent-${agentId}.meta.json`),
+      meta: p.join(dir, claudeCodeSubagentMetaName(agentId)),
     });
   }
   return result;
@@ -382,22 +417,36 @@ function readMeta(file: string): string | null {
  * it to end and then reads from where it stopped, so overlapping calls (a timer and a file-change
  * event, say) never store a line twice.
  */
-export async function ingestHistory(
+export function ingestHistory(
   store: HistoryStore,
   request: HistoryIngestRequest,
   options: HistoryIngestOptions = {},
+): Promise<HistoryIngestResult> {
+  return ingestHistoryWithTestHooks(store, request, options, undefined);
+}
+
+/**
+ * `ingestHistory` with core's test hooks. Internal: for core's own tests only, not exported from
+ * `@orbitrace/core/node`.
+ */
+export async function ingestHistoryWithTestHooks(
+  store: HistoryStore,
+  request: HistoryIngestRequest,
+  options: HistoryIngestOptions,
+  hooks: HistoryIngestTestHooks | undefined,
 ): Promise<HistoryIngestResult> {
   if (!(store instanceof SqliteHistoryStore)) {
     throw new HistoryStoreError("not-writable", "Not a store opened with openHistoryStore.");
   }
   store.assertWritable();
-  return store.exclusiveWrite(() => runIngest(store, request, options));
+  return store.exclusiveWrite(() => runIngest(store, request, options, hooks));
 }
 
 async function runIngest(
   store: SqliteHistoryStore,
   request: HistoryIngestRequest,
   options: HistoryIngestOptions,
+  hooks: HistoryIngestTestHooks | undefined,
 ): Promise<HistoryIngestResult> {
   store.assertWritable();
   const started = Date.now();
@@ -420,6 +469,7 @@ async function runIngest(
   }
   const seen = new Set<string>();
   const unique = refs.filter((ref) => !seen.has(ref.key) && seen.add(ref.key));
+  const ended = new Set(request.endedSessionKeys ?? []);
 
   let done = 0;
   for (const ref of unique) {
@@ -440,18 +490,21 @@ async function runIngest(
         },
         now(),
       );
+      const hasEnded = ended.has(ref.key);
       await ingestFile(
         store,
         store.fileRow(sessionRowId, "main", ""),
         ref.locator,
         counters,
         options,
+        hooks,
+        hasEnded,
       );
       for (const sub of subagentFiles(ref)) {
         const row = store.fileRow(sessionRowId, "subagent", sub.agentId);
         const meta = readMeta(sub.meta);
         if (meta !== null && meta !== row.meta) store.setFileMeta(row.id, meta);
-        await ingestFile(store, row, sub.transcript, counters, options);
+        await ingestFile(store, row, sub.transcript, counters, options, hooks, hasEnded);
       }
     }
     done += 1;

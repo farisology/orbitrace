@@ -31,6 +31,7 @@
       "types": "./dist/sources/node.d.ts",
       "default": "./dist/sources/node.js"
     },
+    "./history-worker": "./dist/history/worker.js",
     "./schema/replay-v1.schema.json": "./schema/replay-v1.schema.json"
   },
   "files": [

@@ -5,6 +5,7 @@
  */
 
 import { listSessions, type SessionRef, type SourceAdapter } from "@orbitrace/core";
+import type { HistoryCapability } from "@orbitrace/core/node";
 import type { ParsedCommand, SourceFlags } from "../args.js";
 import { CLI_EXIT_CODES, EXIT_OK } from "../errors.js";
 import { CLI_ADAPTERS, resolveRoots, type HostContext, type ResolvedRoots } from "../sessions.js";
@@ -21,6 +22,7 @@ import {
   checkRemoteSources,
   checkRunningRegistry,
   checkSessionRoots,
+  readRecordingState,
 } from "./checks.js";
 import { rootPathShower, type PathShower } from "./paths.js";
 import {
@@ -39,8 +41,8 @@ export interface DoctorRuntime {
   readonly nodeRange?: string | null;
   /** The web app folder. Default: `dist/app` beside the command. `null` means none. */
   readonly appDir?: string | null;
-  /** Loads `node:sqlite`. Default: `loadNodeSqlite`. */
-  readonly loadSqlite?: () => Promise<unknown>;
+  /** Whether the history store can run here. Default: core's `historyCapability()`, quietly. */
+  readonly historyCapability?: () => Promise<HistoryCapability>;
   /** Listens on a free port of 127.0.0.1 and closes it. Default: `bindLoopbackPort`. */
   readonly bindLoopback?: () => Promise<void>;
   /** Source adapters. Default: the ones `list` uses. */
@@ -111,7 +113,9 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         : checkAppBundleFinding(runtime.appDir),
     ),
     await check("loopback-port", () => checkLoopbackPort(runtime.bindLoopback)),
-    await check("history-store", () => checkHistoryStore(nodeVersion, runtime.loadSqlite)),
+    await check("history-store", () =>
+      checkHistoryStore(nodeVersion, runtime.historyCapability, readRecordingState(host)),
+    ),
     await check("hooks", checkHooks),
     await check("remote-sources", checkRemoteSources),
   ];

@@ -29,20 +29,41 @@ export function formatLocalTime(epochMs: number): string {
 }
 
 const LIST_HEADERS = ["KEY", "LAST ACTIVITY", "LIVE", "SUBAGENTS", "PROJECT"] as const;
+const LIST_HEADERS_WITH_SOURCE = [
+  "KEY",
+  "LAST ACTIVITY",
+  "LIVE",
+  "SUBAGENTS",
+  "SOURCE",
+  "PROJECT",
+] as const;
 
-/** The session list as an aligned table, one row per session, with a header row. */
-export function formatSessionTable(sessions: readonly SessionSummary[]): string {
+/**
+ * One row of `orbitrace list`: a session summary, with `history: true` when only the history
+ * store holds the session (its transcript was not found under the folders searched, #195).
+ */
+export type ListedSession = SessionSummary & { readonly history?: true };
+
+/**
+ * The session list as an aligned table, one row per session, with a header row. When a session
+ * comes from the history store, a SOURCE column says `history` for it and `files` for the others;
+ * without one the table is as before.
+ */
+export function formatSessionTable(sessions: readonly ListedSession[]): string {
+  const withSource = sessions.some((session) => session.history === true);
+  const headers = withSource ? LIST_HEADERS_WITH_SOURCE : LIST_HEADERS;
   const rows: string[][] = [
-    [...LIST_HEADERS],
+    [...headers],
     ...sessions.map((session) => [
       session.key,
       formatLocalTime(session.lastActivity),
       session.live,
       session.subagentCount === null ? "-" : String(session.subagentCount),
+      ...(withSource ? [session.history === true ? "history" : "files"] : []),
       sanitizeForTerminal(session.projectLabel),
     ]),
   ];
-  const widths = LIST_HEADERS.map((_, column) =>
+  const widths = headers.map((_, column) =>
     Math.max(...rows.map((row) => (row[column] as string).length)),
   );
   const lines = rows.map((row) =>

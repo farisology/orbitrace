@@ -62,6 +62,7 @@ export const DOCTOR_CODES = {
     "history-store-available",
     "history-store-not-in-use",
     "history-store-unavailable",
+    "history-store-settings-invalid",
   ],
   hooks: ["hooks-not-built"],
   "remote-sources": ["remote-sources-not-built"],

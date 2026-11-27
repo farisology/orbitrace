@@ -74,7 +74,9 @@ describe("buildCli and the notices", () => {
       "packages/app/dist/assets/index-0000.js": "console.log(1)",
       "packages/widget-cli/src/index.ts": "export const x = 1;\n",
     });
-    await expect(buildCli(join(dir, "packages", "widget-cli"))).rejects.toThrow(
+    const cli = join(dir, "packages", "widget-cli");
+    // The worker entry is a synthetic file here; the real build resolves core's (#188).
+    await expect(buildCli(cli, { workerEntry: join(cli, "src", "index.ts") })).rejects.toThrow(
       /but no THIRD-PARTY-NOTICES\.txt/,
     );
   });
@@ -87,7 +89,8 @@ describe("buildCli and the notices", () => {
       "packages/app/dist/third-party-modules.json": "{}",
       "packages/widget-cli/src/index.ts": "export const x = 1;\n",
     });
-    const result = await buildCli(join(dir, "packages", "widget-cli"));
+    const cli = join(dir, "packages", "widget-cli");
+    const result = await buildCli(cli, { workerEntry: join(cli, "src", "index.ts") });
     expect(result.appFiles).toBe(4);
     const app = join(dir, "packages", "widget-cli", "dist", "app");
     expect(readdirSync(app).sort()).toEqual([

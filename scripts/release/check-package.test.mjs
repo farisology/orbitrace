@@ -471,6 +471,7 @@ describe("third-party notices (#143)", () => {
   const bundleTree = (extra = {}) => ({
     "package.json": "{}",
     "dist/index.js": "export {};\n",
+    "dist/history-worker.js": "export {};\n",
     "dist/app/index.html": "<!doctype html>",
     "dist/app/favicon.svg": "<svg/>",
     "dist/app/assets/index-0000.js": "x",
@@ -487,6 +488,23 @@ describe("third-party notices (#143)", () => {
     expect(appNotices.MODULE_LIST_FILE).toBe(LIST);
     expect(cliCopy.NOTICES_FILE).toBe(NOTICES);
     expect(vscodeCopy.NOTICES_FILE).toBe(NOTICES);
+  });
+
+  it("accepts, requires and checks the CLI's history worker beside the command (#188, #195)", () => {
+    const cli = NPM_PACKAGES.find((spec) => spec.dir === "cli");
+    expect(checkPaths(["dist/history-worker.js"], cli?.allow ?? [])).toEqual([]);
+    expect(cli?.require).toContain("dist/history-worker.js");
+    expect(cli?.selfContained).toEqual(["dist/index.js", "dist/history-worker.js"]);
+    expect(checkPaths(["dist/other-worker.js"], cli?.allow ?? [])).toEqual([
+      "dist/other-worker.js: not in the allow-list",
+    ]);
+    // An artefact without the worker fails the check.
+    writeTree(dir, bundleTree({ "README.md": "# widget\n", LICENSE: LICENSE_TEXT }));
+    rmSync(join(dir, "dist", "history-worker.js"));
+    const options = { licenseText: LICENSE_TEXT, licensePath: "LICENSE", literals: [] };
+    expect(checkArtefact(dir, cli ?? SPEC, options).errors.join("\n")).toContain(
+      "dist/history-worker.js",
+    );
   });
 
   it("accepts the notices and the module list in the CLI and .vsix allow-lists", () => {
@@ -663,6 +681,7 @@ describe.skipIf(!built)("the real tarballs (after npm run build)", () => {
       expect(cliPaths.filter((path) => !path.startsWith("dist/app/"))).toEqual([
         "LICENSE",
         "README.md",
+        "dist/history-worker.js",
         "dist/index.js",
         "package.json",
       ]);

@@ -10,6 +10,7 @@
  */
 
 import { ReplayValidationError, SessionReplayError } from "@orbitrace/core";
+import { HistoryStoreError } from "@orbitrace/core/node";
 
 /** Stable error codes, with the process exit code of each. */
 export const CLI_EXIT_CODES = {
@@ -40,6 +41,21 @@ export const CLI_EXIT_CODES = {
    * written to stdout, and nothing goes to stderr.
    */
   "doctor-failed": 12,
+  /**
+   * `history`: the history store cannot run in this Node (`node:sqlite` is missing, for example
+   * on Node 20). The message gives core's reason.
+   */
+  "history-unavailable": 13,
+  /** `history`: another process is writing the history store. */
+  "history-locked": 14,
+  /**
+   * `history`: the history store or its settings could not be used: its folder is not allowed
+   * (relative, inside a git working tree or a Claude Code config folder), the file is not a store
+   * or comes from a newer Orbitrace, or a file operation failed. The message gives the reason.
+   */
+  "history-failed": 15,
+  /** `history delete`: not confirmed (no `--yes` without a terminal, or the answer was no). */
+  "not-confirmed": 16,
 } as const;
 
 export type CliErrorCode = keyof typeof CLI_EXIT_CODES;
@@ -108,7 +124,49 @@ export function toCliError(error: unknown): CliError {
       `The replay did not pass the replay format check.${problems === "" ? "" : `\n${problems}`}`,
     );
   }
+  if (error instanceof HistoryStoreError) return historyCliError(error);
   return new CliError("internal", INTERNAL_MESSAGE);
+}
+
+/** The hint for a history store that cannot run here. */
+export const HISTORY_UNAVAILABLE_HINT =
+  "History needs Node 22.13 or later (for example 'nvm install 22 && nvm use 22'). Everything else works on this Node.";
+
+/**
+ * The `CliError` for a `HistoryStoreError`. Core's message names no path, so it is kept.
+ * `unavailable` and `locked` get their own codes; every other store failure is `history-failed`.
+ */
+export function historyCliError(error: HistoryStoreError): CliError {
+  switch (error.code) {
+    case "unavailable":
+      return new CliError("history-unavailable", error.message, HISTORY_UNAVAILABLE_HINT);
+    case "locked":
+      return new CliError(
+        "history-locked",
+        error.message,
+        "Wait for the other 'orbitrace' to finish (an 'orbitrace open' that records history writes while it runs), then try again.",
+      );
+    case "unsafe-location":
+      return new CliError(
+        "history-failed",
+        error.message,
+        "Set ORBITRACE_DATA_DIR to an absolute path outside any git working tree and outside the Claude Code config folder.",
+      );
+    case "newer-schema":
+      return new CliError(
+        "history-failed",
+        error.message,
+        "Update orbitrace, or delete the store with 'orbitrace history delete --all'.",
+      );
+    case "not-a-store":
+      return new CliError(
+        "history-failed",
+        error.message,
+        "Move that file away, or set ORBITRACE_DATA_DIR to another folder. Run 'orbitrace history where' to see the folder.",
+      );
+    default:
+      return new CliError("history-failed", error.message);
+  }
 }
 
 /** The JSON object written to stderr under `--json`. */

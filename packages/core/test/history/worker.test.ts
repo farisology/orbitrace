@@ -5,6 +5,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { runHistoryIngestWorkerWithTestHooks } from "../../src/history/run-worker.js";
 import {
   openHistoryStore,
   runHistoryIngestWorker,
@@ -117,13 +118,10 @@ describe.skipIf(!SQLITE_AVAILABLE)(`history ingest worker${SKIP_NOTE}`, () => {
     await copyAllFixtures(box);
     const lockFile = join(box.data, "history.lock");
     const controller = new AbortController();
-    const run = runHistoryIngestWorker(
+    const run = runHistoryIngestWorkerWithTestHooks(
       { roots: [box.root] },
-      {
-        workerUrl: pathToFileURL(DIST_WORKER),
-        signal: controller.signal,
-        testHooks: { blockAfterLock: true },
-      },
+      { workerUrl: pathToFileURL(DIST_WORKER), signal: controller.signal },
+      { blockAfterLock: true },
     );
     // The worker blocks for good once it holds the lock; abort as soon as the lock file is there.
     const deadline = Date.now() + 15_000;
