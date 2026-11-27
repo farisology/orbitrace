@@ -9,9 +9,14 @@
  *
  * Falling back to the demo when a host lists no sessions happens after the first listing, in
  * `Root.tsx`.
+ *
+ * Each choice also says how an exported replay is saved (issue 168): through the extension in the
+ * editor tab (a webview cannot download), as a Blob download in a browser. An editor tab without a
+ * host (the extension's demo tab) has neither, so it gets no saver and the app no Export button.
  */
 
 import { createDemoTransport } from "./demo-session";
+import { DOWNLOAD_SAVER, type ReplaySaver } from "./export-replay";
 import { createHttpTransport, type FetchFunction } from "./http-transport";
 import {
   EDITOR_HOST_META_VALUE,
@@ -51,8 +56,15 @@ export type Startup =
       readonly transport: HostTransport;
       /** Preselected session, or `null` for the newest one the host lists. */
       readonly sessionKey: string | null;
+      /** How an exported replay is saved. Absent: no export. */
+      readonly saver?: ReplaySaver;
     }
-  | { readonly kind: "demo"; readonly transport: HostTransport }
+  | {
+      readonly kind: "demo";
+      readonly transport: HostTransport;
+      /** How an exported replay is saved. Absent: no export. */
+      readonly saver?: ReplaySaver;
+    }
   | { readonly kind: "failed"; readonly error: TransportError };
 
 export interface StartupDeps {
@@ -112,17 +124,33 @@ export function createStartup(choice: HostChoice, deps: StartupDeps): Startup {
         api: deps.acquireWebviewApi(),
         events: deps.messageEvents,
       });
-      return { kind: "host", host: "editor", transport, sessionKey: choice.sessionKey };
+      const saver: ReplaySaver = {
+        kind: "save",
+        save: (file) => transport.saveReplay(file.data),
+      };
+      return { kind: "host", host: "editor", transport, sessionKey: choice.sessionKey, saver };
     }
     case "browser": {
       const transport = createHttpTransport({
         token: choice.token,
         ...(deps.fetch !== undefined ? { fetch: deps.fetch } : {}),
       });
-      return { kind: "host", host: "browser", transport, sessionKey: choice.sessionKey };
+      return {
+        kind: "host",
+        host: "browser",
+        transport,
+        sessionKey: choice.sessionKey,
+        saver: DOWNLOAD_SAVER,
+      };
     }
-    case "demo":
-      return { kind: "demo", transport: (deps.createDemo ?? createDemoTransport)() };
+    case "demo": {
+      const transport = (deps.createDemo ?? createDemoTransport)();
+      // A page with the editor's message API but no host tag is an editor tab with no host: it
+      // can neither download nor ask the extension to save.
+      return deps.acquireWebviewApi === undefined
+        ? { kind: "demo", transport, saver: DOWNLOAD_SAVER }
+        : { kind: "demo", transport };
+    }
   }
 }
 

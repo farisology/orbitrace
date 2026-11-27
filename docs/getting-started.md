@@ -163,6 +163,26 @@ your own sessions. An exported replay holds no message text, file path, command 
 id, but agent type names and MCP server names are kept as they are, so look at them before you
 share a file. See [privacy.md](privacy.md#what-a-shared-replay-contains).
 
+### Export from the app
+
+The app can export the replay it shows, in the browser tab `open` starts, in the web app with the
+demo, and in the extension's session tabs. Press **Export** in the header. The dialog offers the
+same three privacy options as `orbitrace export`, all off: **Opaque names**
+(`--opaque-names`), **Round times** with a step in seconds (`--round-times`) and **Bucket
+tokens** (`--bucket-tokens`). Each says what it hides and what it does not; the details are in
+[privacy.md](privacy.md#export-options-opt-in).
+
+The file is made by the same `exportReplay` as the command: with no option chosen it is the same,
+byte for byte, as `orbitrace export` writes for that session. A running session is exported as it
+is at that moment. The suggested file name is `orbitrace.replay.json`, the same as the command
+gives, with no project or session name in it.
+
+- In a browser the file is downloaded where your browser puts downloads.
+- In an editor tab the extension asks where to save it, with the editor's save dialog. The
+  extension's demo tab has no Export button.
+
+The public replay player has no export.
+
 ## Build and install the extension by hand
 
 After `npm run build` at the repository root, `packages/vscode/dist` holds the bundled extension

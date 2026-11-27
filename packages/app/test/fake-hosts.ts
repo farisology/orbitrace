@@ -2,6 +2,7 @@
 // answers `/api/rpc` and streams newline-delimited JSON on `/api/live`. Every value is invented.
 
 import { ReadableStream, type ReadableStreamDefaultController } from "node:stream/web";
+import { checkSaveReplayRequest, type SaveReplayRequest } from "@orbitrace/core";
 import { parseLiveRequest, parseTransportRequest } from "../src/protocol";
 import type { TransportMessage, TransportRequest } from "../src/transport";
 import type { MessageEventSource, WebviewApi } from "../src/webview-transport";
@@ -14,6 +15,8 @@ export interface FakeWebview {
   readonly events: MessageEventSource;
   /** Requests the app posted, as parsed by the host-side check. */
   readonly posted: TransportRequest[];
+  /** Save requests (issue 168) the app posted, as parsed by core's save check. */
+  readonly saves: SaveReplayRequest[];
   /** Deliver a message from the host, as a window `message` event. */
   reply(message: unknown): void;
   /** Fire a `messageerror` event. */
@@ -26,6 +29,7 @@ export interface FakeWebview {
 export function fakeWebview(): FakeWebview {
   const listeners = new Map<string, Set<Listener>>();
   const posted: TransportRequest[] = [];
+  const saves: SaveReplayRequest[] = [];
   let broken = false;
   const fire = (type: string, event: Partial<MessageEvent>) => {
     for (const listener of [...(listeners.get(type) ?? [])]) listener(event as MessageEvent);
@@ -35,7 +39,14 @@ export function fakeWebview(): FakeWebview {
       postMessage(message) {
         if (broken) throw new Error("synthetic channel failure");
         // Structured clone, as the editor does.
-        const request = parseTransportRequest(structuredClone(message));
+        const cloned = structuredClone(message);
+        const save = checkSaveReplayRequest(cloned);
+        if (save !== null) {
+          if (!save.ok) throw new Error("not a valid save request");
+          saves.push(save.request);
+          return;
+        }
+        const request = parseTransportRequest(cloned);
         if (request === null) throw new Error("not a TransportRequest");
         posted.push(request);
       },
@@ -51,6 +62,7 @@ export function fakeWebview(): FakeWebview {
       },
     },
     posted,
+    saves,
     reply(message) {
       fire("message", { data: structuredClone(message) });
     },

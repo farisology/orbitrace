@@ -16,6 +16,10 @@
  * the user has scrolled the lanes away from their end, or it would hide the selected or focused
  * lane; a new selection scrolls its lane into view (`lane-scroll.ts`). Only the lane list scrolls,
  * never the page.
+ *
+ * The playhead stays inside the tracks at every time (issue 172): at the live edge a line drawn
+ * from `left: 100%` would reach past the lanes by its own width and bring up a horizontal
+ * scrollbar that came and went while following (`playheadLeft`).
  */
 
 import { memo, useCallback, useId, useLayoutEffect, useRef } from "react";
@@ -138,9 +142,23 @@ const Lane = memo(function Lane({ agent, duration, selected, onSelect }: LanePro
 const selectFraction = (state: ClockState): number =>
   state.duration > 0 ? state.time / state.duration : 0;
 
+/** Width of the playhead line in CSS pixels: its `border-left` in app.css. */
+export const PLAYHEAD_WIDTH_PX = 2;
+
+/**
+ * CSS `left` of the playhead at `fraction` (0 to 1) of the timeline: the share of the track minus
+ * the same share of the line's width, so the line starts at the left edge at 0 and ends at the
+ * right edge at 1, never past it (issue 172).
+ */
+export function playheadLeft(fraction: number): string {
+  const share = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0;
+  if (share === 0) return "0%";
+  return `calc(${share * 100}% - ${share * PLAYHEAD_WIDTH_PX}px)`;
+}
+
 function Playhead() {
   const fraction = useClockValue(selectFraction);
-  return <div className="playhead" style={{ left: `${fraction * 100}%` }} aria-hidden="true" />;
+  return <div className="playhead" style={{ left: playheadLeft(fraction) }} aria-hidden="true" />;
 }
 
 export interface TimelineProps {

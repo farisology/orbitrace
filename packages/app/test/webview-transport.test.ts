@@ -208,3 +208,50 @@ describe("webview transport", () => {
     expect(webview.listenerCount()).toBe(0);
   });
 });
+
+describe("saving an exported replay (issue 168)", () => {
+  const DATA = '{"version":1}\n';
+
+  it("sends the text with the save request, and nothing else: no path, no file name", async () => {
+    const { webview, transport } = setup();
+    const saving = transport.saveReplay(DATA);
+    expect(webview.saves).toEqual([{ id: 1, method: "saveReplay", params: { data: DATA } }]);
+    expect(webview.posted).toEqual([]);
+    webview.reply({ kind: "result", id: 1, result: { outcome: "saved" } });
+    await expect(saving).resolves.toBe("saved");
+  });
+
+  it("resolves cancelled when the user closed the editor's save dialog", async () => {
+    const { webview, transport } = setup();
+    const saving = transport.saveReplay(DATA);
+    webview.reply({ kind: "result", id: 1, result: { outcome: "cancelled" } });
+    await expect(saving).resolves.toBe("cancelled");
+  });
+
+  it("rejects with the host's error, and with its own when the reply cannot be read", async () => {
+    const { webview, transport } = setup();
+    const refused = transport.saveReplay(DATA);
+    const odd = transport.saveReplay(DATA);
+    webview.reply({
+      kind: "error",
+      id: 1,
+      error: { code: "invalid", message: "The replay did not pass the replay format check." },
+    });
+    webview.reply({ kind: "result", id: 2, result: { outcome: "maybe" } });
+    await expect(refused).rejects.toEqual({
+      code: "invalid",
+      message: "The replay did not pass the replay format check.",
+    });
+    await expect(odd).rejects.toEqual({ code: "internal", message: WEBVIEW_MESSAGES.saveReply });
+  });
+
+  it("rejects at once after the transport is closed", async () => {
+    const { webview, transport } = setup();
+    transport.close();
+    await expect(transport.saveReplay(DATA)).rejects.toEqual({
+      code: "internal",
+      message: WEBVIEW_MESSAGES.closed,
+    });
+    expect(webview.saves).toEqual([]);
+  });
+});

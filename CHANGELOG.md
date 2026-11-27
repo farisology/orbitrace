@@ -67,6 +67,11 @@ merged so far.
   origin (its Content-Security-Policy enforces this). A workflow that runs only when started by
   hand uploads the page as a GitHub Pages artefact; it does not deploy it. See `docs/player.md`
   (#19, #148).
+- Web app: an Export button and dialog that write the replay on screen with core's
+  `exportReplay`, with the opt-in opaque names, rounded times and bucketed tokens, all off; a
+  browser downloads the file and an editor tab saves it through the editor's save dialog. The
+  playhead no longer adds a horizontal scrollbar at the live edge, and a replay that is not live
+  gives its dock the height of its lanes (#168, #172).
 
 ### Changed
 

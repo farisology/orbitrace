@@ -1,9 +1,14 @@
-import { EDITOR_HOST_META_VALUE, HOST_META_NAME, SESSION_META_NAME } from "@orbitrace/core";
-import { beforeEach, describe, expect, it } from "vitest";
+import {
+  EDITOR_HOST_META_VALUE,
+  HOST_META_NAME,
+  SESSION_META_NAME,
+  exportReplay,
+} from "@orbitrace/core";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as vscode from "vscode";
 import { PANEL_VIEW_TYPE, PanelManager, panelId } from "../src/panels.js";
 import { FAKE_CSP_SOURCE, fake } from "./fakes/vscode.js";
-import { fakeReplayer, flush, makeRef, makeSummary } from "./helpers.js";
+import { demoReplay, fakeReplayer, flush, makeRef, makeSummary } from "./helpers.js";
 
 const INDEX = `<!doctype html><html><head><title>t</title><script type="module" src="./assets/a.js"></script></head><body></body></html>`;
 const summary = makeSummary();
@@ -87,6 +92,48 @@ describe("PanelManager", () => {
     // A new tab opens after the old one closed.
     manager.open({ kind: "session", key: summary.key, summary });
     expect(fake.panels).toHaveLength(2);
+  });
+
+  it("saves an exported replay through the editor's save dialog (#168)", async () => {
+    const { manager } = setup();
+    manager.open({ kind: "session", key: summary.key, summary });
+    const panel = fake.panels[0];
+    const target = vscode.Uri.file("/workspace/example-project/chosen.json");
+    fake.saveDialog = () => target;
+    const data = exportReplay(demoReplay()).data;
+    panel?.webview.receive({ id: 5, method: "saveReplay", params: { data } });
+    await vi.waitFor(() => expect(panel?.webview.posted).toHaveLength(1));
+    expect(panel?.webview.posted).toEqual([
+      { kind: "result", id: 5, result: { outcome: "saved" } },
+    ]);
+    expect(fake.saveDialogCalls).toHaveLength(1);
+    expect(new TextDecoder().decode(fake.written.get(target.toString()))).toBe(data);
+  });
+
+  it("uses the saver it was given instead of the dialog", async () => {
+    const replayer = fakeReplayer([makeRef(summary, "-workspace-kite-workshop")]);
+    const saved: string[] = [];
+    const manager = new PanelManager({
+      extensionUri: vscode.Uri.file("/workspace/ext"),
+      replayer,
+      readIndexHtml: () => INDEX,
+      saveReplay: async (data) => {
+        saved.push(data);
+        return "cancelled";
+      },
+    });
+    manager.open({ kind: "session", key: summary.key, summary });
+    const panel = fake.panels[0];
+    const data = exportReplay(demoReplay()).data;
+    panel?.webview.receive({ id: 6, method: "saveReplay", params: { data } });
+    await vi.waitFor(() => expect(panel?.webview.posted).toHaveLength(1));
+    expect(panel?.webview.posted[0]).toEqual({
+      kind: "result",
+      id: 6,
+      result: { outcome: "cancelled" },
+    });
+    expect(saved).toEqual([data]);
+    expect(fake.saveDialogCalls).toHaveLength(0);
   });
 
   it("gives the demo tab no host tags and no message host", async () => {

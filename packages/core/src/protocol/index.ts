@@ -20,6 +20,9 @@
  * - `listSessions` options, when present: an object; `since` a finite number, 0 or more;
  *   `limit` a safe integer, 1 or more.
  * Fields beyond these are dropped, so nothing extra a sender attached travels further.
+ *
+ * Saving an exported replay from the editor tab (#168) is one more request, `saveReplay`, kept
+ * outside `TransportRequest` with its own check: see `./save-replay.ts`.
  */
 
 import type { TransportErrorCode } from "../model/errors.js";
@@ -275,3 +278,6 @@ export function hostLinkFragment(token: string, sessionKey?: string): string {
   }
   return `#${parts.join("&")}`;
 }
+
+/** Saving an exported replay from the editor tab (#168). */
+export * from "./save-replay.js";

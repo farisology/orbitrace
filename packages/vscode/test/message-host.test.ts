@@ -1,7 +1,12 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { SESSION_REPLAY_MESSAGES } from "@orbitrace/core/node";
 import type { TransportMessage } from "@orbitrace/app/transport";
-import type { TransportMessage as CoreTransportMessage } from "@orbitrace/core";
+import {
+  MAX_SAVED_REPLAY_BYTES,
+  exportReplay,
+  type SaveReplayOutcome,
+  type TransportMessage as CoreTransportMessage,
+} from "@orbitrace/core";
 // The app's real webview transport, from source: the agreement test below runs it against this
 // host (#100).
 import { createWebviewTransport } from "../../app/src/webview-transport";
@@ -256,7 +261,7 @@ describe("createMessageHost with core's session replayer and the synthetic fixtu
 
 describe("the editor host and the app's webview transport (#100)", () => {
   /** The app's webview transport wired to a message host, messages cloned as the webview does. */
-  function connect() {
+  function connect(saveReplay?: (data: string) => Promise<SaveReplayOutcome>) {
     const ref = makeRef(makeSummary(), "-workspace-kite-workshop");
     const listeners = new Set<(event: MessageEvent) => void>();
     let deliver: (message: unknown) => void = () => undefined;
@@ -277,6 +282,7 @@ describe("the editor host and the app's webview transport (#100)", () => {
         const event = { data: structuredClone(message) } as MessageEvent;
         for (const listener of listeners) listener(event);
       },
+      ...(saveReplay !== undefined ? { saveReplay } : {}),
     });
     deliver = (message) => void host.handle(message);
     return { transport, host };
@@ -296,5 +302,140 @@ describe("the editor host and the app's webview transport (#100)", () => {
     expect(transport.canOpenInBrowser).toBe(outcome !== "unsupported");
     transport.close();
     host.dispose();
+  });
+
+  it("saves what the app exported, byte for byte, and says saved or cancelled (#168)", async () => {
+    const written: string[] = [];
+    const answers: SaveReplayOutcome[] = ["saved", "cancelled"];
+    const { transport, host } = connect(async (data) => {
+      written.push(data);
+      return answers.shift() ?? "cancelled";
+    });
+    const data = exportReplay(demoReplay(), { names: "opaque", roundTimes: 0.1 }).data;
+    await expect(transport.saveReplay(data)).resolves.toBe("saved");
+    await expect(transport.saveReplay(exportReplay(demoReplay()).data)).resolves.toBe("cancelled");
+    expect(written).toEqual([data, exportReplay(demoReplay()).data]);
+    transport.close();
+    host.dispose();
+  });
+
+  it("passes the host's refusal of a bad replay back to the app (#168)", async () => {
+    const save = vi.fn(async () => "saved" as const);
+    const { transport, host } = connect(save);
+    await expect(transport.saveReplay('{"formatVersion":99}')).rejects.toEqual({
+      code: "invalid",
+      message: MESSAGE_HOST_ERRORS.saveInvalid,
+    });
+    expect(save).not.toHaveBeenCalled();
+    transport.close();
+    host.dispose();
+  });
+});
+
+describe("saving an exported replay (#168)", () => {
+  const DATA = exportReplay(demoReplay()).data;
+
+  function saving(saveReplay?: (data: string) => Promise<SaveReplayOutcome>) {
+    const posted: TransportMessage[] = [];
+    const host = createMessageHost({
+      replayer: fakeReplayer([]),
+      post: (message) => posted.push(message),
+      ...(saveReplay !== undefined ? { saveReplay } : {}),
+    });
+    return { host, posted };
+  }
+
+  it("hands the checked text to the saver and answers with the outcome", async () => {
+    const save = vi.fn(async () => "saved" as const);
+    const { host, posted } = saving(save);
+    await host.handle({ id: 1, method: "saveReplay", params: { data: DATA } });
+    expect(save).toHaveBeenCalledWith(DATA);
+    expect(posted).toEqual([{ kind: "result", id: 1, result: { outcome: "saved" } }]);
+  });
+
+  it("answers cancelled when the user closed the save dialog", async () => {
+    const { host, posted } = saving(async () => "cancelled");
+    await host.handle({ id: 2, method: "saveReplay", params: { data: DATA } });
+    expect(posted).toEqual([{ kind: "result", id: 2, result: { outcome: "cancelled" } }]);
+  });
+
+  it("writes only allow-listed fields: anything else in the text is dropped", async () => {
+    const save = vi.fn(async () => "saved" as const);
+    const { host, posted } = saving(save);
+    // A text that is not what the app makes: indented. It is written again in the plain form.
+    const pretty = JSON.stringify(JSON.parse(DATA), null, 2);
+    await host.handle({ id: 3, method: "saveReplay", params: { data: pretty } });
+    expect(save).toHaveBeenCalledWith(DATA);
+    expect(posted[0]).toMatchObject({ kind: "result", id: 3 });
+  });
+
+  it("refuses text that is not JSON or not a valid replay, without calling the saver", async () => {
+    const save = vi.fn(async () => "saved" as const);
+    const { host, posted } = saving(save);
+    const withExtra = JSON.stringify({ ...JSON.parse(DATA), note: "example-extra" });
+    await host.handle({ id: 4, method: "saveReplay", params: { data: "{not json" } });
+    await host.handle({ id: 5, method: "saveReplay", params: { data: '{"formatVersion":99}' } });
+    await host.handle({ id: 6, method: "saveReplay", params: { data: withExtra } });
+    const invalid = { code: "invalid", message: MESSAGE_HOST_ERRORS.saveInvalid };
+    expect(posted).toEqual([
+      { kind: "error", id: 4, error: invalid },
+      { kind: "error", id: 5, error: invalid },
+      { kind: "error", id: 6, error: invalid },
+    ]);
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("refuses text over the size limit and malformed requests as bad requests", async () => {
+    const save = vi.fn(async () => "saved" as const);
+    const { host, posted } = saving(save);
+    const huge = "a".repeat(MAX_SAVED_REPLAY_BYTES + 1);
+    await host.handle({ id: 7, method: "saveReplay", params: { data: huge } });
+    await host.handle({ id: 8, method: "saveReplay", params: { path: "/not/used" } });
+    // No usable id: dropped, no reply.
+    await host.handle({ method: "saveReplay", params: { data: DATA } });
+    expect(posted).toEqual([
+      {
+        kind: "error",
+        id: 7,
+        error: { code: "bad-request", message: MESSAGE_HOST_ERRORS.saveTooLarge },
+      },
+      {
+        kind: "error",
+        id: 8,
+        error: { code: "bad-request", message: MESSAGE_HOST_ERRORS.badParams },
+      },
+    ]);
+    expect(MESSAGE_HOST_ERRORS.saveTooLarge).toContain("50 MB");
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("answers a failed write with a fixed message that names no path", async () => {
+    const { host, posted } = saving(async () => {
+      throw new Error("EACCES: permission denied, open '/workspace/secret-place/x.json'");
+    });
+    await host.handle({ id: 9, method: "saveReplay", params: { data: DATA } });
+    expect(posted).toEqual([
+      {
+        kind: "error",
+        id: 9,
+        error: { code: "internal", message: MESSAGE_HOST_ERRORS.saveFailed },
+      },
+    ]);
+    expect(JSON.stringify(posted)).not.toContain("secret-place");
+  });
+
+  it("answers unsupported when the host was given no saver, and nothing after dispose", async () => {
+    const { host, posted } = saving();
+    await host.handle({ id: 10, method: "saveReplay", params: { data: DATA } });
+    expect(posted).toEqual([
+      {
+        kind: "error",
+        id: 10,
+        error: { code: "unsupported", message: MESSAGE_HOST_ERRORS.saveUnsupported },
+      },
+    ]);
+    host.dispose();
+    await host.handle({ id: 11, method: "saveReplay", params: { data: DATA } });
+    expect(posted).toHaveLength(1);
   });
 });

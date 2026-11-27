@@ -418,3 +418,13 @@ describe("untrusted strings reach the page as text, never as HTML", () => {
     expect(container.querySelector("[data-injected]")).toBeNull();
   });
 });
+
+describe("no export (issue 168)", () => {
+  it("has no Export control, for a picked replay or the demo", async () => {
+    const { container } = renderPlayer();
+    pick(container, replayFile(makeModel()));
+    await screen.findByRole("list", { name: "Agents" });
+    expect(screen.queryByRole("button", { name: "Export" })).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});

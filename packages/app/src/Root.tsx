@@ -5,6 +5,9 @@
  * - Host (editor or browser): list the host's sessions first. No sessions: fall back to the
  *   demo and say why. Sessions: open the preselected one (or the newest) with a picker to
  *   switch. A refused token or any other failed listing: a plain error page, no demo.
+ *
+ * The start-up's saver, when it has one, gives the app its Export button (issue 168), on the demo
+ * fallback too: in the editor tab that demo still saves through the extension.
  */
 
 import { useEffect, useState } from "react";
@@ -124,9 +127,11 @@ export function Root({
     };
   }, [startup, makeDemo]);
 
+  const saver = startup.kind === "failed" ? undefined : startup.saver;
   const shared = {
     ...(startOptions !== undefined ? { startOptions } : {}),
     ...(frames !== undefined ? { frames } : {}),
+    ...(saver !== undefined ? { saver } : {}),
   };
 
   switch (phase.stage) {

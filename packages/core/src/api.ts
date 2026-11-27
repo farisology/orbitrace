@@ -158,7 +158,9 @@ export interface ExportResult {
  * Ticket #18. Serialise a replay for sharing. Builds the output from an allow-list of
  * ReplayModel fields, so extra input properties are dropped; validates that output against the
  * schema and throws `ReplayValidationError` when it does not validate. So no extra field can
- * leave the machine.
+ * leave the machine. The opt-in `ExportOptions` fields `names`, `roundTimes` and `bucketTokens`
+ * (tickets #122, #123, #167) are applied after the allow-list and before a second schema check,
+ * so they cannot add data the allow-list dropped, and their output is validated again.
  */
 export type ExportReplay = (model: ReplayModel, options?: ExportOptions) => ExportResult;
 

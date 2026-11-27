@@ -66,6 +66,32 @@ describe("axe-core: no WCAG 2.1 A or AA failures", () => {
     expect(await axeProblems()).toEqual([]);
   });
 
+  it("export dialog open on a live session, with a bad rounding step (issue 168)", async () => {
+    const host = scriptedHost(SESSIONS);
+    const saver = { kind: "download" as const, save: async () => "downloaded" as const };
+    render(
+      <OrreryFactoryContext.Provider value={fakeOrrery().factory}>
+        <App
+          transport={host}
+          frames={stillFrames}
+          startOptions={{ ...NO_START_OPTIONS, paused: true }}
+          saver={saver}
+        />
+      </OrreryFactoryContext.Provider>,
+    );
+    await vi.waitFor(() => expect(host.subscribed).toHaveLength(1));
+    act(() => host.push(replayUpdate(makeModel(), "busy")));
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    const dialog = screen.getByRole("dialog", { name: "Export replay" });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Round times" }));
+    fireEvent.change(within(dialog).getByRole("spinbutton", { name: "Step in seconds" }), {
+      target: { value: "0" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Download replay" }));
+    expect(within(dialog).getByText(/^The step must be/)).toBeDefined();
+    expect(await axeProblems()).toEqual([]);
+  });
+
   it("agent selected", async () => {
     renderApp(createDemoTransport(), { start: { select: "a5", time: 200 } });
     await screen.findByRole("heading", { name: "lantern-builder#1" });

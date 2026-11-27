@@ -166,6 +166,16 @@ export class FakeTreeView<T> {
 
 type QuickPickAnswer = (items: readonly unknown[], options: unknown) => unknown;
 
+/** The options the extension passed to `window.showSaveDialog`. */
+export interface SaveDialogOptions {
+  readonly defaultUri?: Uri;
+  readonly filters?: Record<string, string[]>;
+  readonly saveLabel?: string;
+  readonly title?: string;
+}
+
+type SaveDialogAnswer = (options: SaveDialogOptions) => Uri | undefined;
+
 /** What the extension did, and how prompts are answered. */
 export const fake = {
   panels: [] as FakeWebviewPanel[],
@@ -175,6 +185,13 @@ export const fake = {
   errors: [] as string[],
   quickPickCalls: [] as { items: readonly unknown[]; options: unknown }[],
   quickPick: (() => undefined) as QuickPickAnswer,
+  saveDialogCalls: [] as SaveDialogOptions[],
+  /** How the save dialog is answered. Default: closed without choosing (`undefined`). */
+  saveDialog: (() => undefined) as SaveDialogAnswer,
+  /** Files written with `workspace.fs.writeFile`, by URI string. */
+  written: new Map<string, Uint8Array>(),
+  /** Makes `workspace.fs.writeFile` reject with this error. */
+  writeError: null as Error | null,
   reset(): void {
     fake.panels.length = 0;
     fake.treeViews.length = 0;
@@ -183,6 +200,10 @@ export const fake = {
     fake.errors.length = 0;
     fake.quickPickCalls.length = 0;
     fake.quickPick = () => undefined;
+    fake.saveDialogCalls.length = 0;
+    fake.saveDialog = () => undefined;
+    fake.written.clear();
+    fake.writeError = null;
     workspace.workspaceFolders = undefined;
   },
 };
@@ -218,6 +239,10 @@ export const window = {
     fake.errors.push(message);
     return undefined;
   },
+  async showSaveDialog(options: SaveDialogOptions): Promise<Uri | undefined> {
+    fake.saveDialogCalls.push(options);
+    return fake.saveDialog(options);
+  },
 };
 
 export const commands = {
@@ -236,4 +261,10 @@ export const commands = {
 export const workspace = {
   workspaceFolders: undefined as
     undefined | { uri: { scheme: string; fsPath: string }; name: string; index: number }[],
+  fs: {
+    async writeFile(uri: Uri, content: Uint8Array): Promise<void> {
+      if (fake.writeError !== null) throw fake.writeError;
+      fake.written.set(uri.toString(), content);
+    },
+  },
 };

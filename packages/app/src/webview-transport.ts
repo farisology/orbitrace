@@ -9,13 +9,20 @@
  * - A transport error (the webview API throws on `postMessage`, a message cannot be read, or
  *   `close` is called) rejects every pending request and ends every subscription with an
  *   `error` update, so nothing waits for a reply that will not come.
+ * - `saveReplay` (issue 168) sends an exported replay's text with core's additive `saveReplay`
+ *   request. The extension checks it, asks the user where to save it and writes it; the app never
+ *   sends a path or a file name.
  */
 
-import type {
-  ListSessionsOptions,
-  ReplayModel,
-  SessionSummary,
-  Unsubscribe,
+import {
+  SAVE_REPLAY_METHOD,
+  parseSaveReplayResult,
+  type ListSessionsOptions,
+  type ReplayModel,
+  type SaveReplayOutcome,
+  type SaveReplayRequest,
+  type SessionSummary,
+  type Unsubscribe,
 } from "@orbitrace/core";
 import { decodeLiveUpdate, decodeReplay, decodeSessions } from "./client-decode";
 import { parseTransportMessage, transportError, type TransportRequestBody } from "./protocol";
@@ -46,6 +53,12 @@ export interface WebviewTransportOptions {
 }
 
 export interface WebviewTransport extends HostTransport {
+  /**
+   * Ask the extension to save an exported replay (`data`, the text `exportReplay` returned):
+   * resolves with `saved` or `cancelled` (the user closed the editor's save dialog); rejects
+   * with a `TransportError` when the extension refused the text or could not write the file.
+   */
+  saveReplay(data: string): Promise<SaveReplayOutcome>;
   /** Stop listening, reject pending requests and end subscriptions. Safe to call twice. */
   close(): void;
 }
@@ -54,7 +67,11 @@ export const WEBVIEW_MESSAGES = {
   sendFailed: "The message to the editor could not be sent.",
   unreadable: "A message from the editor could not be read.",
   closed: "The connection to the editor is closed.",
+  saveReply: "The editor's answer to the save request could not be read.",
 } as const;
+
+/** A request this transport posts: a `TransportRequest` or the save request, without its id. */
+type OutgoingBody = TransportRequestBody | Omit<SaveReplayRequest, "id">;
 
 interface Pending {
   readonly resolve: (value: unknown) => void;
@@ -118,20 +135,20 @@ export function createWebviewTransport({ api, events }: WebviewTransportOptions)
   };
 
   /** Post request `id`; `entry` handles its reply. */
-  const send = (id: number, body: TransportRequestBody, entry: Pending): void => {
+  const send = (id: number, body: OutgoingBody, entry: Pending): void => {
     if (closed !== null) {
       entry.reject(closed);
       return;
     }
     pending.set(id, entry);
     try {
-      api.postMessage({ ...body, id } as TransportRequest);
+      api.postMessage({ ...body, id } as TransportRequest | SaveReplayRequest);
     } catch {
       close(transportError("internal", WEBVIEW_MESSAGES.sendFailed));
     }
   };
 
-  const request = (body: TransportRequestBody): Promise<unknown> =>
+  const request = (body: OutgoingBody): Promise<unknown> =>
     new Promise((resolve, reject) => {
       send(allocateId(), body, { resolve, reject });
     });
@@ -187,6 +204,13 @@ export function createWebviewTransport({ api, events }: WebviewTransportOptions)
     },
     async openInBrowser(key?: string): Promise<void> {
       await request({ method: "openInBrowser", params: key === undefined ? {} : { key } });
+    },
+    async saveReplay(data: string): Promise<SaveReplayOutcome> {
+      const result = parseSaveReplayResult(
+        await request({ method: SAVE_REPLAY_METHOD, params: { data } }),
+      );
+      if (result === null) throw transportError("internal", WEBVIEW_MESSAGES.saveReply);
+      return result.outcome;
     },
     close() {
       close(transportError("internal", WEBVIEW_MESSAGES.closed));
