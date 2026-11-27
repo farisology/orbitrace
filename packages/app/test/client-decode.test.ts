@@ -9,6 +9,7 @@ import {
   decodeSessions,
 } from "../src/client-decode";
 import { SUMMARY, makeModel } from "./helpers";
+import { withRecordedSplit, withReplyModels } from "./ledger-models";
 
 /** What `run` throws, or `undefined`. */
 function thrown(run: () => unknown): unknown {
@@ -68,6 +69,63 @@ describe("decodeReplay", () => {
     const error = thrown(() => decodeReplay({ formatVersion: 1 }));
     expect(error).toMatchObject({ code: "invalid" });
     expect((error as { message: string }).message.startsWith(CLIENT_MESSAGES.badReplay)).toBe(true);
+  });
+});
+
+/** `model` with `extra` added to the main agent's first reply. */
+function withMainReplyExtra(extra: Record<string, unknown>): unknown {
+  const model = makeModel();
+  const [main, ...rest] = model.agents;
+  const [first, ...replies] = main.replies;
+  return {
+    ...model,
+    agents: [{ ...main, replies: [{ ...first, ...extra }, ...replies] }, ...rest],
+  };
+}
+
+describe("decodeReplay and decodeLiveUpdate: reply details (#203)", () => {
+  it("accept a model whose replies carry the cache-write split or their own model", () => {
+    for (const model of [withRecordedSplit(), withReplyModels("all"), withReplyModels("some")]) {
+      expect(decodeReplay(model)).toBe(model);
+      const update = { type: "replay", replay: model, live: "busy" } as const;
+      expect(decodeLiveUpdate(update)).toBe(update);
+    }
+  });
+
+  it("refuse a detail of the wrong type, naming the pointer and rule but not the value", () => {
+    const cases: [Record<string, unknown>, string][] = [
+      [
+        { cacheWrite5mTokens: -1 },
+        "/agents/0/replies/0/cacheWrite5mTokens: must be a whole number of tokens, 0 or more",
+      ],
+      [
+        { cacheWrite1hTokens: 1.5 },
+        "/agents/0/replies/0/cacheWrite1hTokens: must be a whole number of tokens, 0 or more",
+      ],
+      [{ model: "synthetic model name" }, "/agents/0/replies/0/model: must be a model id"],
+    ];
+    for (const [extra, problem] of cases) {
+      const value = withMainReplyExtra(extra);
+      const error = thrown(() => decodeReplay(value)) as { code: string; message: string };
+      expect(error.code).toBe("invalid");
+      expect(error.message).toBe(`${CLIENT_MESSAGES.badReplay} ${problem}`);
+      expect(error.message).not.toContain("synthetic model name");
+      expect(
+        decodeLiveUpdate({ type: "replay", replay: value as never, live: "busy" }),
+      ).toMatchObject({ type: "error", error: { code: "invalid", message: error.message } });
+    }
+  });
+
+  it("still refuse any other unknown property, on a reply or anywhere else", () => {
+    const onReply = thrown(() => decodeReplay(withMainReplyExtra({ prompt: "synthetic" })));
+    expect(onReply).toMatchObject({ code: "invalid" });
+    expect((onReply as { message: string }).message).toContain("/agents/0/replies/0");
+    expect((onReply as { message: string }).message).not.toContain('"synthetic"');
+    const onRoot = thrown(() => decodeReplay({ ...withRecordedSplit(), extra: true }));
+    expect(onRoot).toMatchObject({ code: "invalid" });
+    const onAgent = { ...withRecordedSplit() } as unknown as { agents: unknown[] };
+    onAgent.agents = [{ ...(onAgent.agents[0] as object), cwd: "x" }, ...onAgent.agents.slice(1)];
+    expect(thrown(() => decodeReplay(onAgent))).toMatchObject({ code: "invalid" });
   });
 });
 

@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { validateReplay } from "../../src/index.js";
+import { validateReplay, validateReplayModel, withoutReplyDetails } from "../../src/index.js";
 import {
   createClaudeCodeAdapter,
   createNodeSessionReplayer,
@@ -100,7 +100,9 @@ describe("createNodeSessionReplayer", () => {
     expect(key).not.toContain(SESSION);
 
     const model = await replayer.load(key);
-    expect(validateReplay(model)).toBe(true);
+    // Built with reply details (#203): checked as an in-memory model, and a plain v1 without them.
+    expect(validateReplayModel(model)).toBe(true);
+    expect(validateReplay(withoutReplyDetails(model))).toBe(true);
     expect(model.agents.map((a) => [a.id, a.callsign, a.family])).toEqual([
       ["main", "main", "opus"],
       ["a1", "example-helper", "sonnet"],

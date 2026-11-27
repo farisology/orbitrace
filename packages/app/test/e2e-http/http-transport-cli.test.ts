@@ -17,7 +17,13 @@
  * sent SIGINT.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { validateReplay, type ReplayModel, type SessionSummary } from "@orbitrace/core";
+import {
+  validateReplay,
+  validateReplayModel,
+  withoutReplyDetails,
+  type ReplayModel,
+  type SessionSummary,
+} from "@orbitrace/core";
 import { fixturePaths } from "@orbitrace/fixtures";
 import { createHttpTransport, HTTP_MESSAGES, type FetchFunction } from "../../src/http-transport";
 import { LIVE_PATH, RPC_PATH } from "../../src/protocol";
@@ -146,10 +152,12 @@ describe.skipIf(process.platform === "win32")(
       });
     });
 
-    it("loads a replay that passes the replay v1 schema", async () => {
+    it("loads a replay that passes the replay v1 schema, with reply details (issue 203)", async () => {
       const transport = createHttpTransport({ token, fetch: recordingFetch(origin, exchanges) });
       const replay = await transport.loadReplay(key);
-      expect(validateReplay(replay)).toBe(true);
+      // The host builds with each reply's details; without them it is a plain replay v1.
+      expect(validateReplayModel(replay)).toBe(true);
+      expect(validateReplay(withoutReplyDetails(replay))).toBe(true);
       expect(replay.agents.length).toBeGreaterThan(0);
       expect(JSON.stringify(replay)).not.toContain(sandbox.root);
     });
@@ -167,7 +175,7 @@ describe.skipIf(process.platform === "win32")(
       const unsubscribe = transport.subscribe(summary.key, (update) => updates.push(update));
       await eventually(() => updates.length >= 1);
       const first = replayOf(updates[0]);
-      expect(validateReplay(first)).toBe(true);
+      expect(validateReplayModel(first)).toBe(true);
 
       const live = exchanges.slice(before).find((exchange) => exchange.path === LIVE_PATH);
       expect(live?.status).toBe(200);
@@ -177,7 +185,7 @@ describe.skipIf(process.platform === "win32")(
       // Real file watching with the command's defaults; generous for a loaded machine.
       await eventually(() => updates.length >= 2, 30_000);
       const second = replayOf(updates[1]);
-      expect(validateReplay(second)).toBe(true);
+      expect(validateReplayModel(second)).toBe(true);
       expect(second.totals.toolCalls).toBe(first.totals.toolCalls + 1);
       expect(JSON.stringify(updates)).not.toContain(sandbox.root);
 

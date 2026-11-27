@@ -181,6 +181,23 @@ config folder created after start-up is found). Both hosts use it.
 - Every failure becomes a `TransportErrorCode` (`not-found`, `unreadable`, `invalid`,
   `internal`) with a fixed, path-free message.
 
+**Where reply details travel (#203).** Every build of the replayer, for `load` and for each
+`follow` update, uses `BuildReplayOptions.replyDetails`, so the model a host sends carries each
+reply's cache writes by lifetime and its own model id where the transcript recorded them
+(`ReplayReplyDetails`, in memory only). The replayer checks it with `describeReplayModelProblems`
+(the details type-checked, the rest the strict replay v1 check), and the app's client decoder
+(`packages/app/src/client-decode.ts`) checks what arrives over HTTP or from the editor with
+`validateReplayModel`, the same rule, so any other unknown property is still refused. A
+transcript dropped on the app is built with the details in the page. A replay file never holds
+them: `exportReplay` drops them, so every export path (`orbitrace export`, the app's Export, the
+editor's save) writes the same bytes as before, and a `.replay.json` opened in the app or the
+public player is still checked with the exact `validateReplay`, so the ledger shows its fallback
+note there. The CLI and the extension needed no change: both use this replayer. A host never
+sends details to an app that cannot read them: the CLI and the extension each ship their own
+copy of the built app (see How the CLI ships the web app (#76) and How the extension ships the
+web app (#87)), so the decoder is always from the same build as the replayer; the decoder still
+accepts a model without details.
+
 The Claude Code adapter's `watchSession` watches the folders of the main transcript, the
 session's `subagents/` folder and the live registry folder. The default mode, `auto`, uses
 `fs.watch` events and keeps a polling check every 5 s beside them, because on network drives and

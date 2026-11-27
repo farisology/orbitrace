@@ -11,12 +11,19 @@
  * `SessionRef` stay inside this module. What it hands out for the app is a `ReplayModel`, a
  * `SessionSummary` or a `{ code, message }` error.
  *
+ * Ticket #203: every build, the first one and each live rebuild, is made with
+ * `BuildReplayOptions.replyDetails`, so the models it hands out carry each reply's cache writes
+ * by lifetime and its own model id when the transcript recorded them (`ReplayReplyDetails`), and
+ * the ledger can price them exactly. Such a model is checked with `describeReplayModelProblems`
+ * (details type-checked, everything else the strict replay v1 check), not with the exact file
+ * check. `exportReplay` drops the details, so an export of a loaded model is byte for byte what
+ * it was before.
+ *
  * This file imports no Node module, but it is exported only from `@orbitrace/core/node`, next to
  * `createNodeSessionReplayer`, which fills in the Claude Code adapter and the process's roots.
  */
 
 import type { BuildReplayOptions } from "../api.js";
-import { describeReplayProblems } from "../export/validate.js";
 import type { ParsedSession } from "../model/parsed.js";
 import type { ReplayModel } from "../model/replay.js";
 import type {
@@ -29,15 +36,18 @@ import type {
   Unsubscribe,
 } from "../model/sources.js";
 import { parseSession } from "../parser/index.js";
-import { buildReplay } from "../replay/index.js";
+import { buildReplay, describeReplayModelProblems } from "../replay/index.js";
 import { findSessionByKey, listSessions, toSessionSummary } from "../sources/index.js";
 import { SessionReplayError, toTransportError, type TransportErrorInfo } from "./errors.js";
 
 /** Roots to search: a fixed list, or a function called each time the replayer lists sessions. */
 export type SessionRootsSource = readonly SourceRoot[] | (() => Promise<readonly SourceRoot[]>);
 
-/** Builder options the replayer passes to every build. It manages `previous` itself. */
-export type SessionReplayBuildOptions = Omit<BuildReplayOptions, "previous">;
+/**
+ * Builder options the replayer passes to every build. It manages `previous` itself, and always
+ * builds with `replyDetails` (#203).
+ */
+export type SessionReplayBuildOptions = Omit<BuildReplayOptions, "previous" | "replyDetails">;
 
 export interface SessionReplayerOptions {
   /** Adapters, as for `listSessions`. The first adapter whose `runtime` matches a session opens it. */
@@ -87,16 +97,17 @@ export interface SessionReplayer {
    */
   find(key: string): Promise<SessionRef>;
   /**
-   * Build the replay for one session, once: a fresh build with no `previous`, checked against
-   * the replay v1 schema. Rejects with a `SessionReplayError` whose code is `not-found`,
-   * `unreadable`, `invalid` or `internal`.
+   * Build the replay for one session, once: a fresh build with no `previous`, with each reply's
+   * details (#203), checked with `describeReplayModelProblems`. Rejects with a
+   * `SessionReplayError` whose code is `not-found`, `unreadable`, `invalid` or `internal`.
    */
   load(key: string): Promise<ReplayModel>;
   /**
    * Follow one session. The first update is the current state; each change reported by the
-   * adapter's `watchSession` rebuilds the replay with the last model sent as `previous`, so
-   * consecutive models keep the append-stability rules and the app can pass each one after the
-   * first to `OrreryHandle.updateModel`.
+   * adapter's `watchSession` rebuilds the replay with the last model sent as `previous`, with
+   * each reply's details and the same check as `load`, so consecutive models keep the
+   * append-stability rules and the app can pass each one after the first to
+   * `OrreryHandle.updateModel`.
    *
    * - Changes that arrive while a build runs are merged into one more build, so updates are in
    *   order and never overlap.
@@ -118,7 +129,9 @@ function adapterFor(
 /** Create a session replayer over the given adapters and roots. */
 export function createSessionReplayer(options: SessionReplayerOptions): SessionReplayer {
   const { adapters, roots } = options;
-  const buildOptions: SessionReplayBuildOptions = options.build ?? {};
+  // `replyDetails` is set last, so a caller that passes it anyway (the type forbids it) cannot
+  // turn the details off and leave the ledger on its fallback.
+  const buildOptions: BuildReplayOptions = { ...options.build, replyDetails: true };
   const known = new Map<string, SessionRef>();
 
   async function currentRoots(): Promise<readonly SourceRoot[]> {
@@ -173,8 +186,10 @@ export function createSessionReplayer(options: SessionReplayerOptions): SessionR
     } catch {
       throw new SessionReplayError("internal", SESSION_REPLAY_MESSAGES.buildFailed);
     }
-    // The problem lines name a JSON pointer and a rule and never quote a value.
-    const problems = describeReplayProblems(model);
+    // The model carries reply details (#203), so it is checked as an in-memory model: each
+    // detail on its own, the rest against the strict replay v1 schema. The problem lines name a
+    // JSON pointer and a rule and never quote a value.
+    const problems = describeReplayModelProblems(model);
     if (problems.length > 0) {
       throw new SessionReplayError(
         "invalid",

@@ -39,6 +39,15 @@ recorded: a missing split or model stays missing, never 0. Recent Claude Code tr
 `usage.cache_creation` (key names checked on one machine on 27 Nov 2026); Anthropic's prompt
 caching documentation says `cache_creation_input_tokens` equals the sum of its two values.
 
+**Where they reach the inspector (#203).** The session replayer in `@orbitrace/core/node`
+builds every replay with `{ replyDetails: true }`, for the first load and for every live update,
+so a session opened with `orbitrace open` or in the editor tab arrives in the app with the
+details, and the app's client decoder accepts them (details type-checked, everything else strict
+replay v1). A `.jsonl` transcript dropped on the app is built with them too. A replay file has
+none, so an opened `.replay.json`, in the app or the public player, keeps one "Cache creation"
+row and the fallback note below. Exporting drops them: every export writes the same bytes with
+or without them.
+
 **Per model.** A reply is priced at its own model when the in-memory model records it, and
 otherwise at its agent's model (the model most of the agent's replies used). "Per model" groups
 replies by the model they were priced at, so an agent that switched models appears under each
@@ -130,8 +139,8 @@ is 2x the input price, the 5-minute price 1.25x).
   that has `usage.cache_creation`), each part is priced at its own price, and the inspector
   shows the cache creation row as two rows, "Cache creation, 5-minute cache" and "Cache
   creation, 1-hour cache".
-- **When it is not** (an opened replay file, which never carries it; a transcript from a Claude
-  Code version that does not write it; or a host that does not pass the details on), every cache
+- **When it is not** (an opened replay file, which never carries it; or a transcript from a
+  Claude Code version that does not write it), every cache
   creation token is priced at the 5-minute price, the lifetime Anthropic's prompt caching
   documentation names as the default. The inspector keeps one "Cache creation" row and a note
   says the tokens were priced at the 5-minute cache price because the replay does not record

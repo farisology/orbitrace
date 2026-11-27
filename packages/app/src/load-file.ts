@@ -6,13 +6,20 @@
  *   fails come from `describeReplayProblems`, which never quotes a value from the file.
  * - `.jsonl`: a Claude Code transcript. The whole text is handed to `parseSession` as one item
  *   (the parser splits it into lines), then `buildReplay` makes the replay. Only the main
- *   transcript is in one file, so subagents are not shown; their calls still are.
+ *   transcript is in one file, so subagents are not shown; their calls still are. The replay is
+ *   built with each reply's details (`replyDetails`, issue 203: cache writes by lifetime and the
+ *   reply's own model id), as the hosts build it, so the ledger prices it the same way; it is
+ *   checked with `describeReplayModelProblems`.
+ *
+ * A replay file never carries reply details and stays held to the exact replay v1 check, so a
+ * shared file is exactly replay v1 and the ledger shows its fallback note for it.
  *
  * Error messages are fixed text: they never include the file name or any of its content.
  */
 
 import {
   buildReplay,
+  describeReplayModelProblems,
   describeReplayProblems,
   parseSession,
   validateReplay,
@@ -55,7 +62,7 @@ export function droppedKind(fileName: string): DroppedKind | null {
   return null;
 }
 
-/** Check parsed JSON as a replay v1. */
+/** Check parsed JSON as a replay v1, exactly: a value with reply details is refused. */
 export function replayFromValue(value: unknown): FileLoadResult {
   if (validateReplay(value)) return { ok: true, kind: "replay", model: value };
   return fail(FILE_MESSAGES.invalidReplay, describeReplayProblems(value));
@@ -72,7 +79,7 @@ export function replayFromJson(text: string): FileLoadResult {
   return replayFromValue(value);
 }
 
-/** Parse a transcript's text and build its replay, in the page. */
+/** Parse a transcript's text and build its replay with reply details, in the page. */
 export async function replayFromTranscript(text: string): Promise<FileLoadResult> {
   let model: ReplayModel;
   try {
@@ -85,13 +92,12 @@ export async function replayFromTranscript(text: string): Promise<FileLoadResult
           : [];
       return fail(FILE_MESSAGES.noTimedLines, problems);
     }
-    model = buildReplay(parsed);
+    model = buildReplay(parsed, { replyDetails: true });
   } catch {
     return fail(FILE_MESSAGES.buildFailed);
   }
-  if (!validateReplay(model)) {
-    return fail(FILE_MESSAGES.buildFailed, describeReplayProblems(model));
-  }
+  const problems = describeReplayModelProblems(model);
+  if (problems.length > 0) return fail(FILE_MESSAGES.buildFailed, problems);
   return { ok: true, kind: "transcript", model };
 }
 

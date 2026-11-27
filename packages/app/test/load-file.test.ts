@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildReplay,
+  cacheWriteBasis,
+  exportReplay,
+  parseSession,
+  sessionLedger,
+  validateReplay,
+} from "@orbitrace/core";
+import {
   FILE_MESSAGES,
   droppedKind,
   loadFile,
@@ -9,6 +17,7 @@ import {
   replayFromValue,
 } from "../src/load-file";
 import { DEMO, makeModel } from "./helpers";
+import { withRecordedSplit } from "./ledger-models";
 
 // A hand-written synthetic transcript: one prompt, one reply with two tool calls (one fails),
 // the results, and a closing reply. Every id and value is invented.
@@ -176,6 +185,80 @@ describe("transcript files", () => {
       ok: false,
       error: { title: FILE_MESSAGES.noTimedLines, problems: [] },
     });
+  });
+});
+
+/**
+ * `TRANSCRIPT` with the cache-write split by lifetime on its first reply (#203), and the closing
+ * reply on another model. Invented numbers: 5 + 15 = the reply's 20 cache creation tokens.
+ */
+const SPLIT_TRANSCRIPT = `${lines
+  .map((line, index) => {
+    if (line.type !== "assistant") return JSON.stringify(line);
+    const message = line.message as Record<string, unknown>;
+    const usage = message["usage"] as Record<string, unknown>;
+    const next =
+      index === 1
+        ? {
+            ...message,
+            usage: {
+              ...usage,
+              cache_creation: { ephemeral_5m_input_tokens: 5, ephemeral_1h_input_tokens: 15 },
+            },
+          }
+        : { ...message, model: "claude-haiku-5-5" };
+    return JSON.stringify({ ...line, message: next });
+  })
+  .join("\n")}\n`;
+
+describe("reply details (#203)", () => {
+  it("a dropped transcript is built with each reply's split and model", async () => {
+    const result = await replayFromTranscript(SPLIT_TRANSCRIPT);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.model.agents[0].replies).toEqual([
+      expect.objectContaining({
+        cacheCreationTokens: 20,
+        cacheWrite5mTokens: 5,
+        cacheWrite1hTokens: 15,
+        model: "claude-opus-5-5",
+      }),
+      expect.not.objectContaining({ cacheWrite5mTokens: expect.anything() }),
+    ]);
+    expect(result.model.agents[0].replies[1]?.model).toBe("claude-haiku-5-5");
+    const ledger = sessionLedger(result.model);
+    expect(cacheWriteBasis(ledger.session)).toBe("recorded");
+    expect(ledger.session.ownModelReplies).toBe(2);
+  });
+
+  it("the model built in the page is what the hosts build, and exports the plain bytes", async () => {
+    const result = await replayFromTranscript(SPLIT_TRANSCRIPT);
+    if (!result.ok) throw new Error("expected a replay");
+    const parsed = await parseSession({ main: [SPLIT_TRANSCRIPT], subagents: [] });
+    expect(result.model).toEqual(buildReplay(parsed, { replyDetails: true }));
+    expect(validateReplay(result.model)).toBe(false);
+    expect(exportReplay(result.model).data).toBe(exportReplay(buildReplay(parsed)).data);
+  });
+
+  it("a replay file exported from it has no details, so the ledger falls back", async () => {
+    const result = await replayFromTranscript(SPLIT_TRANSCRIPT);
+    if (!result.ok) throw new Error("expected a replay");
+    const reopened = replayFromJson(exportReplay(result.model).data);
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    expect(validateReplay(reopened.model)).toBe(true);
+    const ledger = sessionLedger(reopened.model);
+    expect(cacheWriteBasis(ledger.session)).toBe("unrecorded");
+    expect(ledger.session.ownModelReplies).toBe(0);
+  });
+
+  it("a replay file that carries details is refused: a file stays exact replay v1", () => {
+    const result = replayFromValue(withRecordedSplit());
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.title).toBe(FILE_MESSAGES.invalidReplay);
+    expect(result.error.problems.length).toBeGreaterThan(0);
+    expect(result.error.problems.join("\n")).toContain("cacheWrite5mTokens");
   });
 });
 

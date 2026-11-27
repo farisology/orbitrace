@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildReplay,
   parseSession,
-  validateReplay,
+  validateReplayModel,
   type ReplayModel,
   type SessionRef,
 } from "../../src/index.js";
@@ -190,9 +190,10 @@ describe("createSessionReplayer: load", () => {
     const world = fakeWorld([session]);
     const replayer = createSessionReplayer({ adapters: [world.adapter], roots: [ROOT] });
     const model = await replayer.load("k-1");
-    expect(validateReplay(model)).toBe(true);
+    expect(validateReplayModel(model)).toBe(true);
     const direct = buildReplay(
       await parseSession({ main: session.main, subagents: session.subagents }),
+      { replyDetails: true },
     );
     expect(model).toEqual(direct);
     expect(model.agents.map((a) => a.callsign)).toEqual(["main", "code-reviewer"]);
@@ -219,7 +220,9 @@ describe("createSessionReplayer: load", () => {
     grow(session);
     const model = await replayer.load("k-1");
     expect(model).toEqual(
-      buildReplay(await parseSession({ main: session.main, subagents: session.subagents })),
+      buildReplay(await parseSession({ main: session.main, subagents: session.subagents }), {
+        replyDetails: true,
+      }),
     );
   });
 
@@ -266,10 +269,11 @@ describe("createSessionReplayer: follow", () => {
     await rec.waitFor(2);
     const second = replayOf(rec.updates[1]);
     expect(rec.updates[1]).toMatchObject({ type: "replay", live: "idle" });
-    expect(validateReplay(second)).toBe(true);
+    expect(validateReplayModel(second)).toBe(true);
     expect(second).toEqual(
       buildReplay(await parseSession({ main: session.main, subagents: session.subagents }), {
         previous: first,
+        replyDetails: true,
       }),
     );
     expect(second.agents.map((a) => [a.id, a.callsign])).toEqual([
