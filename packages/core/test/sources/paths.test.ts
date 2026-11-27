@@ -1,5 +1,6 @@
 // Path rules for macOS, Linux and Windows. Pure string tests: nothing here touches a disk.
 // Every home folder, project and session name is invented.
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   CLAUDE_CONFIG_ENV,
@@ -39,6 +40,19 @@ describe("pathApiFor / pathApiForPath / platformForPath", () => {
     expect(platformForPath("/srv/x")).toBe("posix");
     expect(pathApiForPath("D:\\x").sep).toBe("\\");
     expect(pathApiForPath("/srv/x").sep).toBe("/");
+  });
+
+  it("reads a path rooted with one backslash and no drive letter as Windows (#210)", () => {
+    // What path.join("/srv", ...) returns on Windows: rooted on the current drive.
+    const rooted = path.win32.join("/srv", "config", "projects", "-srv-example", "s.jsonl");
+    expect(rooted).toBe("\\srv\\config\\projects\\-srv-example\\s.jsonl");
+    expect(platformForPath(rooted)).toBe("win32");
+    expect(platformForPath("\\srv")).toBe("win32");
+    expect(pathApiForPath(rooted).dirname(rooted)).toBe("\\srv\\config\\projects\\-srv-example");
+    // Posix paths stay posix, also with a backslash later in a name.
+    expect(platformForPath("/srv/odd\\name")).toBe("posix");
+    expect(platformForPath("relative\\x")).toBe("posix");
+    expect(platformForPath("")).toBe("posix");
   });
 });
 

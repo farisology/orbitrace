@@ -16,6 +16,15 @@ import { collect, lineWithCwd } from "./helpers/mem-fs.js";
 
 let base: string;
 
+/**
+ * Appended to the name of a test that makes symbolic links and skips on Windows, where creating
+ * one needs administrator rights or Developer Mode: the reason there, nothing elsewhere (#210).
+ */
+const WINDOWS_NO_SYMLINKS =
+  process.platform === "win32"
+    ? " (skipped on Windows: creating a symbolic link needs administrator rights or Developer Mode)"
+    : "";
+
 async function put(file: string, text: string, mtimeSeconds?: number): Promise<void> {
   await mkdir(join(file, ".."), { recursive: true });
   await writeFile(file, text, "utf8");
@@ -64,23 +73,26 @@ describe("createNodeFileSystem", () => {
     await expect(collect(fs.readLines(missing))).rejects.toThrow();
   });
 
-  it.skipIf(process.platform === "win32")("reports symbolic links as their targets", async () => {
-    const dir = join(base, "links");
-    await put(join(dir, "target.jsonl"), "x");
-    await symlink(join(dir, "target.jsonl"), join(dir, "link.jsonl"));
-    await symlink(join(dir, "nowhere"), join(dir, "broken"));
-    const entries = await createNodeFileSystem().readDir(dir);
-    expect(entries.find((e) => e.name === "link.jsonl")).toEqual({
-      name: "link.jsonl",
-      isFile: true,
-      isDirectory: false,
-    });
-    expect(entries.find((e) => e.name === "broken")).toEqual({
-      name: "broken",
-      isFile: false,
-      isDirectory: false,
-    });
-  });
+  it.skipIf(process.platform === "win32")(
+    `reports symbolic links as their targets${WINDOWS_NO_SYMLINKS}`,
+    async () => {
+      const dir = join(base, "links");
+      await put(join(dir, "target.jsonl"), "x");
+      await symlink(join(dir, "target.jsonl"), join(dir, "link.jsonl"));
+      await symlink(join(dir, "nowhere"), join(dir, "broken"));
+      const entries = await createNodeFileSystem().readDir(dir);
+      expect(entries.find((e) => e.name === "link.jsonl")).toEqual({
+        name: "link.jsonl",
+        isFile: true,
+        isDirectory: false,
+      });
+      expect(entries.find((e) => e.name === "broken")).toEqual({
+        name: "broken",
+        isFile: false,
+        isDirectory: false,
+      });
+    },
+  );
 });
 
 describe("Claude Code adapter on a temporary config tree", () => {
@@ -150,7 +162,7 @@ describe("Claude Code adapter on a temporary config tree", () => {
   });
 
   it.skipIf(process.platform === "win32")(
-    "removes a root reached through a symbolic link",
+    `removes a root reached through a symbolic link${WINDOWS_NO_SYMLINKS}`,
     async () => {
       const real = join(base, "real-config");
       await mkdir(join(real, "projects"), { recursive: true });

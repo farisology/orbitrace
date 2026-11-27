@@ -30,15 +30,21 @@ export function pathApiFor(platform: string): PathApi {
 
 /**
  * Path functions for an existing path string, for code that gets a path but no platform
- * (a `SourceRoot` or a locator). Drive-letter and UNC paths are Windows; the rest is posix.
+ * (a `SourceRoot` or a locator). Drive-letter, UNC and backslash-rooted paths are Windows; the
+ * rest is posix.
  */
 export function pathApiForPath(value: string): PathApi {
   return pathApiFor(platformForPath(value));
 }
 
-/** `win32` for drive-letter and UNC paths, `posix` for the rest. */
+/**
+ * `win32` for a path that starts with a drive letter (`C:\`, `C:/`) or with a backslash: a UNC
+ * path (`\\server\share`) or a path rooted on the current drive (`\srv\x`, what `path.join("/srv",
+ * ...)` gives on Windows). `posix` for the rest. A posix absolute path starts with `/`, so a path
+ * that starts with a backslash is never one (#210).
+ */
 export function platformForPath(value: string): "win32" | "posix" {
-  return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith("\\\\") ? "win32" : "posix";
+  return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith("\\") ? "win32" : "posix";
 }
 
 /** An environment variable, looked up case-insensitively on Windows as Windows does. */
