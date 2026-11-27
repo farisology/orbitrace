@@ -100,7 +100,11 @@ in `src/follow.ts`, the follow states in `src/clock.ts`). Both host transports d
 updates, so follow works the same in an editor tab and in the browser. A session listed as ended is read once
 with `loadReplay`. The picker is hidden in demo mode.
 
-**Serving the bundle.** Every asset URL in `dist/` is relative (Vite `base: "./"`), chunks load
+**Serving the bundle.** `npm run build` writes `dist/` with `index.html`, `assets/`,
+`favicon.svg`, `orbitrace-mark.svg`, `THIRD-PARTY-NOTICES.txt` (the third-party packages in the
+bundle with their licence texts) and `third-party-modules.json` (which package is in which
+chunk), plus `dist/types/` (the host entry above, built by `tsc`). The CLI and the extension copy
+every file except `dist/types/`. Every asset URL in `dist/` is relative (Vite `base: "./"`), chunks load
 relative to the script, and there is no inline script, style or event handler, so a
 Content-Security-Policy with `script-src` limited to the bundle works. In an editor webview, put
 a `<base href>` pointing at the bundle folder's webview URI into `index.html`, with the meta

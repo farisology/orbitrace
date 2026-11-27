@@ -25,8 +25,12 @@ Extensions view finds nothing; a `.vsix` you install by hand shows under **Insta
 | `scripts/release/lib.mjs`           | The list of packed packages and their allow-lists, and shared helpers.                                          |
 | `scripts/release/tools/`            | Pinned `@vscode/vsce` 4.1.1 and `ovsx` 1.4.0 with their own lockfile. Not a workspace. Both need Node.js 22.    |
 
-The tests next to the scripts run in `npm test` at the root, so CI runs them on every pull request.
-One of them packs the real core, renderer and cli tarballs and checks their contents, so a change
+The tests next to the scripts run in `npm test` at the root, so CI runs them on every pull request,
+on Node 20, 22, 24 and 26. Node 20 is past its end of life (April 2026) but stays in `engines` and
+in CI for now, by the owner's decision on #174. Nothing in the build, the tests or the built viewer
+needs a newer line: CI builds and tests the whole repository on Node 20. `.nvmrc` (20.19) and the
+CLI's `engines` (`>=20`) stay as they are.
+One of the tests packs the real core, renderer and cli tarballs and checks their contents, so a change
 that ships a test, a fixture, a source map or a local path fails CI. Another installs the real CLI
 tarball alone and runs it (a few seconds; see [Try the artefacts](#try-the-artefacts)).
 
@@ -318,7 +322,5 @@ after a partial publish finishes the rest.
 ## Known gaps
 
 - **No extension publisher** (#98): see owner step 2.
-- **`scripts/release/tools/package-lock.json` is not watched by Dependabot**, whose npm entry
-  covers the root only.
 - **The workflow has not run on GitHub yet.** The scripts it calls were run locally; the workflow
   file itself was only parsed and checked by tests.

@@ -227,6 +227,14 @@ Open string fields (`family`, agent `name`, `model`, tool `name`) take new value
 version. A reader must handle values it does not know: draw an unknown `family` as `unknown`, and
 use names only as labels.
 
+A v1 replay exported with opaque names (`names: "opaque"` in `ExportOptions`, or
+`orbitrace export --opaque-names`) holds numbered labels instead of the names a user chose: agent
+types such as `agent-1` (callsign `agent-1#2`), MCP tools such as `mcp:server-1`, and tool names
+such as `tool_1`. It can also hold a `model` of `null` with a known `family` such as `opus`,
+because a model id that is not a known Claude model id is dropped while its family is kept; this
+is not a parse failure. The rules are in
+[docs/privacy.md](privacy.md#export-options-opt-in).
+
 ## Validating with Ajv
 
 `validateReplay`, `describeReplayProblems`, `assertReplay` and `exportReplay` use a validator

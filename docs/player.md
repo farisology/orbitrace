@@ -101,9 +101,12 @@ npm run build                          # the workspace packages the player impor
 npm run build:player -w @orbitrace/app # writes packages/app/dist-player
 ```
 
-`packages/app/dist-player` is the whole site: `index.html`, `assets/`, `favicon.svg` and
-`orbitrace-mark.svg`. Every URL in it is relative, so copy the folder to any path of any static
-host. Put replay files next to it to link them with `?replay=`.
+`packages/app/dist-player` is the whole site: `index.html`, `assets/`, `favicon.svg`,
+`orbitrace-mark.svg` and `THIRD-PARTY-NOTICES.txt`. The notices file lists the third-party
+packages in the bundle with their licence texts (see
+[Third-party notices](releasing.md#third-party-notices)); copy it with the rest. Every URL in the
+folder is relative, so copy the folder to any path of any static host. Put replay files next to it
+to link them with `?replay=`.
 
 The page uses JavaScript modules, which browsers do not load from a file opened straight from
 disk (`file://`). Serve the folder over http, even locally, for example:

@@ -19,6 +19,27 @@ from a real session.
 The 4 ms share leaves the rest of a 16.7 ms frame to the browser's raster and compositing and to
 the app's own panels. A slowed CPU stands in for a slower laptop than the reference machine.
 
+### Reading an allocation test failure
+
+When `test/allocation.test.ts` fails, it prints the bytes V8's sampling heap profiler saw in the
+budgeted files (the renderer's `src/` and core), per file and then per allocating function with
+its caller, each with its number of samples and its largest object.
+
+- Many samples of one small size mean per-frame garbage: code on the frame path makes a new
+  object every frame. The named function is the one to fix.
+- A few samples of mixed sizes, from about a hundred bytes to a few KB, mean V8 compiled a
+  function during the measured run. The profiler charges the compiled code and its metadata to
+  whatever JavaScript was running when the compile was installed, so the named function need not
+  be the one compiled.
+
+The rule that follows: a helper on the frame path that is called once per frame and almost
+always returns at once (a cache or size check) keeps its check in the caller, and the caller
+calls it only when there is work to do. V8 optimises such a helper only after tens of thousands
+of calls, which can fall inside the measured run. That was #158: `ensureGradients` and
+`scheduleFlashes` compiled late on Node 22. Now `drawFrame` compares the canvas size with the
+cached gradients, and `computeFrameState` compares the flash speed and warp time, before calling
+them. The tether-point helper of `scoreWaveAngles` was inlined for the same reason.
+
 ## Measurements
 
 Reference machine: Apple M1 Pro, 8 cores, 16 GB, macOS 27.0, Node v26.5.0, Chrome 158 headless

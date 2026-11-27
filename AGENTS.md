@@ -42,9 +42,11 @@ npm run build
 npm test
 npm run lint
 npm run typecheck
+npm run format:check
 npm run privacy
 ```
 
+- CI (`.github/workflows/ci.yml`) runs these checks on Node 20, 22, 24 and 26, and the VS Code integration test in a separate job on Node 22. A failure in any of them, `npm run format:check` and the integration test included, fails the CI run.
 - If a command fails, fix the cause or report the failure in the pull request. Do not hide it or skip it.
 - If you could not run a command, say so and why. Never report a result you did not see.
 - `npm run privacy` fails when forbidden strings appear in the files or in their file and folder names. `npm run privacy -- --range <base>..<head>` checks every line your commits add, every path they add or rename to, and every commit message; CI runs both (`.github/workflows/ci.yml`). Findings name the file, line and rule, never the matched text.

@@ -7,7 +7,7 @@ Orbitrace replays Claude Code agent sessions as an orrery: the main agent in the
 ## Start here
 
 1. **Branch flow.** Create a feature branch from `dev`. Open a pull request into `dev`. The owner merges `dev` into `main`. Never push to `main`.
-2. **Commands before a pull request.** From the repository root: `npm ci`, `npm run build`, `npm test`, `npm run lint`, `npm run typecheck`, `npm run privacy`.
+2. **Commands before a pull request.** From the repository root: `npm ci`, `npm run build`, `npm test`, `npm run lint`, `npm run typecheck`, `npm run format:check`, `npm run privacy`.
 3. **Privacy rules.** The repository is public. Never commit real session content: no prompts, replies, file contents, command lines, paths from your machine, project names, session ids, emails or secrets. Tests use synthetic fixtures only.
 
 Coding agents: read [AGENTS.md](AGENTS.md) as well. It has the same rules in more detail.
@@ -29,7 +29,7 @@ Coding agents: read [AGENTS.md](AGENTS.md) as well. It has the same rules in mor
 
 ## Setup
 
-You need npm and a Node.js version that matches `engines` in the root `package.json`: `^20.19.0 || ^22.13.0 || >=24`, that is Node 20.19 or a later 20.x, Node 22.13 or a later 22.x, or Node 24 or later. `.nvmrc` names `20.19`, the lowest supported line. CI builds and tests on Node 20 and 22.
+You need npm and a Node.js version that matches `engines` in the root `package.json`: `^20.19.0 || ^22.13.0 || >=24`, that is Node 20.19 or a later 20.x, Node 22.13 or a later 22.x, or Node 24 or later. `.nvmrc` names `20.19`, the lowest supported line. CI builds and tests on Node 20, 22, 24 and 26.
 
 The floor comes from the `engines` fields of the build tools (checked on 27 Nov 2026 against the installed versions):
 
@@ -41,7 +41,7 @@ The floor comes from the `engines` fields of the build tools (checked on 27 Nov 
 | `vitest`               | 4.1.12  | `^20.0.0 \|\| ^22.0.0 \|\| >=24.0.0`  |
 | `typescript-eslint`    | 8.74.0  | `^18.18.0 \|\| ^20.9.0 \|\| >=21.1.0` |
 
-The root range is where all five overlap. Two exceptions: `npm run bench:browser` in `packages/renderer` needs Node 22 or later (`npm run bench:node`, the Node benchmarks next to it, does not), and `@vitest/eslint-plugin` 1.6.28 (a lint plugin) declares `>=22`, so npm may print an engine warning for it on Node 20. CI runs the lint step on Node 20 as well as 22. The `orbitrace` command in `packages/cli` keeps its own `engines` field (`>=20`), which is about running the built command, not building it.
+The root range is where all five overlap. Two exceptions: `npm run bench:browser` in `packages/renderer` needs Node 22 or later (`npm run bench:node`, the Node benchmarks next to it, does not), and `@vitest/eslint-plugin` 1.6.28 (a lint plugin) declares `>=22`, so npm may print an engine warning for it on Node 20. CI runs the lint step on every Node version it tests, Node 20 included. The `orbitrace` command in `packages/cli` keeps its own `engines` field (`>=20`), which is about running the built command, not building it.
 
 The repository uses npm workspaces with these packages:
 
@@ -72,10 +72,11 @@ npm run build       # build every package
 npm test            # run the tests (Vitest, synthetic fixtures only)
 npm run lint        # run ESLint
 npm run typecheck   # check TypeScript types (strict mode)
+npm run format:check  # check formatting (Prettier); npm run format fixes it
 npm run privacy     # fail if forbidden strings appear
 ```
 
-- CI (`.github/workflows/ci.yml`) runs the same commands on Node 20 and 22 for every pull request into `dev` or `main` and every push to `dev`. It also runs `npm run privacy -- --range <base>..<head>`, which checks every line the new commits add, every path they add or rename to, and every commit message. Run that yourself before you push, with `dev` as the base.
+- CI (`.github/workflows/ci.yml`) runs the same commands on Node 20, 22, 24 and 26 for every pull request into `dev` or `main` and every push to `dev`. Each one fails the CI run when it fails, `npm run format:check` included. It also runs `npm run privacy -- --range <base>..<head>`, which checks every line the new commits add, every path they add or rename to, and every commit message. Run that yourself before you push, with `dev` as the base.
 - `npm run privacy` checks file and folder names as well as file contents. A finding prints `file:line: rule` and never the matched text; line `0` means the path itself matched, and the matched part of the path is printed as `[redacted]`.
 - The range check also looks at the author and committer email of each commit, because a merge publishes them. An address that is not a noreply address (such as `<id>+<user>@users.noreply.github.com`) is a warning that names the commit's short sha, never the address, and the check still passes. `--strict-authors` turns these warnings into failures. CI does not use it yet; the owner decides when CI switches to strict.
 - Extra private-name patterns (one regular expression per line, case-insensitive, `#` for comments) come from the git-ignored `.privacy-denylist.local` at the repository root and from the environment variable `ORBITRACE_PRIVACY_DENYLIST`; both apply. A bad pattern is reported by its line number only, never printed. In CI the variable is filled from a repository secret of the same name on pushes to `dev` only, so pull requests (including those from forks, which get no secrets) use the built-in patterns. The secret is optional; the owner may add it under the repository's Actions secrets.
@@ -86,7 +87,7 @@ npm run privacy     # fail if forbidden strings appear
 
 These are not part of `npm test`. Run them when your change touches what they cover.
 
-- **VS Code integration test.** `npm run test:integration -w orbitrace-vscode`, after `npm run build`, with Node 22 or later. It downloads VS Code into `packages/vscode/node_modules/.cache/vscode-test/` and runs the built extension in a real window against synthetic sessions only. CI runs it in a separate job that does not block a merge yet. What it checks and its settings are in [packages/vscode/README.md](packages/vscode/README.md#integration-test).
+- **VS Code integration test.** `npm run test:integration -w orbitrace-vscode`, after `npm run build`, with Node 22 or later. It downloads VS Code into `packages/vscode/node_modules/.cache/vscode-test/` and runs the built extension in a real window against synthetic sessions only. CI runs it in a separate job on Node 22, and a failure fails the CI run. What it checks and its settings are in [packages/vscode/README.md](packages/vscode/README.md#integration-test).
 - **Benchmarks.** In `packages/renderer`, after `npm run build` at the root: `npm run bench:node` (draw path and parse/build in Node) and `npm run bench:browser` (draw benchmark in headless Chrome, Node 22 or later). `bench:browser` reads `BENCH_DPR` (default 2), `BENCH_CPU_THROTTLE` (default 1) and `BENCH_AGENTS` (default `15,100,500`), and `CHROME_PATH`. The targets and the last measured results are in [docs/performance.md](docs/performance.md); the commands are also in [packages/renderer/README.md](packages/renderer/README.md#commands).
 - **Accessibility.** The WCAG 2.1 AA audit of the app shell, its fixes, what still needs a person with a screen reader, and how to run the checks are in [packages/app/ACCESSIBILITY.md](packages/app/ACCESSIBILITY.md#running-the-checks).
 - **Export privacy.** The field-by-field audit of what can reach a shared replay, with its findings and the tests that guard them, is [docs/security/export-audit.md](docs/security/export-audit.md). A change to what a replay contains updates [docs/privacy.md](docs/privacy.md) in the same pull request.

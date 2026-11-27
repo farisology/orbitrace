@@ -89,6 +89,9 @@ merged so far.
 - CI: the formatting check and the VS Code integration test now fail the build. The whole tree
   passes `npm run format:check`; the generated `design/tokens.css` and the generated contrast
   tables in `design/identity.md` are left to their generator (#50).
+- CI builds and tests on Node 24 and 26 as well as 20 and 22; docs catch-up for the allocation
+  test, opaque-name replays, third-party notices and the release gaps (#174, #165, #166, #169,
+  #170, #173).
 
 ### Fixed
 
