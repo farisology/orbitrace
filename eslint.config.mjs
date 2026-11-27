@@ -9,7 +9,8 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig(
   {
-    ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**"],
+    // .vscode-test/ is where @vscode/test-electron downloads VS Code by default (#106).
+    ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**", "**/.vscode-test/**"],
   },
   js.configs.recommended,
   tseslint.configs.recommended,

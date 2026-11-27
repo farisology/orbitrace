@@ -75,7 +75,10 @@ npm run typecheck   # check TypeScript types (strict mode)
 npm run privacy     # fail if forbidden strings appear
 ```
 
-- CI (`.github/workflows/ci.yml`) runs the same commands on Node 20 and 22 for every pull request into `dev` or `main` and every push to `dev`. It also runs `npm run privacy -- --range <base>..<head>`, which checks every line the new commits add and every commit message. Run that yourself before you push, with `dev` as the base.
+- CI (`.github/workflows/ci.yml`) runs the same commands on Node 20 and 22 for every pull request into `dev` or `main` and every push to `dev`. It also runs `npm run privacy -- --range <base>..<head>`, which checks every line the new commits add, every path they add or rename to, and every commit message. Run that yourself before you push, with `dev` as the base.
+- `npm run privacy` checks file and folder names as well as file contents. A finding prints `file:line: rule` and never the matched text; line `0` means the path itself matched, and the matched part of the path is printed as `[redacted]`.
+- The range check also looks at the author and committer email of each commit, because a merge publishes them. An address that is not a noreply address (such as `<id>+<user>@users.noreply.github.com`) is a warning that names the commit's short sha, never the address, and the check still passes. `--strict-authors` turns these warnings into failures. CI does not use it yet; the owner decides when CI switches to strict.
+- Extra private-name patterns (one regular expression per line, case-insensitive, `#` for comments) come from the git-ignored `.privacy-denylist.local` at the repository root and from the environment variable `ORBITRACE_PRIVACY_DENYLIST`; both apply. A bad pattern is reported by its line number only, never printed. In CI the variable is filled from a repository secret of the same name on pushes to `dev` only, so pull requests (including those from forks, which get no secrets) use the built-in patterns. The secret is optional; the owner may add it under the repository's Actions secrets.
 - Passing `npm run privacy` does not prove a change is clean: it only catches known patterns. Also work through the privacy checklist in the pull request template.
 - Paste the real result of each command into the pull request. If a command fails, say so. Do not leave it out.
 
