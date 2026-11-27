@@ -107,6 +107,7 @@ sessions is not an error either: the command prints "No sessions found." and exi
 
 ```text
 orbitrace export (<session-key> | --latest) [-o <file>] [--force] [--pretty]
+                 [--opaque-names] [--round-times <seconds>] [--bucket-tokens]
                  [--config-dir <path>]... [--extra-roots] [--json]
 ```
 
@@ -114,7 +115,7 @@ Builds the replay of one session with core's session replayer and writes it with
 `exportReplay`: the structure-only replay format described in
 [replay-format.md](replay-format.md). No message text, tool input or output, file path, command
 line, working folder or session id is in it. Agent type names, model ids and MCP server names
-are kept as they are, so look at them before you share a file.
+are kept as they are, so look at them before you share a file, or add `--opaque-names`.
 
 | Option                          | Meaning                                                                                                                                   |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -123,8 +124,32 @@ are kept as they are, so look at them before you share a file.
 | `-o, --output <file>`           | Write to this file. A folder gets `orbitrace.replay.json` inside it. `-` means stdout. Without `-o`, the replay goes to stdout.           |
 | `--force`                       | Replace the output file if it exists. Without it, an existing file is never replaced.                                                     |
 | `--pretty`                      | Indent the JSON.                                                                                                                          |
+| `--opaque-names`                | Replace the names you chose with numbered labels (below). Off by default.                                                                 |
+| `--round-times <seconds>`       | Round every time to this step, for example `0.1`: from `0.001` to `3600`, in whole milliseconds. Off by default.                          |
+| `--bucket-tokens`               | Write token counts as buckets (below). Off by default.                                                                                    |
 | `--config-dir`, `--extra-roots` | As for `list`. Use the same values as for the `list` that gave you the key: the key depends on the folder the session was found in.       |
 | `--json`                        | See [JSON output](#json-output).                                                                                                          |
+
+The last three are opt-in (#122, #123). Without them the file is the same, byte for byte, as
+before they existed. Each keeps the file a valid replay v1. What each one hides, and what it
+does not:
+
+- `--opaque-names` writes every subagent's agent type as `agent-1`, `agent-2`, ... (the callsign
+  keeps its `#n`), every MCP server as `mcp:server-1`, ..., every tool name that is not built in
+  as `tool_1`, ..., and every model id that is not a known Claude model id as `null` (the family
+  is kept only when it is `fable`, `opus`, `sonnet` or `haiku`). Labels count up in order of first
+  appearance within the file; they are not derived from the names, and no table of names is
+  written. It does not hide built-in tool names, known Claude model ids, how many distinct names
+  there are or which agents and calls share one. After `-o`, the note on stderr says the names
+  were replaced instead of asking you to check them.
+- `--round-times <seconds>` hides exact times. The order of everything and rough durations stay;
+  a cut idle gap is never rounded below one step.
+- `--bucket-tokens` writes each reply's token counts as the nearest of 1, 2, 5, 10, 20, 50, ...
+  (0 stays 0); agent and session totals are the sums of those. It hides exact sizes, not rough
+  ones.
+
+None of them hides the structure: agents, who started whom, waves, tool calls and their kinds,
+failures and replies. The details are in [privacy.md](privacy.md#export-options-opt-in).
 
 ## Where sessions are looked for
 
@@ -143,19 +168,23 @@ With `--json`, every command writes exactly one JSON document, on one line, to s
 else. A failure writes nothing to stdout and one JSON object to stderr. Warnings are inside the
 document, not on stderr.
 
-| Command                   | Document on stdout                                                        |
-| ------------------------- | ------------------------------------------------------------------------- |
-| `--version --json`        | `{ "name", "version", "core" }`                                           |
-| `help --json`             | `{ "name", "version", "commands": [...], "exitCodes": {...} }`            |
-| `list --json`             | `{ "sessions": [SessionSummary...], "warnings": [...] }`                  |
-| `export --json` (stdout)  | `{ "key", "fileName", "output": null, "bytes", "warnings", "replay" }`    |
-| `export --json -o <file>` | `{ "key", "fileName", "output": "<file as typed>", "bytes", "warnings" }` |
-| `open --json`             | `{ "url", "origin", "port", "key", "browser", "warnings" }`               |
+| Command                   | Document on stdout                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| `--version --json`        | `{ "name", "version", "core" }`                                                      |
+| `help --json`             | `{ "name", "version", "commands": [...], "exitCodes": {...} }`                       |
+| `list --json`             | `{ "sessions": [SessionSummary...], "warnings": [...] }`                             |
+| `export --json` (stdout)  | `{ "key", "fileName", "output": null, "bytes", "warnings", "options", "replay" }`    |
+| `export --json -o <file>` | `{ "key", "fileName", "output": "<file as typed>", "bytes", "warnings", "options" }` |
+| `open --json`             | `{ "url", "origin", "port", "key", "browser", "warnings" }`                          |
 
 The `export --json` document is for scripts. It contains the session key, the `-o` path as typed
 and any `--config-dir` path as typed (in a warning), so share the replay file (`-o`) or the
 document's `replay` value, not the whole document (finding F7 of
 [security/export-audit.md](security/export-audit.md)).
+
+`options` says which export options were applied:
+`{ "names": "as-written" | "opaque", "roundTimes": <seconds> | null, "bucketTokens": <boolean> }`.
+Without the flags it is `{ "names": "as-written", "roundTimes": null, "bucketTokens": false }`.
 
 A `SessionSummary` has `key`, `runtime`, `projectLabel`, `sessionId`, `lastActivity` (Unix epoch
 milliseconds), `live` (`busy`, `idle`, `ended` or `unknown`) and `subagentCount`. It has no path.

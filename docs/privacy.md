@@ -165,6 +165,8 @@ Not guaranteed:
   (`mcp:<server>` keeps the MCP server name), times and token counts. A name you chose is exported
   as it is, so a custom agent type or MCP server named after a project or client is in the file,
   and a secret shaped like an identifier placed in a name field would pass the pattern check.
+  The opt-in [export options](#export-options-opt-in) replace those names and coarsen times and
+  token counts; they are off by default.
 - Export does not check the rules the schema cannot express (totals equal the sums, parents exist,
   ids in order, unique callsigns). The replay builder keeps them.
 
@@ -172,7 +174,53 @@ Not guaranteed:
 
 Some allowed fields are names you chose. A custom agent type, an MCP server name or a callsign can
 reveal a project or a client if you named it after one. Look at the agent and tool names in a
-replay before you post it.
+replay before you post it, or export with `--opaque-names` (next section).
+
+### Export options (opt-in)
+
+Three export options make a shared replay coarser (issues #122 and #123). They are off unless you
+ask for them: with none of them, the file is the same, byte for byte, as before the options
+existed (a test checks this against every golden replay). Each one keeps the file a valid replay
+v1; the format does not change. On the command line they are `orbitrace export --opaque-names`,
+`--round-times <seconds>` and `--bucket-tokens` (see [cli.md](cli.md#orbitrace-export)); in code
+they are the `names: "opaque"`, `roundTimes` and `bucketTokens` fields of `ExportOptions`
+(`exportReplay`, `packages/core/src/export/`).
+
+**`--opaque-names`** (`names: "opaque"`) hides the names you chose:
+
+- Each subagent's agent type becomes `agent-1`, `agent-2`, ...; its callsign keeps its `#n`
+  (`code-reviewer#2` becomes `agent-1#2`). The main agent stays `main`.
+- Each MCP server name becomes `mcp:server-1`, `mcp:server-2`, ...
+- Each tool name that is not on a fixed list of built-in names becomes `tool_1`, `tool_2`, ...
+  The list is `OPAQUE_KEPT_TOOL_NAMES` in `packages/core/src/export/opaque-names.ts`; a tool a
+  newer Claude Code release adds shows as `tool_<n>` until it is added there.
+- Each model id that is not a known Claude model id becomes `null`. Known means one of the
+  family words `fable`, `opus`, `sonnet` or `haiku`, alone or as `claude-<family>-<version>` or
+  `claude-<version>-<family>`, where the version is digits and dashes with an optional 8-digit
+  date or `-latest` (`claude-opus-5-5`, `claude-3-5-sonnet-20241022`). The family is kept when
+  it is one of those four, and becomes `unknown` otherwise, because a family word outside that
+  list is part of the model id.
+
+A label is a counter, in order of first appearance within one export (agents in id order, then
+tools agent by agent). It is not a hash of the name, and no table from labels to names is
+written, so a label cannot be turned back into the name. The same name can get a different label
+in another file. What still shows: built-in tool names such as `Bash` or `Read`, known Claude
+model ids, how many distinct names there are, which agents and calls share a name, and the order
+in which they first appear.
+
+**`--round-times <seconds>`** (`roundTimes`) hides exact times. Every time (agent, tool and reply
+times, cut gaps, `duration` and `realDuration`) is rounded to the step, for example 0.1 s, from
+0.001 s to 3600 s. A cut gap is never rounded below one step. The order of everything, rough
+durations, and the real session length to the step still show.
+
+**`--bucket-tokens`** (`bucketTokens`) hides exact token counts. Each reply's four token counts
+become the nearest of 1, 2, 5, 10, 20, 50, ... (0 stays 0), at most a factor of about 1.6 from
+the real count. Totals are the sums of those buckets. The rough size of each reply, prompt and
+file read still shows.
+
+None of the options hides the structure: how many agents there were, who started whom, the waves,
+how many tool calls of each kind, which calls failed, and how many replies there were. Without
+`--round-times` the times are exact, and without `--bucket-tokens` the token counts are exact.
 
 ## Editor tab and browser view
 

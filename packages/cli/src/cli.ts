@@ -9,8 +9,8 @@
  * - No message shows an absolute path from the machine unless the user typed that path.
  */
 
-import { exportReplay, type ReplayModel } from "@orbitrace/core";
-import { parseCommandLine, wantsJson, type ParsedCommand } from "./args.js";
+import { exportReplay, type ExportOptions, type ReplayModel } from "@orbitrace/core";
+import { parseCommandLine, wantsJson, type ExportFlags, type ParsedCommand } from "./args.js";
 import { EXIT_OK, errorToJson, errorToText, toCliError } from "./errors.js";
 import { helpJson, helpText } from "./help.js";
 import { runOpen, type OpenRuntime } from "./open.js";
@@ -46,6 +46,20 @@ const NO_SESSIONS_TEXT =
 const SHARE_NOTE =
   "The replay holds structure only. Agent type and MCP server names are kept as they are: check them before you share it.\n";
 
+/** The share note after `--opaque-names` (#122). */
+const OPAQUE_SHARE_NOTE =
+  "The replay holds structure only. Agent type, MCP server, custom tool and unknown model names were replaced by numbered labels; structure, counts, times and token counts are still in it.\n";
+
+/** The `ExportOptions` of core for the export flags. Leaves out what is at its default. */
+export function toExportOptions(flags: ExportFlags, pretty: boolean): ExportOptions {
+  return {
+    pretty,
+    ...(flags.names === "opaque" ? { names: flags.names } : {}),
+    ...(flags.roundTimes === null ? {} : { roundTimes: flags.roundTimes }),
+    ...(flags.bucketTokens ? { bucketTokens: true } : {}),
+  };
+}
+
 async function runList(
   command: Extract<ParsedCommand, { kind: "list" }>,
   io: CliIo,
@@ -77,7 +91,8 @@ async function runExport(
     command.key === undefined ? { latest: true } : { key: command.key },
   );
   const model: ReplayModel = await replayer.load(key);
-  const result = exportReplay(model, { pretty: command.pretty });
+  const options = command.exportOptions;
+  const result = exportReplay(model, toExportOptions(options, command.pretty));
   const toStdout = command.output === undefined || command.output === "-";
 
   if (toStdout) {
@@ -88,6 +103,7 @@ async function runExport(
         output: null,
         bytes: Buffer.byteLength(result.data, "utf8"),
         warnings,
+        options,
         replay: JSON.parse(result.data) as unknown,
       });
     } else {
@@ -110,10 +126,11 @@ async function runExport(
       output: written.shown,
       bytes: written.bytes,
       warnings,
+      options,
     });
   } else {
     io.stdout(`Wrote ${written.shown} (${written.bytes} bytes).\n`);
-    io.stderr(SHARE_NOTE);
+    io.stderr(options.names === "opaque" ? OPAQUE_SHARE_NOTE : SHARE_NOTE);
   }
   return EXIT_OK;
 }
