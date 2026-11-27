@@ -1,5 +1,6 @@
-// The inspector's ledger panel (#26): tables, labels, the unpriced note, and axe-core with the
-// app's style sheets and ledger.css. Every value is invented.
+// The inspector's ledger panel (#26, #191): tables, labels, the unpriced note, the cache-write
+// split and its fallback note, and axe-core with the app's style sheets and ledger.css. Every
+// value is invented.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +23,7 @@ import { ClockContext } from "../src/use-clock";
 import { axeProblems, useAppStyles } from "./axe";
 import { declaration, rule } from "./css";
 import { DEMO, makeModel } from "./helpers";
+import { withMixedSplit, withRecordedSplit, withReplyModels } from "./ledger-models";
 
 const srcDir = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
 const ledgerCss = readFileSync(join(srcDir, "ledger.css"), "utf8");
@@ -84,6 +86,85 @@ describe("LedgerTokenTable", () => {
       expect(cells(row)[1]).toBe(NOT_PRICED);
     }
     expect(cells(within(table).getByRole("row", { name: /^Output/ }))[0]).toBe("40");
+  });
+});
+
+describe("LedgerTokenTable with cache writes by lifetime (#191)", () => {
+  const rowHeaders = (table: HTMLElement) =>
+    within(table)
+      .getAllByRole("rowheader")
+      .map((h) => h.textContent);
+
+  it("shows the cache creation row split in two, each with tokens and an estimated cost", () => {
+    const ledger = ledgerOf(withRecordedSplit());
+    render(withClock(<LedgerTokenTable entry={ledger.session} caption="Session tokens" />));
+    const table = screen.getByRole("table", { name: "Session tokens" });
+    expect(rowHeaders(table)).toEqual([
+      "Input",
+      "Output",
+      "Cache read",
+      "Cache creation, 5-minute cache",
+      "Cache creation, 1-hour cache",
+      "Total",
+    ]);
+    // Column headers name the units for every row.
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((h) => h.textContent),
+    ).toEqual(["Class", "Tokens", COST_HEADER]);
+    const fiveMinutes = within(table).getByRole("row", { name: /5-minute cache/ });
+    expect(cells(fiveMinutes)[0]).toBe("40");
+    expect(cells(fiveMinutes)[1]).toMatch(/^(\$\d+\.\d\d|< \$0\.01)$/);
+    expect(cells(within(table).getByRole("row", { name: /1-hour cache/ }))[0]).toBe("110");
+    // The total is still the replay's own.
+    expect(cells(within(table).getByRole("row", { name: /^Total/ }))[0]).toBe("2,020");
+  });
+
+  it("adds a row for cache writes with no recorded lifetime", () => {
+    const ledger = ledgerOf(withMixedSplit());
+    render(withClock(<LedgerTokenTable entry={ledger.session} caption="Session tokens" />));
+    const table = screen.getByRole("table", { name: "Session tokens" });
+    expect(rowHeaders(table)).toContain("Cache creation, cache not recorded");
+    expect(cells(within(table).getByRole("row", { name: /cache not recorded/ }))[0]).toBe("100");
+  });
+
+  it("keeps one cache creation row, and says why, when no lifetime is recorded", () => {
+    render(withClock(<SessionLedgerView ledger={ledgerOf(makeModel())} />));
+    const table = screen.getByRole("table", { name: "Session tokens" });
+    expect(rowHeaders(table)).toContain("Cache creation");
+    const note = screen.getByText(/^Cache writes are priced at the 5-minute cache price/);
+    expect(note.textContent).toContain("does not record which cache each write used");
+    expect(note.className).toContain("ledger-note");
+  });
+
+  it("says each lifetime is priced as recorded, and every cost stays an estimate", () => {
+    render(withClock(<SessionLedgerView ledger={ledgerOf(withRecordedSplit())} />));
+    expect(screen.getByText(/as the transcript recorded for each\.$/)).toBeDefined();
+    expect(screen.getByText(/^Costs are estimates in US dollars/)).toBeDefined();
+    for (const table of screen.getAllByRole("table")) {
+      const headers = within(table)
+        .getAllByRole("columnheader")
+        .map((h) => h.textContent);
+      expect(headers).toContain(COST_HEADER);
+    }
+  });
+
+  it("splits an agent's own cache creation row in its view", () => {
+    const ledger = ledgerOf(withMixedSplit());
+    render(withClock(<AgentLedgerView ledger={ledger} entry={agentLedger(ledger, "main")!} />));
+    const table = screen.getByRole("table", { name: "Tokens" });
+    expect(cells(within(table).getByRole("row", { name: /5-minute cache/ }))[0]).toBe("20");
+    expect(within(table).queryByRole("row", { name: /cache not recorded/ })).toBeNull();
+    // a1 recorded nothing: one row and the fallback note.
+    const a1 = agentLedger(ledger, "a1")!;
+    render(withClock(<AgentLedgerView ledger={ledger} entry={a1} />));
+    expect(screen.getByText(/^Cache writes are priced at the 5-minute cache price/)).toBeDefined();
+  });
+
+  it("says each reply is priced at its own model when the replay records it", () => {
+    render(withClock(<SessionLedgerView ledger={ledgerOf(withReplyModels("all"))} />));
+    expect(screen.getByText(/Each reply is priced at the model it used\./)).toBeDefined();
   });
 });
 
@@ -213,6 +294,33 @@ describe("axe-core: the ledger panel", () => {
 
   it("has no WCAG 2.1 A or AA failures for an unpriced agent", async () => {
     render(withClock(<Inspector model={withUnpriced()} selected="a2" onSelect={() => {}} />));
+    expect(await axeProblems()).toEqual([]);
+  });
+
+  it("has no WCAG 2.1 A or AA failures for the session with the cache-write split", async () => {
+    render(withClock(<Inspector model={withMixedSplit()} selected={null} onSelect={() => {}} />));
+    expect(screen.getAllByRole("row", { name: /5-minute cache/ }).length).toBeGreaterThan(0);
+    expect(await axeProblems()).toEqual([]);
+  });
+
+  it("has no WCAG 2.1 A or AA failures for an agent with the split and one without", async () => {
+    const { unmount } = render(
+      withClock(<Inspector model={withMixedSplit()} selected="main" onSelect={() => {}} />),
+    );
+    expect(await axeProblems()).toEqual([]);
+    unmount();
+    render(withClock(<Inspector model={withMixedSplit()} selected="a1" onSelect={() => {}} />));
+    expect(screen.getByText(/^Cache writes are priced at the 5-minute cache price/)).toBeDefined();
+    expect(await axeProblems()).toEqual([]);
+  });
+
+  it("has no WCAG 2.1 A or AA failures with per-reply models and a partial agent", async () => {
+    render(
+      withClock(
+        <Inspector model={withReplyModels("unpriced")} selected="a1" onSelect={() => {}} />,
+      ),
+    );
+    expect(screen.getByText(/^Not priced: replies of this agent used/)).toBeDefined();
     expect(await axeProblems()).toEqual([]);
   });
 

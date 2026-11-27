@@ -1,8 +1,10 @@
 /**
  * The inspector's ledger (#26): tokens in four classes with a cost estimate per class, for the
  * session or one agent, and for the session a breakdown by model and by agent. Every cost is
- * labelled an estimate, and an unpriced model says so. Numbers come from core's ledger
- * (`ledgerOf`), so they reconcile with the replay's totals.
+ * labelled an estimate, and an unpriced model says so. When the replay recorded the cache
+ * lifetime of its cache writes (ticket 191), the cache creation row is split by lifetime; when it did
+ * not, a note says how they were priced. Numbers come from core's ledger (`ledgerOf`), so they
+ * reconcile with the replay's totals.
  */
 
 import {
@@ -16,6 +18,8 @@ import {
 import { formatCount } from "../format";
 import {
   agentUnpricedNote,
+  cacheWriteNote,
+  cacheWriteRows,
   classCostText,
   costParts,
   estimateNote,
@@ -60,8 +64,12 @@ function TotalCost({ entry }: { entry: LedgerEntry }) {
   );
 }
 
-/** Four token classes and their estimated cost, with a total row. */
+/**
+ * Four token classes and their estimated cost, with a total row. With a recorded cache-write
+ * split, the cache creation class is shown as one row per cache lifetime instead of one row.
+ */
 export function LedgerTokenTable({ entry, caption }: { entry: LedgerEntry; caption: string }) {
+  const split = cacheWriteRows(entry);
   return (
     <table className="stat-table ledger-table">
       <caption>{caption}</caption>
@@ -73,13 +81,23 @@ export function LedgerTokenTable({ entry, caption }: { entry: LedgerEntry; capti
         </tr>
       </thead>
       <tbody>
-        {CLASSES.map(([key, label]) => (
-          <tr key={key}>
-            <th scope="row">{label}</th>
-            <td>{formatCount(entry.tokens[key])}</td>
-            <td className={costClass(entry)}>{classCostText(entry, key)}</td>
-          </tr>
-        ))}
+        {CLASSES.map(([key, label]) =>
+          key === "cacheCreation" && split !== null ? (
+            split.map((row) => (
+              <tr key={row.key}>
+                <th scope="row">{row.label}</th>
+                <td>{formatCount(row.tokens)}</td>
+                <td className={costClass(entry)}>{row.cost}</td>
+              </tr>
+            ))
+          ) : (
+            <tr key={key}>
+              <th scope="row">{label}</th>
+              <td>{formatCount(entry.tokens[key])}</td>
+              <td className={costClass(entry)}>{classCostText(entry, key)}</td>
+            </tr>
+          ),
+        )}
       </tbody>
       <tfoot>
         <tr>
@@ -146,11 +164,21 @@ export function LedgerAgentTable({ ledger }: { ledger: SessionLedger }) {
   );
 }
 
-function Notes({ ledger, unpriced }: { ledger: SessionLedger; unpriced: string | null }) {
+function Notes({
+  ledger,
+  entry,
+  unpriced,
+}: {
+  ledger: SessionLedger;
+  entry: LedgerEntry;
+  unpriced: string | null;
+}) {
+  const cache = cacheWriteNote(ledger, entry);
   return (
     <>
       {unpriced === null ? null : <p className="ledger-note ledger-unpriced">{unpriced}</p>}
-      <p className="ledger-note">{estimateNote(ledger)}</p>
+      {cache === null ? null : <p className="ledger-note ledger-cache-note">{cache}</p>}
+      <p className="ledger-note">{estimateNote(ledger, entry)}</p>
     </>
   );
 }
@@ -162,7 +190,7 @@ export function SessionLedgerView({ ledger }: { ledger: SessionLedger }) {
       <LedgerTokenTable entry={ledger.session} caption="Session tokens" />
       <LedgerModelTable ledger={ledger} />
       <LedgerAgentTable ledger={ledger} />
-      <Notes ledger={ledger} unpriced={sessionUnpricedNote(ledger)} />
+      <Notes ledger={ledger} entry={ledger.session} unpriced={sessionUnpricedNote(ledger)} />
     </div>
   );
 }
@@ -178,7 +206,7 @@ export function AgentLedgerView({
   return (
     <div className="ledger">
       <LedgerTokenTable entry={entry} caption="Tokens" />
-      <Notes ledger={ledger} unpriced={agentUnpricedNote(entry)} />
+      <Notes ledger={ledger} entry={entry} unpriced={agentUnpricedNote(entry)} />
     </div>
   );
 }

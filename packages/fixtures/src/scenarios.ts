@@ -7,6 +7,7 @@ import {
   INVENTED_LINE_TYPES,
   INVENTED_TOOL_NAME,
   MODELS,
+  type CacheWriteSplit,
   type FullUsage,
   type KnownEffortLevel,
 } from "./lines.js";
@@ -40,7 +41,22 @@ export interface ScenarioDefinition {
   effort: KnownEffortLevel;
   gitBranch?: string;
   entrypoint?: "cli" | "claude-vscode";
+  /** #191. Split the main agent's cache writes by lifetime this way. Default: no split. */
+  cacheWrites?: CacheWriteSplit;
   script: (session: SessionBuilder) => void;
+}
+
+/**
+ * #191. Scenarios generated on demand only (`generateExtraSession`). They are not in
+ * `SCENARIO_NAMES`, so the committed fixtures, the manifest and the golden replays do not
+ * include them and do not change when one is added.
+ */
+export const EXTRA_SCENARIO_NAMES = ["cache-write-split"] as const;
+export type ExtraScenarioName = (typeof EXTRA_SCENARIO_NAMES)[number];
+
+/** A scenario of `EXTRA_SCENARIO_NAMES`: the same shape as a committed one. */
+export interface ExtraScenarioDefinition extends Omit<ScenarioDefinition, "name"> {
+  name: ExtraScenarioName;
 }
 
 /**
@@ -506,6 +522,70 @@ function demo(session: SessionBuilder): void {
   main.system("turn_duration", { durationMs: 268000 });
   session.close();
 }
+
+/**
+ * #190, #191. Cache writes split by lifetime, and models that change within one agent. The main
+ * agent writes to the 1-hour cache and answers once on another model; one subagent writes to
+ * the 5-minute cache and switches model for some replies; one splits each write in half; and
+ * one writes no split at all, as an older Claude Code version would.
+ */
+function cacheWriteSplit(session: SessionBuilder): void {
+  const main = session.main;
+  session.open();
+  main.prompt();
+  main.use([main.tools.glob(), main.tools.read()], { thinking: true });
+  main.spawn(
+    [
+      {
+        agentType: "Explore",
+        model: MODELS.haiku,
+        effort: "low",
+        cacheWrites: "5m",
+        script: (agent) => {
+          agent.use(agent.tools.read());
+          agent.use(agent.tools.grep(), { model: MODELS.sonnet });
+          agent.use(agent.tools.read());
+          agent.say({ model: MODELS.sonnet });
+        },
+      },
+      {
+        agentType: "lantern-builder",
+        model: MODELS.sonnet,
+        effort: "medium",
+        cacheWrites: "half",
+        script: (agent) => work(agent, "build", 3),
+      },
+      {
+        agentType: "docs-scribe",
+        model: MODELS.haiku,
+        effort: "medium",
+        script: (agent) => work(agent, "docs", 2),
+      },
+    ],
+    { text: true },
+  );
+  main.use(main.tools.edit(), { text: true });
+  main.say({ model: MODELS.haiku });
+  main.prompt();
+  main.say({ thinking: true });
+  session.close();
+}
+
+/** The definitions of `EXTRA_SCENARIO_NAMES`. */
+export const EXTRA_SCENARIOS: Record<ExtraScenarioName, ExtraScenarioDefinition> = {
+  "cache-write-split": {
+    name: "cache-write-split",
+    description:
+      "Cache writes split by lifetime (5-minute, 1-hour, half of each, or not recorded) and " +
+      "agents that change model part way. Generated on demand; not a committed fixture.",
+    project: "lantern-ledger",
+    startTime: "2026-03-03T09:00:00.000Z",
+    model: MODELS.opus,
+    effort: "high",
+    cacheWrites: "1h",
+    script: cacheWriteSplit,
+  },
+};
 
 export const SCENARIOS: Record<ScenarioName, ScenarioDefinition> = {
   "single-agent": {

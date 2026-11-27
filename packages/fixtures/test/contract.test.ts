@@ -8,6 +8,7 @@
 import { readFileSync } from "node:fs";
 import * as core from "@orbitrace/core";
 import type {
+  RawCacheCreation as CoreCacheCreation,
   RawLineBase,
   RawSubagentInput,
   RawSubagentMeta as CoreSubagentMeta,
@@ -23,8 +24,10 @@ import {
   KNOWN_RAW_LINE_TYPES,
   MODELS,
   SCENARIO_NAMES,
+  CACHE_CREATION_KEYS,
   SUBAGENT_META_KEYS,
   USAGE_KEYS,
+  USAGE_SPLIT_KEY,
   fixturePaths,
   generateSession,
   isKnownLineType,
@@ -151,11 +154,18 @@ describe("types come from the contract", () => {
 
   it("the key lists name every key the contract types declare, and no other", () => {
     expectTypeOf<(typeof COMMON_LINE_KEYS)[number]>().toEqualTypeOf<DeclaredKeys<RawLineBase>>();
-    expectTypeOf<(typeof USAGE_KEYS)[number]>().toEqualTypeOf<DeclaredKeys<CoreUsage>>();
+    // #191: the usage keys are the counts plus the one key that holds the split by lifetime.
+    expectTypeOf<(typeof USAGE_KEYS)[number] | typeof USAGE_SPLIT_KEY>().toEqualTypeOf<
+      DeclaredKeys<CoreUsage>
+    >();
+    expectTypeOf<(typeof CACHE_CREATION_KEYS)[number]>().toEqualTypeOf<
+      DeclaredKeys<CoreCacheCreation>
+    >();
     expectTypeOf<(typeof SUBAGENT_META_KEYS)[number]>().toEqualTypeOf<
       DeclaredKeys<CoreSubagentMeta>
     >();
-    for (const keys of [COMMON_LINE_KEYS, USAGE_KEYS, SUBAGENT_META_KEYS]) {
+    expect(USAGE_KEYS as readonly string[]).not.toContain(USAGE_SPLIT_KEY);
+    for (const keys of [COMMON_LINE_KEYS, USAGE_KEYS, CACHE_CREATION_KEYS, SUBAGENT_META_KEYS]) {
       expect(new Set<string>(keys).size).toBe(keys.length);
     }
   });

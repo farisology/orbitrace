@@ -34,6 +34,14 @@ export interface TokenUsage {
   readonly outputTokens: number;
   readonly cacheReadTokens: number;
   readonly cacheCreationTokens: number;
+  /**
+   * #191. Cache creation tokens written to the 5-minute cache (`usage.cache_creation.
+   * ephemeral_5m_input_tokens`), the maximum across the reply's lines. Absent, never 0, when no
+   * line of the reply recorded it.
+   */
+  readonly cacheWrite5mTokens?: number;
+  /** #191. The same for the 1-hour cache (`ephemeral_1h_input_tokens`). Absent when not recorded. */
+  readonly cacheWrite1hTokens?: number;
 }
 
 /**

@@ -106,6 +106,15 @@ describe("sums", () => {
     const zero = { input: 0n, output: 0n, cacheRead: 0n, cacheCreation: 0n, total: 0n };
     const t = { input: 1, output: 0, cacheRead: 0, cacheCreation: 0 };
     const none = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
+    const writes = {
+      recorded5m: 0,
+      recorded1h: 0,
+      unrecorded: 0,
+      overTotal: 0,
+      cost5m: 0n,
+      cost1h: 0n,
+      costUnrecorded: 0n,
+    };
     const priced: LedgerEntry = {
       replies: 1,
       tokens: t,
@@ -113,6 +122,8 @@ describe("sums", () => {
       unpricedReplies: 0,
       unpricedTokens: none,
       pricing: "priced",
+      cacheWrites: { ...writes, recorded1h: 2, cost1h: 3n },
+      ownModelReplies: 1,
     };
     const unpriced: LedgerEntry = {
       replies: 1,
@@ -121,6 +132,8 @@ describe("sums", () => {
       unpricedReplies: 1,
       unpricedTokens: t,
       pricing: "unpriced",
+      cacheWrites: { ...writes, unrecorded: 5 },
+      ownModelReplies: 0,
     };
     expect(sumEntries([priced, unpriced])).toMatchObject({
       replies: 2,
@@ -129,6 +142,8 @@ describe("sums", () => {
       tokens: { input: 2 },
       unpricedTokens: { input: 1 },
       cost: { total: 4n },
+      cacheWrites: { recorded1h: 2, unrecorded: 5, cost1h: 3n, costUnrecorded: 0n },
+      ownModelReplies: 1,
     });
     expect(sumEntries([unpriced, unpriced]).pricing).toBe("unpriced");
     expect(sumEntries([]).pricing).toBe("priced");

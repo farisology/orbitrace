@@ -16,9 +16,15 @@ import type {
 } from "@orbitrace/core";
 import {
   BUILT_IN_AGENT_TYPES,
+  USAGE_SPLIT_KEY,
+  addCacheCreation,
   addUsage,
+  cacheCreationOf,
+  maxCacheCreation,
   maxUsage,
   zeroUsage,
+  type CacheWriteSplit,
+  type FullCacheCreation,
   type FullUsage,
   type KnownEffortLevel,
   type RawLine,
@@ -228,6 +234,17 @@ export interface ReplyOptions {
    * out. Real lines show all three.
    */
   effortKeys?: "both" | "nullPerTurn" | "none";
+  /**
+   * #190. The model written on this reply's lines. Default: the agent's model. A different one
+   * makes an agent that switches models part way, as a real one can.
+   */
+  model?: string;
+  /**
+   * #191. Also write `usage.cache_creation`, the cache writes split by lifetime, on each line.
+   * Default: the agent's `cacheWrites`; with neither, the key is left out, as older Claude Code
+   * versions do.
+   */
+  cacheWrites?: CacheWriteSplit;
 }
 
 export interface ToolCall {
@@ -255,6 +272,8 @@ export interface ReplyHandle {
 export interface UseOptions {
   thinking?: boolean;
   text?: boolean;
+  /** #190. The model of this reply. Default: the agent's model. */
+  model?: string;
 }
 
 export interface SubagentSpec {
@@ -272,6 +291,8 @@ export interface SubagentSpec {
    * files do. A reader then has to tell from the transcripts whether the subagent finished.
    */
   statusInMeta?: boolean;
+  /** #191. Split every reply's cache writes by lifetime this way. Default: no split written. */
+  cacheWrites?: CacheWriteSplit;
   script: (agent: AgentWriter) => void;
 }
 
@@ -317,6 +338,16 @@ export interface AgentFacts {
   mcpToolCalls: number;
   /** Sum over replies of the per-field maximum across the lines of each reply. */
   usage: FullUsage;
+  /**
+   * #191. Present only when some reply wrote `usage.cache_creation`: the sum over those
+   * replies of the per-field maximum across their lines. Replies without it are not in it.
+   */
+  cacheCreation?: FullCacheCreation;
+  /**
+   * #190. Present only when some reply used a model other than `model`: the number of
+   * replies per model, in order of first use.
+   */
+  replyModels?: Record<string, number>;
   firstTimestamp: string;
   lastTimestamp: string;
 }
@@ -329,6 +360,8 @@ export interface SessionTotals {
   unfinishedToolCalls: number;
   mcpToolCalls: number;
   usage: FullUsage;
+  /** #191. Present only when some agent has `cacheCreation`: the sum over those agents. */
+  cacheCreation?: FullCacheCreation;
 }
 
 /** What is true of a whole session, known from how it was written. */
@@ -391,6 +424,8 @@ export interface SessionOptions {
   version?: string;
   /** Lines the caller declares as invented types, so the facts can count them. */
   inventedLineTypes?: readonly string[];
+  /** #191. Split the main agent's cache writes by lifetime this way. Default: no split. */
+  cacheWrites?: CacheWriteSplit;
 }
 
 interface AgentIdentity {
@@ -400,6 +435,7 @@ interface AgentIdentity {
   spawnDepth: number;
   model: string;
   effort: KnownEffortLevel;
+  cacheWrites?: CacheWriteSplit;
 }
 
 interface SubagentRecord {
@@ -451,6 +487,10 @@ export class AgentWriter {
   private readonly identity: AgentIdentity;
   private readonly calls = new Map<string, ToolCall>();
   private readonly replies = new Map<string, FullUsage>();
+  /** #191. The merged split of each reply that wrote one. */
+  private readonly replySplits = new Map<string, FullCacheCreation>();
+  /** #190. The model of each reply. */
+  private readonly replyModels = new Map<string, string>();
   private lastUuid: string | null = null;
   private lastLineAt: number;
   private cachedTokens: number;
@@ -619,6 +659,9 @@ export class AgentWriter {
     const messageId = this.session.ids.messageId();
     const requestId = this.session.ids.requestId();
     const baseUsage = this.nextUsage(blocks);
+    const model = options.model ?? this.model;
+    const split = options.cacheWrites ?? this.identity.cacheWrites;
+    let mergedSplit: FullCacheCreation | null = null;
     const stopReason = blocks.some((block) => block.kind === "tool") ? "tool_use" : "end_turn";
 
     const rendered: RawContentBlock[] = [];
@@ -670,15 +713,20 @@ export class AgentWriter {
       rendered.push(content);
       const usage = perLine?.[index] ?? baseUsage;
       merged = maxUsage(merged, usage);
+      const lineSplit =
+        split === undefined ? null : cacheCreationOf(usage.cache_creation_input_tokens, split);
+      if (lineSplit !== null) {
+        mergedSplit = mergedSplit === null ? lineSplit : maxCacheCreation(mergedSplit, lineSplit);
+      }
       const message: RawAssistantMessage = {
         id: messageId,
         type: "message",
         role: "assistant",
-        model: this.model,
+        model,
         content: [content],
         stop_reason: stopReason,
         stop_sequence: null,
-        usage: { ...usage },
+        usage: lineSplit === null ? { ...usage } : { ...usage, [USAGE_SPLIT_KEY]: lineSplit },
       };
       const fields: Partial<RawAssistantLine> = { message, requestId, ...effortFields };
       const uuid = this.conversationLine("assistant", fields);
@@ -700,6 +748,8 @@ export class AgentWriter {
     });
 
     this.replies.set(messageId, merged);
+    this.replyModels.set(messageId, model);
+    if (mergedSplit !== null) this.replySplits.set(messageId, mergedSplit);
     return { messageId, lineUuids, calls, usage: merged };
   }
 
@@ -766,19 +816,19 @@ export class AgentWriter {
     if (options.thinking === true) blocks.push({ kind: "thinking" });
     if (options.text === true) blocks.push({ kind: "text" });
     for (const tool of list) blocks.push({ kind: "tool", tool });
-    const handle = this.reply(blocks);
+    const handle = this.reply(blocks, options.model === undefined ? {} : { model: options.model });
     this.results(handle.calls);
     return handle;
   }
 
-  /** One reply with text only, which ends the turn. */
-  say(options: { thinking?: boolean; text?: string } = {}): ReplyHandle {
+  /** One reply with text only, which ends the turn. `model` as in `ReplyOptions`. */
+  say(options: { thinking?: boolean; text?: string; model?: string } = {}): ReplyHandle {
     const blocks: BlockSpec[] = [];
     if (options.thinking === true) blocks.push({ kind: "thinking" });
     blocks.push(
       options.text === undefined ? { kind: "text" } : { kind: "text", text: options.text },
     );
-    return this.reply(blocks);
+    return this.reply(blocks, options.model === undefined ? {} : { model: options.model });
   }
 
   /**
@@ -853,6 +903,15 @@ export class AgentWriter {
     const calls = [...this.calls.values()];
     let usage = zeroUsage();
     for (const merged of this.replies.values()) usage = addUsage(usage, merged);
+    let cacheCreation: FullCacheCreation | null = null;
+    for (const split of this.replySplits.values()) {
+      cacheCreation = cacheCreation === null ? split : addCacheCreation(cacheCreation, split);
+    }
+    const replyModels: Record<string, number> = {};
+    for (const model of this.replyModels.values()) {
+      replyModels[model] = (replyModels[model] ?? 0) + 1;
+    }
+    const switched = Object.keys(replyModels).some((model) => model !== this.model);
     const stamps = this.lines
       .map((line) => line.timestamp)
       .filter((value): value is string => typeof value === "string");
@@ -873,6 +932,9 @@ export class AgentWriter {
       unfinishedToolCalls: calls.filter((call) => !call.resolved).length,
       mcpToolCalls: calls.filter((call) => call.name.startsWith("mcp__")).length,
       usage,
+      // Only when written, so the facts of the committed fixtures keep their exact shape.
+      ...(cacheCreation === null ? {} : { cacheCreation }),
+      ...(switched ? { replyModels } : {}),
       firstTimestamp: stamps[0] ?? "",
       lastTimestamp: stamps[stamps.length - 1] ?? "",
     };
@@ -924,6 +986,7 @@ export class SessionBuilder {
       spawnDepth: 0,
       model: options.model,
       effort: options.effort,
+      ...(options.cacheWrites === undefined ? {} : { cacheWrites: options.cacheWrites }),
     };
     this.main = new AgentWriter(this, identity, this.rng.fork("main"), startMs);
   }
@@ -943,6 +1006,7 @@ export class SessionBuilder {
       spawnDepth: parent.spawnDepth + 1,
       model: spec.model,
       effort: spec.effort,
+      ...(spec.cacheWrites === undefined ? {} : { cacheWrites: spec.cacheWrites }),
     };
     const rng = this.rng.fork(`agent-${this.subagents.length + 1}`);
     const writer = new AgentWriter(this, identity, rng, call.calledAt);
@@ -1026,6 +1090,12 @@ export class SessionBuilder {
       totals.unfinishedToolCalls += agent.unfinishedToolCalls;
       totals.mcpToolCalls += agent.mcpToolCalls;
       totals.usage = addUsage(totals.usage, agent.usage);
+      if (agent.cacheCreation !== undefined) {
+        totals.cacheCreation =
+          totals.cacheCreation === undefined
+            ? agent.cacheCreation
+            : addCacheCreation(totals.cacheCreation, agent.cacheCreation);
+      }
       for (const [type, count] of Object.entries(agent.lineTypes)) {
         if (this.inventedLineTypes.has(type)) invented[type] = (invented[type] ?? 0) + count;
       }

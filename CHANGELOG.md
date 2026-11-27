@@ -81,6 +81,7 @@ merged so far.
 - VS Code extension: listing text for the VS Code Marketplace and Open VSX (description,
   keywords, category, a 256x256 icon drawn from the Orbitrace mark, banner colour, and a readme
   written as the listing page); nothing is published (#22).
+- Ledger: prices cache writes at their own 5-minute and 1-hour prices and each reply at its own model when the in-memory model records them (`buildReplay` option `replyDetails`, new optional `ReplayReplyDetails`), and otherwise falls back to the 5-minute price and the agent's model with a note in the inspector; replay files, the schema and every golden replay are unchanged (#191, #190).
 
 ### Changed
 

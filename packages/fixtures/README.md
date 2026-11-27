@@ -55,12 +55,16 @@ The raw line vocabulary is defined once, in `@orbitrace/core` (`src/model/raw.ts
 package imports it and re-exports it, and defines none of it a second time:
 
 - `KNOWN_RAW_LINE_TYPES`, `KNOWN_EFFORT_LEVELS` and the types `KnownRawLineType`,
-  `KnownEffortLevel`, `RawLine`, `RawSubagentMeta` and `RawUsage` are the contract's own.
+  `KnownEffortLevel`, `RawLine`, `RawSubagentMeta`, `RawUsage` and `RawCacheCreation` are the
+  contract's own.
 - `FullUsage` is `RawUsage` with every token count present, which is what the generator
-  writes. It is derived from `RawUsage`, not written out again.
+  writes. It is derived from `RawUsage`, not written out again. `FullCacheCreation` is the same
+  for `RawCacheCreation` (#191).
 - `COMMON_LINE_KEYS`, `USAGE_KEYS` and `SUBAGENT_META_KEYS` are run-time lists of the keys that
-  `RawLineBase`, `RawUsage` and `RawSubagentMeta` declare. The contract has types but no such
-  lists, and the tests need them. `npm run typecheck` fails when a list and its type differ.
+  `RawLineBase`, `RawUsage` and `RawSubagentMeta` declare (`USAGE_KEYS` holds the counts;
+  `USAGE_SPLIT_KEY` is `cache_creation`, whose keys are `CACHE_CREATION_KEYS`). The contract has
+  types but no such lists, and the tests need them. `npm run typecheck` fails when a list and its
+  type differ.
 - `CONVERSATION_LINE_TYPES` names the known line types that carry the common keys.
   `HOUSEKEEPING_LINE_TYPES` is every other known type, computed from the contract's list.
 
@@ -109,6 +113,23 @@ Constants that tests can check a reader against:
   exact lengths, in the raw timestamps, of the gaps in `idle-gap`.
 - `INVENTED_LINE_TYPES`, `INVENTED_BLOCK_TYPE`, `INVENTED_TOOL_NAME`, `MODELS.unknownFamily`:
   the things in `unknown-lines` that a reader cannot know.
+
+### On-demand scenarios
+
+`EXTRA_SCENARIO_NAMES` lists scenarios that are generated only when asked for, with
+`generateExtraSession(name)`. They are not in `SCENARIO_NAMES`, so `generateAll`, the manifest,
+the committed files under `fixtures/config` and the golden replays never include them, and adding
+one changes none of those files. `writeGeneratedSession(configDir, session)` writes one into a
+temporary config folder for a test.
+
+- `cache-write-split` (#190, #191): cache writes split by lifetime in `usage.cache_creation`
+  (the main agent all to the 1-hour cache, one subagent all to the 5-minute cache, one half of
+  each, one with no split, as an older Claude Code version writes), and a main agent and a
+  subagent that change model part way. Its facts carry `cacheCreation` and `replyModels`.
+
+A script can ask for the same things: `cacheWrites` (`"5m"`, `"1h"` or `"half"`) on a
+`SubagentSpec`, on the session or on one reply, and `model` on one reply (`reply`, `use`, `say`).
+Without them nothing changes: no `cache_creation` key is written and the facts keep their shape.
 
 ## Determinism
 
