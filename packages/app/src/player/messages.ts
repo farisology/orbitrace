@@ -35,5 +35,9 @@ export const PLAYER_MESSAGES = {
     `The linked replay is larger than the ${limit} limit, so it was not opened.`,
   tooLarge: (size: string, limit: string): string =>
     `This file is ${size}, larger than the ${limit} limit, so it was not opened.`,
-  transcriptNote: "main agent only",
+  /** A `.jsonl` transcript was opened. The player takes replay files only (decided on issue 19). */
+  transcriptRefused: "This player opens replay files only, so the transcript was not opened.",
+  transcriptRefusedHelp: `A transcript holds the session's private content. Export a replay first (${EXPORT_COMMAND}) and open the .replay.json file it writes.`,
+  /** Any other file type. */
+  unsupported: "This file type is not supported. Open a .replay.json replay file.",
 } as const;

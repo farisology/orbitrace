@@ -325,12 +325,6 @@ kbd {
   color: var(--dim);
 }
 
-.app-main-message {
-  display: grid;
-  place-items: center;
-  padding: var(--space-6);
-}
-
 .message {
   max-width: 36rem;
   text-align: center;
@@ -358,14 +352,41 @@ kbd {
 
 /* ---- main layout ------------------------------------------------------------------------- */
 
+/*
+ * The dock (controls and timeline) has a fixed share of the height, never its content's height,
+ * so the orrery above it changes size only when the window does. A followed session that adds an
+ * agent adds a timeline lane; the lanes scroll inside the dock instead of shrinking the canvas
+ * (issue 144). The narrow layout below gives the stage its own height instead.
+ */
 .app-main {
+  --dock-height: clamp(196px, 35%, 360px);
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) var(--dock-height);
   grid-template-areas:
     "stage side"
     "dock side";
   min-height: 0;
+}
+
+/*
+ * Empty, loading and error pages: one centred cell. Two classes, so the replay grid of
+ * `.app-main` (here and in the narrow layout) cannot put the message in its left column
+ * (issue 154). A long message scrolls inside main; auto margins centre it and keep its top
+ * reachable when it is taller than main.
+ */
+.app-main.app-main-message {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: none;
+  place-items: center;
+  overflow-y: auto;
+  padding: var(--space-6);
+}
+
+.app-main-message > .message {
+  margin: auto;
 }
 
 .stage {
@@ -374,10 +395,22 @@ kbd {
   min-height: 0;
 }
 
+/*
+ * A column: the controls at their own height, the timeline in the rest. If even the fixed parts
+ * do not fit (large text spacing in a short window), the dock scrolls rather than clipping.
+ */
 .dock {
   grid-area: dock;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
   background: var(--deck);
   border-top: 1px solid var(--rim);
+}
+
+.dock > .controls {
+  flex: none;
 }
 
 .side {
@@ -481,9 +514,17 @@ kbd {
   /* Each lane label is a 24 px tall target (WCAG 2.2 target size minimum). */
   --lane-height: 24px;
   --track-height: 14px;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 0 var(--space-4) var(--space-2);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+.timeline > * {
+  flex: none;
 }
 
 /* Legend: each kind of call beside a sample of its mark, at its height and colour. */
@@ -545,9 +586,18 @@ kbd {
   white-space: nowrap;
 }
 
+/*
+ * The lanes: whatever height the dock has left, scrolling once there are more lanes than fit, and
+ * always tall enough for one lane (the dock scrolls before that is lost). The app scrolls the
+ * newest lane into view while following (components/Timeline.tsx).
+ */
+.timeline > .timeline-body {
+  flex: 1 1 auto;
+}
+
 .timeline-body {
   position: relative;
-  max-height: 252px;
+  min-height: calc(var(--lane-height) + 2 * var(--space-1));
   overflow-y: auto;
   border-top: 1px solid var(--rim);
 }
@@ -918,6 +968,7 @@ kbd {
   }
 
   .app-main {
+    --dock-height: auto;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto auto;
     grid-template-areas:
@@ -928,6 +979,15 @@ kbd {
 
   .stage {
     height: min(100vw, 62vh);
+  }
+
+  /* The dock is as tall as its content here; the lanes scroll past 252 px as before. */
+  .dock {
+    overflow-y: visible;
+  }
+
+  .timeline-body {
+    max-height: 252px;
   }
 
   .side {

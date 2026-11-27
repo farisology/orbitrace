@@ -5,20 +5,22 @@
  *   choice, one line on making a replay of your own session, and the privacy statement.
  * - `?replay=<path>`: a same-origin replay next to the page is fetched and shown; any other
  *   origin is refused with a message and never fetched (`linked-replay.ts`).
- * - Opening a file: refused over `MAX_REPLAY_BYTES` before it is read, then checked with the
- *   app's loader (`validateReplay`, with `describeReplayProblems` for the reasons).
+ * - Opening a file: replay files only. A `.jsonl` transcript (private content) or another file
+ *   type, and a file over `MAX_REPLAY_BYTES`, are refused before it is read; a replay is then
+ *   checked with the app's loader (`validateReplay`, with `describeReplayProblems` for the
+ *   reasons). See `open-file.ts`.
  *
  * The player owns every way a file gets in. It listens on its outer element in the capture
  * phase for drag and drop and for `change` on a file input, so the app's own Open file button
- * and drop area (inside `App`) go through the same size limit and checks, and the app's
- * handlers never see the event. That keeps `App.tsx` and the bundle the editor and the CLI
- * ship unchanged.
+ * and drop area (inside `App`) go through the same checks, and the app's handlers never see the
+ * event. The app is shown with `transcripts={false}`, so its Open file control and drop hint
+ * offer replay files only.
  *
  * Every string from a file or a link reaches the page as React text, never as HTML.
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { APP_MESSAGES, App } from "../App";
+import { APP_MESSAGES, App, OPEN_FILE_INPUT } from "../App";
 import { createDemoTransport } from "../demo-session";
 import type { FetchFunction } from "../http-transport";
 import type { FileLoadError } from "../load-file";
@@ -102,7 +104,7 @@ function StartScreen({
           ref={inputRef}
           className="visually-hidden"
           type="file"
-          accept=".json,.jsonl,application/json"
+          accept={OPEN_FILE_INPUT.replayOnly.accept}
           tabIndex={-1}
           aria-label={PLAYER_MESSAGES.inputLabel}
         />
@@ -216,7 +218,7 @@ export function Player({
         setView((current) => (current.kind === "loading" ? { kind: "start" } : current));
         return;
       }
-      show(createReplayTransport(result.model, fileLabel(result.kind, file.name)));
+      show(createReplayTransport(result.model, fileLabel(file.name)));
     },
     [maxBytes, show],
   );
@@ -339,6 +341,7 @@ export function Player({
             key={view.generation}
             transport={view.transport}
             startOptions={view.startOptions}
+            transcripts={false}
             {...(frames !== undefined ? { frames } : {})}
           />
         </div>

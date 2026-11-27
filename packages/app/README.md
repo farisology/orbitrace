@@ -41,13 +41,18 @@ The page URL takes `?t=<seconds>` (compressed timeline), `?select=<agent id>`,
   ended session, a session with an unknown status and the demo open at the start, as before.
   A new snapshot can cut a new idle gap; the playhead is carried across it through real time, so
   a paused view stays on the same real moment and a following one never shows an earlier time.
+  The controls and timeline have a fixed share of the window height, so new agents add lanes that
+  scroll inside the timeline and the orrery keeps its size; while following, the newest lane is
+  scrolled into view unless you scrolled the lanes yourself or it would hide the selected lane.
 - **Select an agent** on the canvas or with its timeline lane label. The inspector shows its
   callsign, model family and shape, effort, wave, start and end in real time, token classes and
   tool calls by kind with failures.
 - **Drop a file** anywhere on the page, or use Open file. A `.replay.json` is checked with
   `validateReplay`; a `.jsonl` transcript is parsed with `parseSession` and `buildReplay`. The
   file is read in the page and is not sent anywhere. A single transcript holds the main agent
-  only; subagent transcripts are separate files and are not read.
+  only; subagent transcripts are separate files and are not read. The public replay player
+  (`src/player`, [docs/player.md](../../docs/player.md)) opens replay files only and refuses a
+  transcript; it shows the app with `transcripts={false}`.
 - **Reduced motion:** with `prefers-reduced-motion: reduce`, or in an editor tab when the editor's
   own reduce-motion setting puts `vscode-reduce-motion` on the page body, the replay does not
   autoplay and the renderer draws still frames. A followed session still opens at the live edge;

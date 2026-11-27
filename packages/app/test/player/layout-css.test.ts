@@ -46,13 +46,16 @@ describe("the player frame gives way to the page scroll on small screens", () =>
 });
 
 describe("the start panel is never clipped", () => {
+  // app.css now centres every message page in one cell (#154), so the player has no override.
+  it("the player no longer overrides the app's message page", () => {
+    expect(playerTop).not.toMatch(/app-main-message/);
+  });
+
   it("main scrolls when the panel is taller than it (a long problem list, a short window)", () => {
-    expect(declaration(rule(".player .app-main-message", playerTop), "overflow-y")).toBe("auto");
+    expect(declaration(rule(".app-main.app-main-message"), "overflow-y")).toBe("auto");
   });
 
   it("the panel is centred with auto margins, so its top stays reachable when it overflows", () => {
-    expect(declaration(rule(".player .app-main-message > .message", playerTop), "margin")).toBe(
-      "auto",
-    );
+    expect(declaration(rule(".app-main-message > .message"), "margin")).toBe("auto");
   });
 });

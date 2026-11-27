@@ -121,7 +121,14 @@ Follow mode added one control and two states. What was decided for each, and why
   session." when follow starts (added to the "Showing ..." message when a running session opens)
   and "Stopped following the live session. Go live, or press End, to return." when it stops. Each
   is said once per change and never per snapshot; a test watches the region across several
-  snapshots. When the session ends, only "Live session ended." is said.
+  snapshots. When the session ends, only "Live session ended." is said. When a followed
+  session's status becomes unknown (issue 139), follow ends and Go live is hidden, so the region
+  says once "The session's status can no longer be read. Stopped following it." rather than the
+  "Go live, or press End" words; nothing is said if the view was not following.
+- **Event feed before the first event** (issue 159). The feed says "No events yet." while the
+  replay plays or follows, and adds "Press play." only while it is paused, so it never asks for
+  what is already happening. A running session with no events so far also says "No events yet."
+  rather than "This replay has no events."
 - **Scrubber value text.** While following it reads "Following live, past 4:00, real time":
   rounded down to the minute and without the session length, which grows with every snapshot,
   so a focused slider is not re-read on each snapshot.
@@ -132,6 +139,17 @@ Follow mode added one control and two states. What was decided for each, and why
   playback (found in review: it used to play on at 8x from the new position, back to the edge).
 - **Layout** (1.4.4 Resize Text, 1.4.10 Reflow). Go live widens the Playback row; it wraps rather
   than run under the side panel (finding 25).
+- **Stable canvas while lanes are added** (issue 144). Each new agent adds a
+  timeline lane. The dock used to be as tall as its lanes, so the orrery shrank while the user
+  watched (measured in headless Chrome at 1280 x 800 on a synthetic followed session: 593 px to
+  449 px high as lanes went from 1 to 7). The dock now has a fixed share of the height
+  (`clamp(196px, 35%, 360px)`) and the lanes scroll inside it; measured the same way, the canvas
+  stayed 920 x 474 px from 1 to 8 lanes. While following, a new lane is scrolled into view within
+  the lane list only (never the page), unless the user scrolled the lanes away from their end or
+  it would hide the selected or focused lane; a new selection scrolls its lane into view. Below
+  820 px wide or 480 px tall the page still scrolls as one column, the stage keeps its own height
+  and the lanes scroll past 252 px as before (measured at 700 x 800 and 1280 x 460: canvas
+  constant). `test/layout-css.test.ts` and `test/timeline-dock.test.tsx` guard this.
 
 The automated checks above cover these states; no screen reader was used for them either.
 
