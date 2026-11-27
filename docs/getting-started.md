@@ -90,11 +90,11 @@ node packages/cli/dist/index.js --help
 node packages/cli/dist/index.js --version
 ```
 
-| Command  | What it does                                                                     |
-| -------- | -------------------------------------------------------------------------------- |
-| `list`   | Lists sessions, newest first: key, last activity, status, subagents, project.    |
-| `export` | Writes the structure-only replay of one session.                                 |
-| `open`   | Opens a session in your browser through a local server. Ctrl+C stops it.         |
+| Command  | What it does                                                                  |
+| -------- | ----------------------------------------------------------------------------- |
+| `list`   | Lists sessions, newest first: key, last activity, status, subagents, project. |
+| `export` | Writes the structure-only replay of one session.                              |
+| `open`   | Opens a session in your browser through a local server. Ctrl+C stops it.      |
 
 Run each one as `node packages/cli/dist/index.js <command>`.
 

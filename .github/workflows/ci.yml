@@ -1,12 +1,12 @@
 # CI: every pull request into dev or main, and every push to dev, is built, linted,
 # type-checked, tested on Node 20 and 22, and scanned by the privacy check. A separate job
-# runs the VS Code integration test in a real editor (not blocking yet, see that job).
+# runs the VS Code integration test in a real editor.
 #
 # Each step calls an npm script from the root package.json, so the commands here are the
 # same ones a contributor runs locally:
 #   npm ci && npm run build && npm run lint && npm run typecheck && npm test
 #   node scripts/release/check-package.mjs           (after the build: the npm tarballs)
-#   npm run format:check                             (not blocking yet, see the step)
+#   npm run format:check
 #   npm run privacy                                  (the files in the tree, paths included)
 #   npm run privacy -- --range <base>..<head>        (what the new commits add)
 #   xvfb-run -a npm run test:integration -w orbitrace-vscode
@@ -129,10 +129,7 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      # Not blocking for now: the formatting on dev does not pass yet. #50 fixes the
-      # formatting and then removes continue-on-error to make this step blocking.
-      - name: Check formatting (not blocking yet)
-        continue-on-error: true
+      - name: Check formatting
         run: npm run format:check
 
       - name: Typecheck
@@ -142,12 +139,8 @@ jobs:
         run: npm test
 
   integration:
-    name: VS Code integration test (Node 22, not blocking yet)
+    name: VS Code integration test (Node 22)
     runs-on: ubuntu-latest
-    # Not blocking for now: a failure here does not fail the workflow or block a merge until
-    # the job has proven stable on GitHub's runners. Remove continue-on-error then, and make
-    # the check required in the branch protection of dev.
-    continue-on-error: true
     timeout-minutes: 15
     steps:
       - name: Check out

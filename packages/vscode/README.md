@@ -89,7 +89,7 @@ Settings (environment variables, all optional):
 
 On Linux without a desktop, run it under a virtual display, for example `xvfb-run -a npm run test:integration -w orbitrace-vscode`.
 
-In CI the job "VS Code integration test (Node 22, not blocking yet)" in the repository's `.github/workflows/ci.yml` runs it on every pull request into `dev` or `main` and every push to `dev`. It looks up the current stable VS Code version, passes it as `ORBITRACE_VSCODE_VERSION`, caches `packages/vscode/node_modules/.cache/vscode-test` under that version, runs `npm run build`, and then runs the test under `xvfb-run -a`. The job has `continue-on-error: true`, so a failure does not fail the workflow or block a merge yet. Check its result on your pull request yourself.
+In CI the job "VS Code integration test (Node 22)" in the repository's `.github/workflows/ci.yml` runs it on every pull request into `dev` or `main` and every push to `dev`. It looks up the current stable VS Code version, passes it as `ORBITRACE_VSCODE_VERSION`, caches `packages/vscode/node_modules/.cache/vscode-test` under that version, runs `npm run build`, and then runs the test under `xvfb-run -a`. A failure fails the workflow.
 
 ## Licence
 

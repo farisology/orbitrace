@@ -52,12 +52,12 @@ ELECTRON_RUN_AS_NODE=1 "/Applications/Visual Studio Code.app/Contents/MacOS/Code
 /usr/local/bin/node probe.mjs        # Node 19.8.1 on the test machine
 ```
 
-| Engine | Node 26.5.0 | VS Code (Node 24.22.1) | Node 19.8.1 |
-| --- | --- | --- | --- |
-| `node:sqlite` | FTS5 yes | FTS5 yes | module missing |
-| `sql.js` 1.17.0 | `no such module: fts5` | `no such module: fts5` | `no such module: fts5` |
-| `node-sqlite3-wasm` 0.8.61 | FTS5 yes | FTS5 yes | FTS5 yes |
-| `@sqlite.org/sqlite-wasm` 3.54.1-build1 | FTS5 yes | FTS5 yes | FTS5 yes (despite `engines >=22`) |
+| Engine                                  | Node 26.5.0            | VS Code (Node 24.22.1) | Node 19.8.1                       |
+| --------------------------------------- | ---------------------- | ---------------------- | --------------------------------- |
+| `node:sqlite`                           | FTS5 yes               | FTS5 yes               | module missing                    |
+| `sql.js` 1.17.0                         | `no such module: fts5` | `no such module: fts5` | `no such module: fts5`            |
+| `node-sqlite3-wasm` 0.8.61              | FTS5 yes               | FTS5 yes               | FTS5 yes                          |
+| `@sqlite.org/sqlite-wasm` 3.54.1-build1 | FTS5 yes               | FTS5 yes               | FTS5 yes (despite `engines >=22`) |
 
 `sql.js` drops out: no FTS5.
 
@@ -93,24 +93,24 @@ What is measured:
 
 Machine: one macOS laptop with other work running, so timings vary between runs. Main runs: `run-all.sh` twice on Node 26.5.0 and twice on VS Code's Node 24.22.1. Ranges cover those four runs.
 
-| Option | Write (ms) | File size | Start before first query | RSS added (MB) |
-| --- | --- | --- | --- | --- |
-| (a) `node:sqlite` | 460 to 808 | 27.1 MB | open the file | about 0 to 19 |
-| (b1) `node-sqlite3-wasm` | 772 to 1,684 | 27.1 MB | open the file | 21 to 110 |
-| (b2) `@sqlite.org/sqlite-wasm` | 960 to 1,675 (export 22 to 33) | 26.5 MB | read whole file into memory | 133 to 177 |
-| (c) JSON lines + index | 44 to 76 | 20.9 MB | index build 441 to 776 ms | 90 to 117 |
+| Option                         | Write (ms)                     | File size | Start before first query    | RSS added (MB) |
+| ------------------------------ | ------------------------------ | --------- | --------------------------- | -------------- |
+| (a) `node:sqlite`              | 460 to 808                     | 27.1 MB   | open the file               | about 0 to 19  |
+| (b1) `node-sqlite3-wasm`       | 772 to 1,684                   | 27.1 MB   | open the file               | 21 to 110      |
+| (b2) `@sqlite.org/sqlite-wasm` | 960 to 1,675 (export 22 to 33) | 26.5 MB   | read whole file into memory | 133 to 177     |
+| (c) JSON lines + index         | 44 to 76                       | 20.9 MB   | index build 441 to 776 ms   | 90 to 117      |
 
 Node 19.8.1, one run: `node:sqlite` failed to load. Write times were 717 ms for (b1) and 918 ms for (b2). For (c), the write took 186 ms and the index build 525 ms.
 
 Query times on VS Code's Node 24.22.1 (first run), median of 20, `count / top20` in ms:
 
-| Query | Matches | (a) node:sqlite | (b1) node-sqlite3-wasm | (b2) sqlite-wasm | (c) in-memory index |
-| --- | --- | --- | --- | --- | --- |
-| rare term | 51 | 0.015 / 0.044 | 0.261 / 0.288 | 0.054 / 0.304 | 0.001 / 0.037 |
-| medium term | 1,499 | 0.055 / 1.87 | 0.54 / 3.032 | 0.211 / 0.574 | 0 / 0.029 |
-| common term | 15,240 | 0.471 / 8.983 | 1.913 / 10.563 | 1.376 / 6.402 | 0 / 0.023 |
-| two terms AND | 799 | 0.245 / 1.385 | 0.711 / 2.685 | 0.554 / 0.709 | 0.096 / 0.056 |
-| phrase | 512 | 0.236 / 0.863 | 0.848 / 1.6 | 0.509 / 0.691 | 0.179 / 0.214 |
+| Query         | Matches | (a) node:sqlite | (b1) node-sqlite3-wasm | (b2) sqlite-wasm | (c) in-memory index |
+| ------------- | ------- | --------------- | ---------------------- | ---------------- | ------------------- |
+| rare term     | 51      | 0.015 / 0.044   | 0.261 / 0.288          | 0.054 / 0.304    | 0.001 / 0.037       |
+| medium term   | 1,499   | 0.055 / 1.87    | 0.54 / 3.032           | 0.211 / 0.574    | 0 / 0.029           |
+| common term   | 15,240  | 0.471 / 8.983   | 1.913 / 10.563         | 1.376 / 6.402    | 0 / 0.023           |
+| two terms AND | 799     | 0.245 / 1.385   | 0.711 / 2.685          | 0.554 / 0.709    | 0.096 / 0.056       |
+| phrase        | 512     | 0.236 / 0.863   | 0.848 / 1.6            | 0.509 / 0.691    | 0.179 / 0.214       |
 
 The slowest query in the five reported runs (including Node 19.8.1) was `top20` on the common term with (b1): 18.994 ms on Node 26.5.0.
 

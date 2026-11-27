@@ -86,6 +86,9 @@ merged so far.
   named step that checks the npm packages, Dependabot updates for `scripts/release/tools` (#121),
   no separate cache-folder step before the VS Code integration test (#125), and the extension's
   tests take their tag text from core's constants (#107) (#72, #146).
+- CI: the formatting check and the VS Code integration test now fail the build. The whole tree
+  passes `npm run format:check`; the generated `design/tokens.css` and the generated contrast
+  tables in `design/identity.md` are left to their generator (#50).
 
 ### Fixed
 
