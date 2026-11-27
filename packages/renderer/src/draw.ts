@@ -113,7 +113,12 @@ export function drawFrame(
   ctx.fillRect(0, 0, layout.width, layout.height);
   if (scene === null || layout.width <= 0 || layout.height <= 0) return;
 
-  ensureGradients(ctx, res, layout.width, layout.height, layout.cx, layout.cy, layout.base);
+  // Only on a size change: called every frame, this helper would be optimised late, on a frame
+  // well into playback, and the compile allocates on that frame (#158).
+  const sized = res.gradients;
+  if (sized.width !== layout.width || sized.height !== layout.height) {
+    ensureGradients(ctx, res, layout.width, layout.height, layout.cx, layout.cy, layout.base);
+  }
   const board = ensureBoard(res, scene.agents.length, scene.waveCount);
   markCollapsedWaves(scene, frame, scene.lod, board.waveCollapsed, board.waveOpen);
   prepareLabels(ctx, scene, layout, frame, view, res, board);

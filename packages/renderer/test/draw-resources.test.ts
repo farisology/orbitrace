@@ -128,7 +128,12 @@ describe("drawFrame", () => {
         end: 10 + ran,
       });
       const end = 20 + ran;
-      const m = model(mainAgent(end, [call("Agent", "agent", 9.5, 10.5 + ran)], []), [agent], [], end);
+      const m = model(
+        mainAgent(end, [call("Agent", "agent", 9.5, 10.5 + ran)], []),
+        [agent],
+        [],
+        end,
+      );
       const texts = render({ t: end, selected: 1, m }).texts();
       expect(texts).toContain(canvas);
       expect(formatDurationWords(ran)).toBe(words);
@@ -250,6 +255,28 @@ describe("resources", () => {
     expect(res.gradients.sweep).toBeInstanceOf(MockGradient);
     ensureGradients(ctx.asDrawContext(), res, 900, 600, 450, 300, 200);
     expect(ctx.count("createRadialGradient")).toBe(first * 2);
+  });
+
+  it("has drawFrame rebuild the gradients when the canvas size changes, and only then", () => {
+    const scene = buildScene(smallModel());
+    const frame = computeFrameState(scene, 30, timing(), createFrameState(scene));
+    const res = createResources(mockSurfaces(), createPalette(DEFAULT_THEME));
+    const view: ViewState = { selected: -1, hovered: -1, ambient: 0, dpr: 1 };
+    const ctx = new MockContext();
+    const draw = (width: number) =>
+      drawFrame(ctx.asDrawContext(), scene, computeLayout(scene, width, 600), frame, view, res);
+    draw(800);
+    const first = ctx.count("createRadialGradient");
+    expect(first).toBe(4);
+    const vignette = res.gradients.vignette;
+    draw(800);
+    draw(800);
+    expect(ctx.count("createRadialGradient")).toBe(first);
+    expect(res.gradients.vignette).toBe(vignette);
+    draw(900);
+    expect(ctx.count("createRadialGradient")).toBe(first * 2);
+    expect(res.gradients.width).toBe(900);
+    expect(res.gradients.vignette).not.toBe(vignette);
   });
 
   it("creates wave labels on first use", () => {
