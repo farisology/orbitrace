@@ -20,7 +20,11 @@ const SESSIONS: SessionSummary[] = [
 describe("SessionPicker", () => {
   it("lists every session with its age, subagents and live status, and marks the shown one", () => {
     render(<SessionPicker sessions={SESSIONS} currentKey="s2" onSelect={() => {}} now={NOW} />);
-    expect(screen.getByText("Sessions (2)")).toBeDefined();
+    const toggle = screen.getByRole("button", { name: "Sessions (2)" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("list", { name: "Sessions" })).toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
     const items = within(screen.getByRole("list", { name: "Sessions" })).getAllByRole("button");
     expect(items).toHaveLength(2);
     expect(items[0]?.textContent).toContain("example-project");
@@ -36,15 +40,17 @@ describe("SessionPicker", () => {
 
   it("calls onSelect with the picked key and closes", () => {
     const onSelect = vi.fn();
-    const { container } = render(
+    render(
       <SessionPicker sessions={SESSIONS} currentKey={undefined} onSelect={onSelect} now={NOW} />,
     );
-    const details = container.querySelector("details") as HTMLDetailsElement;
-    details.open = true;
+    const toggle = screen.getByRole("button", { name: "Sessions (2)" });
+    fireEvent.click(toggle);
     fireEvent.click(screen.getByRole("button", { name: /^example-gadgets/ }));
     expect(onSelect).toHaveBeenCalledWith("s2");
-    expect(details.open).toBe(false);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("list", { name: "Sessions" })).toBeNull();
     expect(screen.queryByText("Shown")).toBeNull();
+    expect(document.activeElement).toBe(toggle);
   });
 
   it("treats busy and idle as live", () => {

@@ -9,7 +9,7 @@
  * and never goes through the transport.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type {
   LiveStatus,
   ReplayAgentId,
@@ -17,10 +17,16 @@ import type {
   SessionSummary,
   Unsubscribe,
 } from "@orbitrace/core";
+import {
+  LIVE_ANNOUNCE_INTERVAL_MS,
+  liveStatusAnnouncement,
+  loadedAnnouncement,
+  newAgentsAnnouncement,
+} from "./announce";
 import { createClock, type Clock } from "./clock";
 import { Controls } from "./components/Controls";
 import { EventFeed } from "./components/EventFeed";
-import { Inspector } from "./components/Inspector";
+import { CLEAR_SELECTION_CLASS, INSPECTOR_HEADING_ID, Inspector } from "./components/Inspector";
 import { OrreryView } from "./components/OrreryView";
 import { isLiveStatus, SessionPicker } from "./components/SessionPicker";
 import { Timeline } from "./components/Timeline";
@@ -53,6 +59,7 @@ export const APP_MESSAGES = {
   dropHere: "Drop to open. The file is read in this page and is not sent anywhere.",
   transcriptNote: "Main agent only: subagent transcripts are separate files.",
   notAffiliated: "Orbitrace is an independent project and is not affiliated with Anthropic.",
+  skipToControls: "Skip to playback controls",
 } as const;
 
 /** Header text for where the replay came from. */
@@ -127,6 +134,13 @@ export function App({
   const dragDepth = useRef(0);
   /** Bumped to open the same session again (after a dropped file replaced it). */
   const [reopen, setReopen] = useState(0);
+  /** Text of the polite live region (`announce.ts`). */
+  const [announcement, setAnnouncement] = useState("");
+  const announcedLiveRef = useRef<LiveStatus | null>(null);
+  const announcedAgentsRef = useRef(0);
+  const agentsAnnouncedAtRef = useRef(-Infinity);
+  const openButtonRef = useRef<HTMLButtonElement>(null);
+  const playButtonId = useId();
 
   const openSummary =
     sessionKey === undefined ? undefined : sessions?.find((entry) => entry.key === sessionKey);
@@ -153,9 +167,34 @@ export function App({
       setSelected(startSelection(options, model));
       setView({ model, generation: generationRef.current, source });
       setStage("ready");
+      announcedLiveRef.current = source.kind === "host" ? source.live : null;
+      announcedAgentsRef.current = model.agents.length;
+      agentsAnnouncedAtRef.current = -Infinity;
+      setAnnouncement(loadedAnnouncement(sourceLabel(source), model));
     },
     [clock],
   );
+
+  /** Say that a followed session changed state or gained agents. Rate-limited for agents. */
+  const announceLive = useCallback((live: LiveStatus, model: ReplayModel | null) => {
+    const parts: string[] = [];
+    const before = announcedLiveRef.current;
+    if (before !== null) {
+      const status = liveStatusAnnouncement(before, live);
+      if (status !== null) parts.push(status);
+    }
+    announcedLiveRef.current = live;
+    const now = Date.now();
+    if (model !== null && now - agentsAnnouncedAtRef.current >= LIVE_ANNOUNCE_INTERVAL_MS) {
+      const added = newAgentsAnnouncement(announcedAgentsRef.current, model);
+      if (added !== null) {
+        parts.push(added);
+        announcedAgentsRef.current = model.agents.length;
+        agentsAnnouncedAtRef.current = now;
+      }
+    }
+    if (parts.length > 0) setAnnouncement(parts.join(" "));
+  }, []);
 
   /** A newer snapshot of the session already shown. */
   const updateModel = useCallback(
@@ -169,8 +208,9 @@ export function App({
       setSelected((id) =>
         id !== null && model.agents.some((agent) => agent.id === id) ? id : null,
       );
+      announceLive(live, model);
     },
-    [clock],
+    [clock, announceLive],
   );
 
   // Show a host session: follow it when it is (or may be) live, read it once when it ended.
@@ -188,6 +228,9 @@ export function App({
           first = false;
           setHostError(null);
         } else if (update.type === "ended") {
+          if (announcedLiveRef.current === "busy" || announcedLiveRef.current === "idle") {
+            announceLive("ended", null);
+          }
           setView((current) =>
             current !== null &&
             current.source.kind === "host" &&
@@ -251,7 +294,7 @@ export function App({
       stop?.();
       stopHostRef.current = null;
     };
-  }, [transport, sessionKey, openLabel, openLive, reopen, replaceModel, updateModel]);
+  }, [transport, sessionKey, openLabel, openLive, reopen, replaceModel, updateModel, announceLive]);
 
   const pickSession = useCallback(
     (key: string) => {
@@ -297,6 +340,13 @@ export function App({
           clock.seek(action.to === "start" ? 0 : clock.getState().duration);
           break;
         case "clearSelection":
+          // The Clear selection button goes away with the selection: keep focus in the inspector.
+          if (
+            document.activeElement instanceof HTMLElement &&
+            document.activeElement.classList.contains(CLEAR_SELECTION_CLASS)
+          ) {
+            document.getElementById(INSPECTOR_HEADING_ID)?.focus();
+          }
           setSelected(null);
           break;
       }
@@ -346,6 +396,15 @@ export function App({
         onDrop={onDrop}
       >
         <header className="app-header">
+          {view !== null && stage === "ready" ? (
+            <button
+              type="button"
+              className="skip-link"
+              onClick={() => document.getElementById(playButtonId)?.focus()}
+            >
+              {APP_MESSAGES.skipToControls}
+            </button>
+          ) : null}
           <img className="app-mark" src="orbitrace-mark.svg" alt="" width={24} height={24} />
           <h1 className="app-title">Orbitrace</h1>
           {source !== undefined ? (
@@ -372,6 +431,7 @@ export function App({
             />
           ) : null}
           <button
+            ref={openButtonRef}
             type="button"
             className="open-button"
             onClick={() => fileInputRef.current?.click()}
@@ -405,7 +465,13 @@ export function App({
                 </ul>
               ) : null}
             </div>
-            <button type="button" onClick={() => setFileError(null)}>
+            <button
+              type="button"
+              onClick={() => {
+                openButtonRef.current?.focus();
+                setFileError(null);
+              }}
+            >
               Dismiss
             </button>
           </div>
@@ -415,7 +481,13 @@ export function App({
             <p className="alert-title">
               {hostError.message} <span className="muted">({hostError.code})</span>
             </p>
-            <button type="button" onClick={() => setHostError(null)}>
+            <button
+              type="button"
+              onClick={() => {
+                openButtonRef.current?.focus();
+                setHostError(null);
+              }}
+            >
               Dismiss
             </button>
           </div>
@@ -433,7 +505,7 @@ export function App({
               />
             </div>
             <div className="dock">
-              <Controls model={view.model} />
+              <Controls model={view.model} playButtonId={playButtonId} />
               <Timeline model={view.model} selected={selected} onSelect={setSelected} />
             </div>
             <aside className="side">
@@ -443,7 +515,8 @@ export function App({
           </main>
         ) : (
           <main className="app-main app-main-message">
-            <div className="message" role={stage === "error" ? "alert" : "status"}>
+            {/* Keyed by stage: a new element, so the change of role and text is announced. */}
+            <div key={stage} className="message" role={stage === "error" ? "alert" : "status"}>
               {stage === "loading" ? <p>{APP_MESSAGES.loading}</p> : null}
               {stage === "empty" ? <p className="message-title">{APP_MESSAGES.empty}</p> : null}
               {stage === "error" ? (
@@ -464,6 +537,10 @@ export function App({
           </span>
           <span>{APP_MESSAGES.notAffiliated}</span>
         </footer>
+
+        <div className="visually-hidden" aria-live="polite" aria-atomic="true">
+          {announcement}
+        </div>
 
         {dragging ? (
           <div className="drop-overlay" aria-hidden="true">

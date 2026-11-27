@@ -4,7 +4,7 @@
  * totals. All times are real time (idle gaps included), converted with `toRealSeconds`.
  */
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import {
   toRealSeconds,
   type ReplayAgent,
@@ -25,6 +25,7 @@ import {
 import type { ClockState } from "../clock";
 import { formatClock, formatCount, formatDuration } from "../format";
 import { useClockValue } from "../use-clock";
+import { CallMark } from "./CallMark";
 
 const PHASE_LABELS: Readonly<Record<AgentPhase, string>> = {
   waiting: "Not started",
@@ -71,7 +72,7 @@ function KindTable({ agent }: { agent: ReplayAgent }) {
         {kinds.map((entry) => (
           <tr key={entry.kind}>
             <th scope="row">
-              <span className={`swatch k-${entry.kind}`} aria-hidden="true" />
+              <CallMark kind={entry.kind} />
               {KIND_LABELS[entry.kind]}
             </th>
             <td>{formatCount(entry.calls)}</td>
@@ -168,6 +169,15 @@ function SessionDetails({ model }: { model: ReplayModel }) {
   );
 }
 
+/**
+ * Id of the inspector heading. It takes focus (tabindex -1) when the selection is cleared from
+ * the inspector, so focus does not drop to the page when the Clear selection button goes away.
+ */
+export const INSPECTOR_HEADING_ID = "inspector-title";
+
+/** Class of the Clear selection button, so the Escape shortcut can tell it had focus. */
+export const CLEAR_SELECTION_CLASS = "clear-selection";
+
 export interface InspectorProps {
   readonly model: ReplayModel;
   readonly selected: ReplayAgentId | null;
@@ -176,12 +186,25 @@ export interface InspectorProps {
 
 export function Inspector({ model, selected, onSelect }: InspectorProps) {
   const agent = findAgent(model, selected);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  // The inspector scrolls on its own when the window is short. tabIndex 0 makes it a Tab stop,
+  // so a keyboard user can scroll it with the arrow and Page keys even when nothing inside can
+  // take focus (no agent selected) and in browsers that do not focus scroll areas themselves.
   return (
-    <section className="panel inspector" aria-labelledby="inspector-title">
+    <section className="panel inspector" aria-labelledby={INSPECTOR_HEADING_ID} tabIndex={0}>
       <div className="panel-head">
-        <h2 id="inspector-title">{agent === undefined ? "Session" : "Agent"}</h2>
+        <h2 id={INSPECTOR_HEADING_ID} ref={headingRef} tabIndex={-1}>
+          {agent === undefined ? "Session" : "Agent"}
+        </h2>
         {agent !== undefined ? (
-          <button type="button" className="link-button" onClick={() => onSelect(null)}>
+          <button
+            type="button"
+            className={`link-button ${CLEAR_SELECTION_CLASS}`}
+            onClick={() => {
+              headingRef.current?.focus();
+              onSelect(null);
+            }}
+          >
             Clear selection
           </button>
         ) : null}

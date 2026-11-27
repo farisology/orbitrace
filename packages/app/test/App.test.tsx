@@ -198,7 +198,7 @@ describe("keyboard", () => {
     scrubber().focus();
     fireEvent.keyDown(scrubber(), { key: " " });
     expect(playButton().textContent).toContain("Pause");
-    fireEvent.keyDown(scrubber(), { key: "k" });
+    fireEvent.keyDown(scrubber(), { key: " " });
     expect(playButton().textContent).toContain("Play");
   });
 });
@@ -225,7 +225,9 @@ describe("controls and timeline", () => {
     renderApp(host, { start: { paused: true } });
     await subscribed(host);
     act(() => host.push(replayUpdate(makeModel())));
-    const mark = screen.getByRole("button", { name: /Idle skip at 0:30: 10 min cut/ });
+    const mark = screen.getByRole("button", {
+      name: /^skip 10 min ?: idle skip at 0:30\. Jump here\.$/,
+    });
     fireEvent.click(mark);
     expect(Number(scrubber().value)).toBe(30);
   });
@@ -235,7 +237,11 @@ describe("controls and timeline", () => {
     renderApp(host, { start: { paused: true } });
     await subscribed(host);
     act(() => host.push(replayUpdate(makeModel())));
-    expect(within(lane("widget-explorer")).getByLabelText("1 failed")).toBeDefined();
+    // A cross and the count on screen; the words for screen readers.
+    expect(lane("widget-explorer").textContent).toContain("✕1");
+    expect(screen.getByRole("button", { name: /^widget-explorer ?, 1 failed$/ })).toBe(
+      lane("widget-explorer"),
+    );
   });
 });
 
