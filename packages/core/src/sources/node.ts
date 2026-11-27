@@ -31,6 +31,8 @@ export * from "./claude-code/watch.js";
 export * from "../host/session-replayer.js";
 // Also on the main entry; repeated here so a host gets the replayer and its errors in one import.
 export * from "../host/errors.js";
+// The history store and its indexer (#25): opt-in, nothing runs on import.
+export * from "../history/index.js";
 
 /** Settings a host passes in; the OS, home folder and environment come from the process. */
 export type NodeResolveOptions = Omit<ResolveRootsContext, "platform" | "homeDir" | "env">;

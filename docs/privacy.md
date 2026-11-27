@@ -107,6 +107,102 @@ replay that session, because it keeps no record of its own (next section).
   stops. See [architecture.md](architecture.md#opening-the-browser).
 - Nothing is uploaded. Orbitrace has no telemetry.
 
+## History store (#25)
+
+**Built in core, not used by any command yet.** `@orbitrace/core/node` has a history store that
+keeps a copy of your sessions so they outlive Claude Code's cleanup. No host (the CLI, the editor
+extension, the app) calls it, so today nothing is recorded; the statement under
+[What Orbitrace stores](#what-orbitrace-stores) still describes every command. Recording is
+opt-in: nothing is written unless a program opens the store for writing and asks it to copy
+sessions. How it works is in [architecture.md](architecture.md#history-store-25).
+
+What it would store, once a host turns it on:
+
+- Each line of each session's main transcript and subagent transcripts, as JSON text after
+  redaction (below), and each subagent's meta file, also redacted. That is your content (prompts,
+  replies, tool inputs and outputs, paths, branch names) minus what redaction replaced. Treat the
+  store as being as sensitive as the transcripts themselves.
+- Per session: the session key, the runtime's session id, the project label, the last activity
+  time and when it was copied. Per transcript file: its device and inode numbers, how far it was
+  read, and SHA-256 hashes of up to 4 KiB at its start and before that point, used to notice a
+  replaced or truncated file.
+
+Where and how:
+
+- In `ORBITRACE_DATA_DIR` if set (an absolute path), otherwise in `.orbitrace` in your home folder:
+  `history.sqlite`, SQLite's `history.sqlite-wal` and `history.sqlite-shm`, and `history.lock`
+  while a writer runs.
+- The folder is set to 0700 and the files to 0600 (your account only). On Windows, Node cannot set
+  these and the folder's inherited permissions apply.
+- It refuses a folder inside a git working tree (so it cannot end up in a commit) or inside a
+  Claude Code config folder.
+- Nothing is uploaded.
+
+### Redaction (best effort)
+
+Before a line is written it is parsed and every string in it, and every key, is checked against
+these rules; a match is replaced with `[redacted:<rule>]`:
+
+- Private key blocks (PEM): from a `BEGIN ... PRIVATE KEY` line to its `END` line, or to the end
+  of the text when the end line is missing.
+- API keys and tokens in well-known prefixed formats: Anthropic (`sk-ant-`), OpenAI-style (`sk-`,
+  `sk-proj-`, `sk-svcacct-`, `sk-admin-`), GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`,
+  `github_pat_`), GitLab (`glpat-`), AWS access key ids (`AKIA`, `ASIA`), Slack (`xoxa-`, `xoxb-`,
+  `xoxp-`, `xoxo-`, `xoxr-`, `xoxs-`), Google API keys (`AIza`), Stripe (`sk_`, `rk_`, `pk_` with
+  `live_` or `test_`), DigitalOcean (`dop_v1_`, `doo_v1_`, `dor_v1_`), npm (`npm_`), Hugging Face
+  (`hf_`), and JSON Web Tokens (three dot-separated parts, the first two starting `eyJ`).
+- The user name and password in a URL (`scheme://user:password@host`); the host is kept.
+- `Authorization` and `Proxy-Authorization` header values (the scheme such as `Bearer` is kept),
+  and `Bearer` or `Basic` followed by a value of 8 or more characters that contains a digit.
+- `Cookie` and `Set-Cookie` header values, to the end of the line or the next quote.
+- Assignments written as `name=value` or `name: value`, quoted or not, whose name **ends in** one
+  of the secret words `password`, `passwd`, `secret`, `token`, `api_key`/`api-key`/`apikey`,
+  `access_key`, `private_key`, `client_secret` or `credential(s)`, in any letter case, optionally
+  followed by up to two short parts. A part starts with `_`, `.` or `-`, or is a camelCase part (an
+  upper-case letter right after the word). Examples: `DB_PASSWORD=...`, `"api_key": "..."`,
+  `DB_PASSWORD_PROD=...`, `SECRET_KEY_BASE=...`, `password_confirmation: ...`,
+  `accessToken: ...`. A plain lower-case ending is not a part, so `max_tokens: 1000` and
+  `tokenizer: ...` are left alone.
+- Any string under a JSON key that ends in one of those words, `authorization` or `cookie`, after
+  any characters and with the same optional parts, whatever it holds. This covers camelCase keys
+  such as `"accessToken"`, `"refreshToken"`, `"githubToken"`, `"dbPassword"` and
+  `"secretKeyBase"` as well as `"password"`, `"auth_token"` and `"SECRET_KEY_BASE"`.
+
+A line that is not valid JSON is checked as text by the same rules. It is stored only when no rule
+matches; otherwise it is skipped and counted, never stored.
+
+What redaction does not catch:
+
+- Secrets with no known prefix and no telling name: a random string pasted into a prompt, a
+  password typed on its own, a key in a format not listed above.
+- Secrets split across strings or lines, or encoded (base64 of a key file, URL-encoded values,
+  escaped text inside a string that is itself JSON).
+- Values passed as a separate command-line argument (`--password value`, `-p value`).
+- Names where the secret word is not at the end and not followed by at most two short parts
+  (`PASSWORD_FOR_THE_STAGING_DATABASE=...`), and names that do not use one of the words above
+  (`pwd=...`, `pin=...`, `sid=...` outside a `Cookie` header).
+- Header values other than `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie`
+  (for example a custom `X-Session: ...` header), unless they match a token format.
+- Personal data in general: names, email addresses, paths, file contents, project names. These
+  are kept.
+
+It can also replace harmless text that looks like a secret (for example a type annotation such as
+`password: string`).
+
+### Deleting
+
+- One session: `deleteSession` removes its rows with SQLite's `secure_delete` on, so its pages are
+  overwritten with zeros, then empties the WAL file, **but only when no reader has the store open
+  inside a read**. SQLite cannot empty the WAL while a reader may still need it. In that case
+  `deleteSession` reports `scrubbed: false`: the rows are gone, but old copies of their bytes stay
+  in `history.sqlite-wal` until the readers close and `scrub()` succeeds (or the last connection
+  closes). Tests check that a marker from the deleted session is gone from the raw bytes of the
+  database files, and that an open reader makes `deleteSession` report the incomplete scrub.
+- Everything: `deleteHistoryStore` deletes the database and the files SQLite keeps beside it,
+  then the lock, then the folder if nothing else is in it. Files are unlinked, not overwritten; on
+  SSDs and copy-on-write file systems an overwrite would not reach the old blocks anyway.
+- Deleting history never touches Claude Code's transcripts.
+
 ## What a shared replay contains
 
 A shared replay file holds structure only. It is built from the allow-list below. Orbitrace does

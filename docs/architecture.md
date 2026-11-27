@@ -199,6 +199,77 @@ read, stops when the watch is stopped, and never keeps the Node process alive on
 
 All three are exported from `@orbitrace/core/node`, not from the main entry.
 
+## History store (#25)
+
+A copy of each session's transcript lines, redacted, in one SQLite file, so a session outlives
+Claude Code's cleanup. Built in core and exported from `@orbitrace/core/node`; **no host calls it
+yet**, and nothing is written unless a caller opens a store for writing and calls the ingest.
+Importing the module does nothing. The engine decision and its measurements are in
+[decisions/0001-storage.md](decisions/0001-storage.md); what is stored and what redaction does
+not catch is in [privacy.md](privacy.md#history-store-25).
+
+- **Engine.** `node:sqlite`, loaded by a dynamic import inside `try`/`catch` on first use.
+  `historyCapability()` says whether it loads (Node 22.13+, Node 24 in current VS Code) and, when
+  it does not (Node 20, older editor hosts), why. On such a runtime every store call fails with
+  `HistoryStoreError` code `unavailable` and the rest of core is unaffected. It also reports
+  whether this SQLite has FTS5, for #28.
+- **Interface.** `openHistoryStore({ mode: "write" | "read" })` returns a `HistoryStore`:
+  `totals()`, `listSessions()`, `readSession(key)` (a `SessionInput` for `parseSession`),
+  `deleteSession(key)` and `scrub()` (writer) and `close()`. `ingestHistory(store, { sessions } | { roots })`
+  copies sessions in. `deleteHistoryStore()` removes the whole store and works without
+  `node:sqlite`. Errors are `HistoryStoreError` with a code and a message that names no path.
+- **Location.** `ORBITRACE_DATA_DIR` (absolute) or `.orbitrace` in the home folder; files
+  `history.sqlite` (plus SQLite's `-wal` and `-shm`) and `history.lock`. Refused inside a git
+  working tree or a Claude Code config folder. Folder 0700, files 0600.
+- **Schema** (version 1 in `PRAGMA user_version`, `application_id` `ORBT`): `sessions` (one row
+  per `SessionRef.key`), `files` (one per transcript file, with the subagent's redacted meta, the
+  file's device and inode, the byte offset read up to, hashes of the first and last 4 KiB before
+  it, and a generation), `lines` (redacted JSON text, keyed by file, base key and occurrence). A
+  later version is a numbered migration applied by the next writer; a reader of an older file
+  fails with `needs-upgrade` and of a newer one with `newer-schema`.
+- **Incremental ingest.** Each run reads every transcript file from its stored offset and stores
+  complete lines only; a partial last line waits for the next run. A line's key is its `uuid`, or
+  a hash of its redacted text, plus how often that key came before in the file, so a second run
+  adds nothing and identical lines are kept apart. A file whose inode changed, that shrank below
+  the offset, or whose first or last 4 KiB before the offset changed is read again from the start
+  under a new generation, and lines already stored are recognised by their keys. Lines no longer
+  in a file stay stored. Lines go in transactions of 1,000 (`batchLines`) together with the new
+  offset, so a killed writer loses nothing and duplicates nothing. The file uses WAL journal
+  mode, so readers are not blocked by the writer, and `synchronous = NORMAL`: in WAL mode that
+  keeps the file consistent after a crash or power loss but can roll back the last commits on
+  power loss, which is safe here because each file's offset commits in the same transaction as its
+  lines, so the next run re-reads the lost lines (nothing lost, nothing duplicated); `FULL`'s fsync
+  on every commit would buy nothing.
+- **One writer.** A writer takes `history.lock`, a pid file written to a temporary name and
+  hard-linked into place (exclusive create where links are not supported). A live holder makes a
+  second writer wait up to `lockWaitMs` and then fail with `locked`; a lock whose pid is gone is
+  renamed aside, checked and removed; a lock from another host counts as held. Release removes
+  the file only when it still holds the owner's token. Readers take no lock; WAL mode lets them
+  read during a write. Within one process, one store object runs one write at a time: a second
+  `ingestHistory` call on the same store waits for the first to end and then continues from where
+  it stopped, and `deleteSession` and `scrub` fail with `locked` while an ingest runs.
+- **Off the main thread.** `runHistoryIngestWorker(request, options)` starts the worker entry
+  `dist/history/worker.js` with `worker_threads`, forwards `progress` after each session and
+  resolves with the result; `signal` terminates it. Because a worker shares its parent's pid, a
+  lock it leaves behind would look held by a live process, so the helper makes the lock token
+  before it starts the worker, passes it in `workerData`, and on the worker's `exit` removes the
+  lock file (only if it still holds that token) and the side files named after the token, however
+  and whenever the worker ended. `ingestHistory`
+  itself reads files synchronously and yields to the event loop between transactions.
+- **Deleting.** `deleteSession` runs with `secure_delete` on and then checkpoints the WAL with
+  `TRUNCATE`, so the session's bytes are overwritten in the database and, when no reader is inside
+  a read, gone from the WAL file. The checkpoint's result row and the WAL size are checked, with
+  three short attempts (150 ms busy timeout each); when a reader keeps the WAL in use it returns
+  `{ deleted: true, scrubbed: false }` and the caller retries with `scrub()` once readers close.
+  `deleteHistoryStore` takes the lock and deletes the database, its `-wal`, `-shm` and `-journal`
+  files and the lock, then the folder if it is empty.
+
+What a host needs before it can call this (later tickets): ship `dist/history/worker.js` as its
+own file next to its bundle and pass its location as `workerUrl`, which is required because a
+bundler moves the module away from the worker file and the extension's CommonJS bundle has no
+`import.meta.url`; check `historyCapability()` before offering history; and keep recording off
+until the user turns it on.
+
 ## Export and validation (#18)
 
 `exportReplay` builds a new value from an allow-list of the replay fields, checks it against the

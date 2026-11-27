@@ -58,6 +58,10 @@ merged so far.
 - The web app ships a `THIRD-PARTY-NOTICES.txt`, with the licence of each bundled package, in the
   CLI tarball, the `.vsix` and the public player; the release check fails when it is missing or
   stale (#143).
+- `@orbitrace/core/node`: a history store and incremental indexer on `node:sqlite` (Node 22.13+;
+  unavailable with a reason on Node 20): idempotent, redacting ingest by byte offset, one writer
+  with a pid lock, a worker-thread entry, and deletion of a session or the whole store. Opt-in;
+  no host calls it yet (#25).
 - `@orbitrace/core`: `toCompressedSeconds`, the inverse of `toRealSeconds`. The app imports it
   from core and no longer keeps its own copy (#135, #147).
 - A public replay player: a static page, built with `npm run build:player -w @orbitrace/app`
