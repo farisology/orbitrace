@@ -78,18 +78,18 @@ Jobs:
 ## Artefacts
 
 `pack-release.mjs` writes these files. Sizes are from a local run of
-`node scripts/release/pack-release.mjs` (with the `.vsix`) on 27 Nov 2026 on `dev` at `e78bb38`
-(after #25, #26, #31, #168 and #22) with the docs changes of #183 to #187, version `0.0.0`, taken
-from its `release-manifest.json` (the manifest has no unpacked size for the `.vsix`, so that cell
-is the sum of its file sizes); KiB is 1024 bytes. The CLI tarball and the `.vsix` include the web
-app's `THIRD-PARTY-NOTICES.txt` and `third-party-modules.json` (#143).
+`node scripts/release/pack-release.mjs` (with the `.vsix`) on 27 Nov 2026 on `dev` at `0f5494b`
+(after #195, #196 and the docs changes of #185), version `0.0.0`, taken from its
+`release-manifest.json` (the manifest has no unpacked size for the `.vsix`, so that cell is the
+sum of its file sizes); KiB is 1024 bytes. The CLI tarball and the `.vsix` include the web app's
+`THIRD-PARTY-NOTICES.txt` and `third-party-modules.json` (#143).
 
 | File                         | Packed    | Unpacked  | Files | Contents                                                                                                                                                                                                        |
 | ---------------------------- | --------- | --------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `orbitrace-core-<v>.tgz`     | 155.8 KiB | 617.6 KiB | 116   | `dist/**/*.js`, `dist/**/*.d.ts`, `schema/replay-v1.schema.json`, `README.md`, `LICENSE`, `package.json`                                                                                                        |
+| `orbitrace-core-<v>.tgz`     | 166.6 KiB | 655.9 KiB | 120   | `dist/**/*.js`, `dist/**/*.d.ts`, `schema/replay-v1.schema.json`, `README.md`, `LICENSE`, `package.json`                                                                                                        |
 | `orbitrace-renderer-<v>.tgz` | 57.6 KiB  | 191.5 KiB | 41    | `dist/**/*.js`, `dist/**/*.d.ts`, `README.md`, `LICENSE`, `package.json`                                                                                                                                        |
-| `orbitrace-<v>.tgz` (CLI)    | 188.9 KiB | 747.8 KiB | 12    | `dist/index.js` (core bundled in), the web app, its notices and module list in `dist/app`, `README.md`, `LICENSE`, `package.json`                                                                               |
-| `orbitrace-vscode-<v>.vsix`  | 192.9 KiB | 713.8 KiB | 16    | `extension/dist/extension.js` (core bundled in), `extension/dist/app` with notices and module list, the activity-bar icon, the listing icon `extension/media/icon.png` (256x256 PNG, 11.9 KiB), readme, licence |
+| `orbitrace-<v>.tgz` (CLI)    | 229.3 KiB | 905.7 KiB | 13    | `dist/index.js` (core bundled in), `dist/history-worker.js` (core's history worker, #195), the web app, its notices and module list in `dist/app`, `README.md`, `LICENSE`, `package.json`                       |
+| `orbitrace-vscode-<v>.vsix`  | 194.9 KiB | 721.6 KiB | 16    | `extension/dist/extension.js` (core bundled in), `extension/dist/app` with notices and module list, the activity-bar icon, the listing icon `extension/media/icon.png` (256x256 PNG, 11.9 KiB), readme, licence |
 | `SHA256SUMS`                 |           |           |       | One `<sha256>  <file>` line per artefact. `sha256sum -c SHA256SUMS` (or `shasum -a 256 -c`) checks them.                                                                                                        |
 | `release-manifest.json`      |           |           |       | The version, the commit, and each artefact's size, SHA-256, file list, warnings and errors.                                                                                                                     |
 
@@ -105,7 +105,8 @@ Each tarball is checked for:
   `sourceMappingURL` comment points at a shipped map;
 - every `bin` file starts with `#!/usr/bin/env node` and is executable;
 - for the CLI (`selfContained` in `lib.mjs`): no `dependencies`, `peerDependencies` or
-  `optionalDependencies`, and `dist/index.js` imports only Node.js built-ins and shipped files;
+  `optionalDependencies`, and `dist/index.js` and `dist/history-worker.js` each import only
+  Node.js built-ins and shipped files;
 - where it carries the web app (an `index.html` with `assets/*.js` beside it):
   `THIRD-PARTY-NOTICES.txt` and `third-party-modules.json` in the same folder, every script listed
   in the module list, and notices that name exactly the packages the list puts in those scripts
@@ -134,8 +135,10 @@ file instead of the `.ts` source.
 The CLI ships no source maps either, and no `src/` (#120). `packages/cli/scripts/build.mjs`
 bundles the command and `@orbitrace/core` (both its main and its `/node` entry) with esbuild into
 one ES module, `dist/index.js`, for Node.js 20 or later, with Node built-ins left external and no
-map. It writes no type declarations: they would import `@orbitrace/core`, which is not installed
-with the CLI. The build fails if code from a third-party package ends up in the bundle, so a new
+map. Since #195 the same build writes core's history worker as a second file beside it,
+`dist/history-worker.js`, also with no map, because a worker thread starts from a file of its own.
+It writes no type declarations: they would import `@orbitrace/core`, which is not installed
+with the CLI. The build fails if code from a third-party package ends up in either file, so a new
 bundled dependency cannot ship before its licence is noted in `NOTICE`; today the bundle holds
 only Orbitrace's own code. The CLI tarball went from 183.6 KiB packed, 675.9 KiB unpacked and
 89 files to 158.0 KiB, 633.9 KiB and 10 files (local runs on 27 Nov 2026).

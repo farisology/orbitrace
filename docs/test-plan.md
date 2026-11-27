@@ -5,7 +5,7 @@ checks by hand before a release. Orbitrace is an independent project. It is not 
 or endorsed by Anthropic.
 
 **Status: nothing is released.** This page describes the repository as it is. The counts are
-from a run on 27 Nov 2026 with Node.js 26 on macOS. They change with every pull request, so read
+from a run on 27 Nov 2026 with Node.js 26 on macOS, on `dev` at `0f5494b`. They change with every pull request, so read
 them as sizes, not as targets.
 
 Every test uses invented data. No test reads your own Claude Code config folder: the tests that
@@ -38,13 +38,13 @@ Each package runs its tests with Vitest: `npm test -w <name>`, after `npm run bu
 
 | Package    | Run                               | Files | Tests | What the tests cover                                                                                                                                                                                                                                              |
 | ---------- | --------------------------------- | ----- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `core`     | `npm test -w @orbitrace/core`     | 54    | 654   | The transcript parser, source resolution and session listing in temporary folders, file watching, the replay builder and event feed, live snapshots, export and the replay schema, the session replayer, the wire protocol checks, the ledger, the history store. |
-| `fixtures` | `npm test -w @orbitrace/fixtures` | 17    | 1015  | The seeded generator writes the same bytes every time, the committed fixtures match it, each line fits core's raw-line contract, the golden replays match what core's pipeline makes today, and every fixture passes the repository's privacy check.              |
+| `core`     | `npm test -w @orbitrace/core`     | 58    | 704   | The transcript parser, source resolution and session listing in temporary folders, file watching, the replay builder and event feed, live snapshots, export and the replay schema, the session replayer, the wire protocol checks, the ledger, the history store. |
+| `fixtures` | `npm test -w @orbitrace/fixtures` | 18    | 1026  | The seeded generator writes the same bytes every time, the committed fixtures match it, each line fits core's raw-line contract, the golden replays match what core's pipeline makes today, and every fixture passes the repository's privacy check.              |
 | `renderer` | `npm test -w @orbitrace/renderer` | 13    | 186   | Scene layout, level of detail, label layout, drawing on a fake canvas, per-frame allocation limits, colour contrast, hit testing, and that generated design files match the tokens.                                                                               |
-| `app`      | `npm test -w @orbitrace/app`      | 48    | 582   | The React shell in happy-dom with a fake renderer: components, keyboard paths, follow live, export, the ledger panel, accessibility rules with axe-core, layout rules in the CSS, both client transports, the public player and its build, the built bundle.      |
-| `cli`      | `npm test -w orbitrace`           | 24    | 315   | Argument parsing, `list`, `export`, `open` and `doctor`, the loopback server and its token, export privacy options, and the built command run as a child process.                                                                                                 |
-| `vscode`   | `npm test -w orbitrace-vscode`    | 25    | 246   | The extension with a fake `vscode` module: commands, the Sessions view, panels, the page it writes for a tab and its Content-Security-Policy, the message host, the manifest, the build, and the helpers of the integration test.                                 |
-| scripts    | `npx vitest run --dir scripts`    | 6     | 210   | The privacy check, the workspace runner and the release scripts. Two of these tests pack the real npm tarballs and install the real command-line tarball.                                                                                                         |
+| `app`      | `npm test -w @orbitrace/app`      | 48    | 600   | The React shell in happy-dom with a fake renderer: components, keyboard paths, follow live, export, the ledger panel, accessibility rules with axe-core, layout rules in the CSS, both client transports, the public player and its build, the built bundle.      |
+| `cli`      | `npm test -w orbitrace`           | 30    | 389   | Argument parsing, `list`, `export`, `open`, `history` and `doctor`, the loopback server and its token, export privacy options, and the built command run as a child process.                                                                                      |
+| `vscode`   | `npm test -w orbitrace-vscode`    | 27    | 270   | The extension with a fake `vscode` module: commands, the Sessions view, panels, the page it writes for a tab and its Content-Security-Policy, the message host, the manifest, the build, and the helpers of the integration test.                                 |
+| scripts    | `npx vitest run --dir scripts`    | 6     | 211   | The privacy check, the workspace runner and the release scripts. Two of these tests pack the real npm tarballs and install the real command-line tarball.                                                                                                         |
 
 Run one file, or the tests whose name matches some text, from the package folder:
 
@@ -89,17 +89,24 @@ Do not fix a test like this with a retry or a longer timeout. Wait for the thing
 ## What CI runs
 
 `.github/workflows/ci.yml` runs on every pull request into `dev` or `main` and on every push to
-`dev`. All jobs run on `ubuntu-latest`. A failure in any step fails the run.
+`dev`. Every job but one runs on `ubuntu-latest`, and a failure in any of their steps fails the
+run. The Windows job runs on `windows-latest` and does not fail the run yet.
 
-| Job                      | Node.js           | Steps                                                                                                                                                          |
-| ------------------------ | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Privacy check            | `.nvmrc` (20.19)  | `npm run privacy` on the files, then `npm run privacy -- --range <base>..<head>` on the new commits. Nothing is installed.                                     |
-| Build and test           | 20, 22, 24 and 26 | `npm ci --ignore-scripts`, `npm run build`, `node scripts/release/check-package.mjs`, `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm test`. |
-| VS Code integration test | 22                | `npm ci --ignore-scripts`, `npm run build`, then the integration test under a virtual display with the current stable VS Code.                                 |
+| Job                                 | Node.js           | Steps                                                                                                                                                                                      |
+| ----------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Privacy check                       | `.nvmrc` (20.19)  | `npm run privacy` on the files, then `npm run privacy -- --range <base>..<head>` on the new commits. Nothing is installed.                                                                 |
+| Build and test                      | 20, 22, 24 and 26 | `npm ci --ignore-scripts`, `npm run build`, `node scripts/release/check-package.mjs`, `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm test`.                             |
+| VS Code integration test            | 22                | `npm ci --ignore-scripts`, `npm run build`, then the integration test under a virtual display twice: with the current stable VS Code, and with 1.96.0, the lowest `engines.vscode` allows. |
+| Core tests on Windows, not blocking | 24                | `npm ci --ignore-scripts`, build core and the fixtures package, then `npm test -w @orbitrace/core -- test/history` and the whole core suite. `continue-on-error: true`.                    |
 
 The matrix does not stop the other Node.js versions when one fails. The history store uses
 `node:sqlite`, which Node.js 20 does not have; on Node.js 20 its tests check that core says so
 and that the rest of core still works.
+
+The Windows job was red on its first run on `dev` (run 46021091151, at `0f5494b`): 56 of 58 core
+test files passed. The two that failed, `test/history/location.test.ts` (#204) and
+`test/history/host-options.test.ts` (#210), assert POSIX paths and get Windows ones. Read its
+result on the run page: the run shows green while that job fails.
 
 The release workflow (`.github/workflows/release.yml`) is started by hand. It repeats the build,
 lint, typecheck, tests and privacy check, then packs and checks the artefacts. See
@@ -120,6 +127,18 @@ It checks that the extension activates, that its commands exist, that the Sessio
 synthetic sessions, that a session tab gets a page with the Content-Security-Policy, that the app
 in the tab sends its first requests and gets answers, that nothing sent to the tab holds a path,
 and that closing the tab stops its subscriptions.
+
+It also runs the history store inside the extension host, with `HOME`, `CLAUDE_CONFIG_DIR` and
+`ORBITRACE_DATA_DIR` pointing into the temporary folder: `historyCapability()`, the ingest worker
+over the synthetic sessions, a second run that adds nothing, the totals and deleting the store.
+The extension itself does not call the store; the test loads it from `@orbitrace/core/node`. On
+an editor whose Node has no `node:sqlite` (VS Code 1.96.0 bundles Node 20.18.1) the four store
+steps are skipped with the reason.
+
+Two settings help when you measure an editor version: `ORBITRACE_IT_PROBE_ONLY=1` downloads the
+editor, prints the Node, Electron and SQLite versions it bundles and whether `node:sqlite` loads,
+then stops; `ORBITRACE_IT_CACHE_DIR=<absolute path>` downloads into that folder instead of
+`packages/vscode/node_modules/.cache/vscode-test`.
 
 It does not check what the tab draws: an extension cannot read a webview's pixels. The full list
 and the settings are in
@@ -184,8 +203,10 @@ Known gaps. Each one is a risk a release carries until someone closes it.
   VS Code webview are not part of any automated run. The headless Chrome checks in
   [packages/app/ACCESSIBILITY.md](../packages/app/ACCESSIBILITY.md#running-the-checks) and the
   browser benchmark are run by hand.
-- **Windows and macOS in CI.** CI runs on Linux only. Paths, file watching and the editor are not
-  tested on Windows or macOS there.
+- **Windows and macOS in CI.** CI runs everything on Linux. On Windows it runs only the core
+  tests, in a job that does not block yet and that fails today on two path tests (#204, #210).
+  The other packages (the renderer, the app, the command line and the extension) and the editor
+  are not tested on Windows, and nothing runs on macOS in CI.
 - **Screen readers.** The accessibility rules are checked by axe-core and by tests. What a
   person still has to check with a screen reader is listed in
   [ACCESSIBILITY.md](../packages/app/ACCESSIBILITY.md#still-to-check-with-a-screen-reader).

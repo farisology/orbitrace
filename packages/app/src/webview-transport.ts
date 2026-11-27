@@ -164,7 +164,9 @@ export function createWebviewTransport({ api, events }: WebviewTransportOptions)
   return {
     kind: "editor",
     // The editor extension answers every `openInBrowser` with `unsupported` until it can start
-    // the loopback server (issue 100), so the flag says no. A vscode test checks the two agree.
+    // the loopback server (issue 100), so the flag says no. packages/app/test/webview-wire.test.ts
+    // and packages/vscode/test/message-host.test.ts check the two agree, through the conversation
+    // in @orbitrace/fixtures/wire.
     canOpenInBrowser: false,
     async listSessions(options?: ListSessionsOptions): Promise<readonly SessionSummary[]> {
       const result = await request({

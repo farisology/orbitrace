@@ -112,6 +112,7 @@ merged so far.
 - Docs catch-up for `orbitrace doctor`, the history store, the ledger, export from the app and the
   `saveReplay` request, the CI Node matrix and the release artefact sizes (#183, #185, #186,
   #187).
+- Docs catch-up for `orbitrace history` and `dist/history-worker.js`, the release artefact sizes, links to the test plan, the integration-test settings and CI jobs, core's entry list, and the first CI results for VS Code 1.96.0 and Windows in the storage decision record (#205, #206, #207, #208, #212).
 
 ### Fixed
 
