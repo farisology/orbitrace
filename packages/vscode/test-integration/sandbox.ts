@@ -11,6 +11,9 @@
  * - `ud`, `ext`: the editor's user-data and extensions folders, so the user's own editor
  *   profile is never touched. `ud/User/settings.json` turns telemetry, update checks and the
  *   AI features off (`SANDBOX_USER_SETTINGS`).
+ * - `hd`: the history store's data folder (`ORBITRACE_DATA_DIR`, #196), not created here. It is
+ *   outside the config folder and outside any git working tree, as the store requires, so no
+ *   store is ever written to the real `~/.orbitrace`.
  *
  * Folder names are short because the editor puts its IPC socket inside the user-data folder,
  * and macOS limits a socket path to 103 characters.
@@ -32,7 +35,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { claudeCodeSessionKey } from "@orbitrace/core/node";
+import { claudeCodeSessionKey, HISTORY_DATA_DIR_ENV } from "@orbitrace/core/node";
 import { generateSession, writeFixtureTree, type FixtureManifest } from "@orbitrace/fixtures";
 import { encodeProjectFolder } from "../src/workspace-match.js";
 import {
@@ -138,6 +141,7 @@ export function createSandbox(
     const workspaceDir = join(root, "ws");
     const userDataDir = join(root, "ud");
     const extensionsDir = join(root, "ext");
+    const historyDataDir = join(root, "hd");
     for (const dir of [fixturesDir, homeDir, workspaceDir, userDataDir, extensionsDir]) {
       mkdirSync(dir, { recursive: true });
     }
@@ -172,6 +176,7 @@ export function createSandbox(
       workspaceDir,
       userDataDir,
       extensionsDir,
+      historyDataDir,
       workspaceSession,
       otherSessions,
     };
@@ -201,7 +206,7 @@ export function isInheritedEditorVariable(name: string): boolean {
 /**
  * The whole environment the editor is launched with: the launcher's environment `base` without
  * the variables `isInheritedEditorVariable` names, plus the synthetic config folder, the empty
- * home folder, and where the suite finds the sandbox.
+ * home folder, the history data folder, and where the suite finds the sandbox.
  */
 export function editorEnvironment(
   sandbox: SandboxDescription,
@@ -216,6 +221,7 @@ export function editorEnvironment(
     CLAUDE_CONFIG_DIR: sandbox.configDir,
     HOME: sandbox.homeDir,
     USERPROFILE: sandbox.homeDir,
+    [HISTORY_DATA_DIR_ENV]: sandbox.historyDataDir,
     [SANDBOX_ENV]: sandbox.root,
   };
 }

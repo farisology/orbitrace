@@ -1,7 +1,10 @@
 # CI: every pull request into dev or main, and every push to dev, is built, linted,
 # type-checked, tested on Node 20, 22, 24 and 26, and scanned by the privacy check. A separate
-# job runs the VS Code integration test in a real editor on Node 22. A failure in any job or
-# step, the formatting check and the integration test included, fails the workflow.
+# job runs the VS Code integration test in a real editor on Node 22: on the current stable
+# VS Code and on 1.96.0, the lowest version engines.vscode allows. A failure in any of these
+# jobs or steps, the formatting check and the integration test included, fails the workflow.
+# One more job runs the core package's tests on Windows; it does not fail the workflow yet
+# (#196, see the job).
 #
 # Each step calls an npm script from the root package.json, so the commands here are the
 # same ones a contributor runs locally:
@@ -11,6 +14,9 @@
 #   npm run privacy                                  (the files in the tree, paths included)
 #   npm run privacy -- --range <base>..<head>        (what the new commits add)
 #   xvfb-run -a npm run test:integration -w orbitrace-vscode
+#   ORBITRACE_VSCODE_VERSION=1.96.0 xvfb-run -a npm run test:integration -w orbitrace-vscode
+#   npm run build -w @orbitrace/core && npm run build -w @orbitrace/fixtures \
+#     && npm test -w @orbitrace/core                 (Windows)
 #
 # Security: the token is read-only, pull_request_target is never used, checkout does not
 # keep the token on disk, and third-party actions are pinned to a full commit SHA (the
@@ -191,7 +197,79 @@ jobs:
             sudo apt-get install -y --no-install-recommends xvfb
           fi
 
+      # The suite also runs the history store in the extension host (#196): the ingest worker
+      # over the synthetic sessions, totals, a second run, delete. The launcher first prints the
+      # Node, Electron and SQLite versions the editor bundles and whether node:sqlite loads.
       - name: Run the integration test under a virtual display
         env:
           ORBITRACE_VSCODE_VERSION: ${{ steps.vscode.outputs.version }}
         run: xvfb-run -a npm run test:integration -w orbitrace-vscode
+
+      # VS Code 1.96.0 is the lowest version engines.vscode in packages/vscode/package.json
+      # allows. Its Node (20.18.1) has no node:sqlite, so the suite checks that history reports
+      # itself unavailable there with a reason, and that the extension still works (#196). A
+      # released version never changes, so its download is cached under a fixed key, in a
+      # folder of its own (ORBITRACE_IT_CACHE_DIR). Adds one more editor start (6 s on a macOS
+      # laptop; expect under a minute here), plus the download (about 100 MB) when not cached.
+      - name: Cache the VS Code 1.96.0 download
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/vscode-floor
+          key: vscode-test-${{ runner.os }}-${{ runner.arch }}-1.96.0
+
+      - name: Run the integration test on VS Code 1.96.0
+        env:
+          ORBITRACE_VSCODE_VERSION: 1.96.0
+          ORBITRACE_IT_CACHE_DIR: ${{ runner.temp }}/vscode-floor
+        run: xvfb-run -a npm run test:integration -w orbitrace-vscode
+
+  windows-core:
+    name: Core tests on Windows (Node 24, not blocking yet)
+    runs-on: windows-latest
+    # Not blocking yet (#196): this job has never run, and nobody has run the history store on
+    # Windows. Until it has been green on dev for a while, a failure shows on the run but does
+    # not fail the workflow. Remove continue-on-error then. Node 24 is the line the current
+    # VS Code's extension host runs (docs/decisions/0001-storage.md).
+    continue-on-error: true
+    timeout-minutes: 15
+    # Git Bash, run with -e: a failing command fails its step. PowerShell, the Windows default,
+    # only checks the exit code of a step's last command.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Git for Windows converts line endings on checkout by default. The tests compare files
+      # byte for byte with what was committed, as on Linux and macOS, so keep them as committed.
+      - name: Keep line endings as committed
+        run: git config --global core.autocrlf false
+
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 24 with the npm cache
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # --ignore-scripts, as in the other jobs: no dependency runs code at install time.
+      - name: Install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      # Only what the core tests load: core's dist (the history worker and the Node entry run in
+      # child processes and worker threads) and the fixture generator some core tests import.
+      - name: Build core and the fixtures package
+        run: |
+          npm run build -w @orbitrace/core
+          npm run build -w @orbitrace/fixtures
+
+      # The history store first, on its own, so its result is easy to find in the log.
+      - name: Test the history store
+        run: npm test -w @orbitrace/core -- test/history
+
+      - name: Test the whole core package
+        if: success() || failure()
+        run: npm test -w @orbitrace/core

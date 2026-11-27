@@ -31,6 +31,11 @@ export interface SandboxDescription {
   readonly workspaceDir: string;
   readonly userDataDir: string;
   readonly extensionsDir: string;
+  /**
+   * The history store's data folder (`ORBITRACE_DATA_DIR` in the editor, #196). Not created by
+   * the sandbox: the store creates it, and the suite checks that deleting the store removes it.
+   */
+  readonly historyDataDir: string;
   /** The session filed under the workspace folder. */
   readonly workspaceSession: SandboxSession;
   /** Every other session. */
@@ -49,6 +54,7 @@ export function readSandbox(root: string): SandboxDescription {
     "workspaceDir",
     "userDataDir",
     "extensionsDir",
+    "historyDataDir",
   ] as const;
   for (const name of paths) {
     if (typeof value[name] !== "string" || value[name] === "") {
