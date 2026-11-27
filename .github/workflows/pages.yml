@@ -1,0 +1,58 @@
+# Public replay player: builds the static player (packages/app, `npm run build:player`) and
+# uploads it as a GitHub Pages artefact. See docs/player.md.
+#
+# Manual trigger only (workflow_dispatch). This workflow does not deploy and does not enable
+# Pages: there is no deploy job, no push trigger, and no pages or id-token permission. The
+# owner turns Pages on and adds the deploy step (actions/deploy-pages) when the player should
+# go live.
+#
+# Security, as in ci.yml: least permissions (none at the top level, read-only contents for the
+# job), checkout does not keep the token on disk, no secrets, and every action is pinned to a
+# full commit SHA (the version is in the comment).
+
+name: Pages (player artefact)
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages-player
+  cancel-in-progress: true
+
+jobs:
+  build-player:
+    name: Build the player and upload the Pages artefact
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 22 with the npm cache
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # --ignore-scripts: no dependency runs code at install time (see ci.yml).
+      - name: Install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      # The player imports the built workspace packages (core, renderer), so build them first.
+      - name: Build the packages
+        run: npm run build
+
+      - name: Build the player
+        run: npm run build:player -w @orbitrace/app
+
+      - name: Upload the Pages artefact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: packages/app/dist-player

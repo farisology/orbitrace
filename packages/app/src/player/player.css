@@ -1,0 +1,122 @@
+/*
+ * Styles of the public replay player only (src/player). Every colour, font, space and radius is a
+ * design token from ../generated/tokens.css, as in ../app.css.
+ */
+
+.player {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.player > * {
+  flex: none;
+  min-width: 0;
+}
+
+.player > .player-app {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.player-app > .app {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/*
+ * In app.css the later `.app-main` rule gives every main area its two-column replay grid, which
+ * puts a centred message in the left column. The player's message pages use one column.
+ */
+.player .app-main-message {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: none;
+  /* A long problem list or a short window: the start panel scrolls inside main, never clipped. */
+  overflow-y: auto;
+}
+
+.player .app-main-message > .message {
+  margin: auto;
+}
+
+.player-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  line-height: 1.5;
+}
+
+.player-start p {
+  margin: 0;
+}
+
+.player-start .message-title {
+  margin: 0 0 var(--space-2);
+}
+
+.player-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 var(--space-1);
+}
+
+.player-actions button {
+  min-height: 40px;
+  padding: var(--space-2) var(--space-4);
+  font-size: 13px;
+}
+
+.player-actions .player-primary {
+  border-color: var(--ion);
+  background: var(--deck);
+}
+
+.player-own {
+  margin-top: var(--space-3);
+  color: var(--dim);
+}
+
+.player-start code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--rim);
+  padding: 0 var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+.player-start a {
+  color: var(--ion);
+}
+
+.player-start a:hover {
+  color: var(--text);
+}
+
+/*
+ * Reflow (WCAG 1.4.10) and resize text (1.4.4): below 820 px wide or 480 px tall app.css lets the
+ * page scroll as one column. The fixed-height player frame above would cancel that, so it gives
+ * way here and the page scrolls exactly as the app does. Measured in a real browser; guarded by
+ * test/player/layout-css.test.ts.
+ */
+@media (max-width: 820px), (max-height: 480px) {
+  .player {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .player > .player-app,
+  .player-app > .app {
+    flex: 1 0 auto;
+  }
+}

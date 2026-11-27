@@ -20,6 +20,7 @@
     "dev": "vite",
     "preview": "vite preview",
     "build": "vite build && tsc -p tsconfig.types.json",
+    "build:player": "vite build --mode player",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:e2e-http": "vitest run test/e2e-http",
