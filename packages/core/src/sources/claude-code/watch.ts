@@ -129,6 +129,9 @@ const DEFAULTS = {
   settleMs: 250,
 } as const;
 
+/** The defaults of `SessionWatchOptions`, for callers that derive their own intervals from them. */
+export const SESSION_WATCH_DEFAULTS: Readonly<typeof DEFAULTS> = DEFAULTS;
+
 /** Subagent transcripts and their meta files. Other entries in `subagents/` are ignored. */
 const SUBAGENT_ENTRY = /^agent-.+\.(?:jsonl|meta\.json)$/;
 

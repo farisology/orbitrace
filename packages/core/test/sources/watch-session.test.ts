@@ -11,6 +11,7 @@ import type { SessionRef, SourceRoot } from "../../src/index.js";
 import {
   createClaudeCodeAdapter,
   createSessionReplayer,
+  livenessIntervalOf,
   type SessionFilesChange,
   type SessionFilesWatcher,
   type SessionReplayUpdate,
@@ -358,5 +359,153 @@ describe("Claude Code watchSession logic", () => {
     fake.fire({ files: true, registry: false });
     await sleep(30);
     expect(seen).toEqual([]);
+  });
+
+  describe("liveness with no file change (#139)", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    /** A watched busy session whose process liveness the test controls. Never fires a file event. */
+    async function liveWatch(options: {
+      livenessIntervalMs?: number;
+      watch?: SessionWatchOptions;
+    }) {
+      const fake = fakeWatcher();
+      const fs = memTree("busy");
+      const owner = { alive: true };
+      const adapter = createClaudeCodeAdapter({
+        fs,
+        isProcessAlive: (pid) => pid === 77 && owner.alive,
+        watchFiles: fake.watchFiles,
+        ...options,
+      });
+      const [ref] = await adapter.listSessions(memRoot);
+      expect(ref?.live).toBe("busy");
+      const seen: SessionRef[] = [];
+      const stop = adapter.watchSession!(ref!, (changed) => seen.push(changed));
+      stops.push(stop);
+      return { fake, fs, owner, seen, stop };
+    }
+
+    it("reports ended when the process exits, then stops checking", async () => {
+      vi.useFakeTimers();
+      const { owner, seen, fake } = await liveWatch({ livenessIntervalMs: 1000 });
+      expect(vi.getTimerCount()).toBe(1);
+
+      // Still running: the check reads the registry again but has nothing to report.
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(seen).toEqual([]);
+      expect(vi.getTimerCount()).toBe(1);
+
+      // The process exits; no file changes and the file watcher stays silent.
+      owner.alive = false;
+      await vi.advanceTimersByTimeAsync(999);
+      expect(seen).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(seen.map((ref) => ref.live)).toEqual(["ended"]);
+      expect(fake.stopped()).toBe(0);
+
+      // Ended: no timer is left and nothing more is reported.
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(seen).toHaveLength(1);
+    });
+
+    it("reports a status change in the registry that raised no event", async () => {
+      vi.useFakeTimers();
+      const { fs, seen } = await liveWatch({ livenessIntervalMs: 500 });
+      fs.file(
+        `${MEM_ROOT}/sessions/77.json`,
+        JSON.stringify({ pid: 77, sessionId: MEM_SESSION, status: "idle", updatedAt: 2 }),
+      );
+      await vi.advanceTimersByTimeAsync(500);
+      expect(seen.map((ref) => ref.live)).toEqual(["idle"]);
+      // Idle still runs, so the check goes on.
+      expect(vi.getTimerCount()).toBe(1);
+    });
+
+    it("uses the watch's backstop interval by default", async () => {
+      vi.useFakeTimers();
+      const { owner, seen } = await liveWatch({ watch: { backstopIntervalMs: 300 } });
+      owner.alive = false;
+      await vi.advanceTimersByTimeAsync(299);
+      expect(seen).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(seen.map((ref) => ref.live)).toEqual(["ended"]);
+    });
+
+    it("runs no timer when turned off, or for a session that is not running", async () => {
+      vi.useFakeTimers();
+      const off = await liveWatch({ livenessIntervalMs: 0 });
+      expect(vi.getTimerCount()).toBe(0);
+      off.owner.alive = false;
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(off.seen).toEqual([]);
+      off.stop();
+
+      const fake = fakeWatcher();
+      const adapter = createClaudeCodeAdapter({
+        fs: memTree("busy"),
+        isProcessAlive: () => false,
+        watchFiles: fake.watchFiles,
+        livenessIntervalMs: 100,
+      });
+      const [ended] = await adapter.listSessions(memRoot);
+      expect(ended?.live).toBe("ended");
+      stops.push(adapter.watchSession!(ended!, () => {}));
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("leaves no timer after stop, and makes no call after stop", async () => {
+      vi.useFakeTimers();
+      const first = await liveWatch({ livenessIntervalMs: 1000 });
+      expect(vi.getTimerCount()).toBe(1);
+      first.stop();
+      expect(vi.getTimerCount()).toBe(0);
+      first.owner.alive = false;
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(first.seen).toEqual([]);
+
+      // Stopped while a liveness check is reading the registry: its result is dropped.
+      const second = await liveWatch({ livenessIntervalMs: 1000 });
+      second.owner.alive = false;
+      vi.advanceTimersByTime(1000);
+      second.stop();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(second.seen).toEqual([]);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("does not keep the Node process alive", async () => {
+      const timers: ReturnType<typeof setTimeout>[] = [];
+      const real = globalThis.setTimeout;
+      vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+        callback: () => void,
+        ms?: number,
+      ) => {
+        const timer = real(callback, ms);
+        timers.push(timer);
+        return timer;
+      }) as typeof setTimeout);
+      const { stop } = await liveWatch({ livenessIntervalMs: 60_000 });
+      vi.restoreAllMocks();
+      expect(timers).toHaveLength(1);
+      expect(timers[0]?.hasRef()).toBe(false);
+      stop();
+    });
+
+    it("works out the interval from the options", () => {
+      expect(livenessIntervalOf({})).toBe(5000);
+      expect(livenessIntervalOf({ watch: { backstopIntervalMs: 250 } })).toBe(250);
+      expect(livenessIntervalOf({ watch: { backstopIntervalMs: 0 } })).toBe(5000);
+      expect(
+        livenessIntervalOf({ watch: { backstopIntervalMs: 250 }, livenessIntervalMs: 40 }),
+      ).toBe(40);
+      expect(livenessIntervalOf({ livenessIntervalMs: 0 })).toBe(0);
+      expect(livenessIntervalOf({ livenessIntervalMs: -1 })).toBe(5000);
+      expect(livenessIntervalOf({ livenessIntervalMs: Number.NaN })).toBe(5000);
+    });
   });
 });

@@ -15,6 +15,8 @@
  * `watchSession` (ticket #74) watches the main transcript, the `subagents/` folder and the live
  * registry folder with `watchSessionFiles` (see `watch.ts` for events, polling and debounce) and
  * hands the listener a fresh `SessionRef` for each change.
+ * While the session runs it also re-reads the live registry on a timer, so a process that exits
+ * without touching a file is still reported as ended (#139).
  *
  * Node only. Exported from `@orbitrace/core/node`.
  */
@@ -61,6 +63,7 @@ import {
   type ProcessAliveCheck,
 } from "./registry.js";
 import {
+  SESSION_WATCH_DEFAULTS,
   watchSessionFiles,
   type SessionFilesChange,
   type SessionFilesWatcher,
@@ -85,6 +88,29 @@ export interface ClaudeCodeAdapterOptions {
    * file system; replace it together with `fs`.
    */
   readonly watchFiles?: SessionFilesWatcher;
+  /**
+   * How often `watchSession` reads the live registry again with no file change, while the
+   * session's last reported live status is `busy` or `idle`, in milliseconds (#139). A process
+   * that exits without touching a file (a crash, `kill -9`, a closed terminal) can leave its
+   * registry entry behind, and file events alone never notice that. 0 turns the check off.
+   * Default: the watch's `backstopIntervalMs` when it is greater than 0, otherwise that option's
+   * default (5000).
+   */
+  readonly livenessIntervalMs?: number;
+}
+
+/** The interval of `watchSession`'s liveness check for these options. See `livenessIntervalMs`. */
+export function livenessIntervalOf(options: ClaudeCodeAdapterOptions): number {
+  const usable = (value: number | undefined): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0;
+  if (usable(options.livenessIntervalMs)) return options.livenessIntervalMs;
+  const backstop = options.watch?.backstopIntervalMs;
+  return usable(backstop) && backstop > 0 ? backstop : SESSION_WATCH_DEFAULTS.backstopIntervalMs;
+}
+
+/** Let a timer not keep the Node process alive. A runtime without `unref` is left as it is. */
+function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
+  (timer as { unref?: () => void }).unref?.();
 }
 
 export const CLAUDE_CODE_RUNTIME = "claude-code" as const;
@@ -198,6 +224,7 @@ export function createClaudeCodeAdapter(options: ClaudeCodeAdapterOptions = {}):
   const headBytes = options.headBytes ?? 65536;
   const watchFiles = options.watchFiles ?? watchSessionFiles;
   const watchOptions = options.watch;
+  const livenessMs = livenessIntervalOf(options);
 
   async function isReadableDir(dir: string): Promise<boolean> {
     return (await tryReadDir(fs, dir)) !== null;
@@ -456,6 +483,12 @@ export function createClaudeCodeAdapter(options: ClaudeCodeAdapterOptions = {}):
    * other field as passed in. A change to the live registry alone calls it only when the
    * session's live status changed. Calls never overlap and come in order; none follows `stop`.
    * While the main transcript is missing no call is made; it is reported when it comes back.
+   *
+   * Liveness (#139): while the last reported live status is `busy` or `idle`, the registry and
+   * the process are read again every `livenessIntervalMs` even when no file changed, and the
+   * listener is called when the status changed, so a process that exits without touching a file
+   * is reported as `ended`. The timer runs only in that state, is released by `stop`, and never
+   * keeps the Node process alive on its own.
    */
   function watchSession(ref: SessionRef, listener: SessionChangeListener): Unsubscribe {
     const p = pathApiForPath(ref.locator);
@@ -464,6 +497,31 @@ export function createClaudeCodeAdapter(options: ClaudeCodeAdapterOptions = {}):
     let lastLive = ref.live;
     let refreshing = false;
     let queued: SessionFilesChange | null = null;
+    let livenessTimer: ReturnType<typeof setTimeout> | undefined;
+
+    /** Queue a refresh. A registry-only change is reported only when the live status changed. */
+    const enqueue = (change: SessionFilesChange): void => {
+      queued = {
+        files: change.files || (queued?.files ?? false),
+        registry: change.registry || (queued?.registry ?? false),
+      };
+      void refresh();
+    };
+
+    /**
+     * (Re)start the liveness timer while the session runs; clear it otherwise. Called after every
+     * refresh, so it measures time since the registry was last read.
+     */
+    const scheduleLiveness = (): void => {
+      if (livenessTimer !== undefined) clearTimeout(livenessTimer);
+      livenessTimer = undefined;
+      if (!active || livenessMs <= 0 || (lastLive !== "busy" && lastLive !== "idle")) return;
+      livenessTimer = setTimeout(() => {
+        livenessTimer = undefined;
+        if (active) enqueue({ files: false, registry: true });
+      }, livenessMs);
+      unrefTimer(livenessTimer);
+    };
 
     const refresh = async (): Promise<void> => {
       if (refreshing) return;
@@ -491,6 +549,7 @@ export function createClaudeCodeAdapter(options: ClaudeCodeAdapterOptions = {}):
         }
       } finally {
         refreshing = false;
+        scheduleLiveness();
       }
     };
 
@@ -502,20 +561,18 @@ export function createClaudeCodeAdapter(options: ClaudeCodeAdapterOptions = {}):
         registryDir: p.join(ref.source.root, "sessions"),
       },
       (change) => {
-        if (!active) return;
-        queued = {
-          files: change.files || (queued?.files ?? false),
-          registry: change.registry || (queued?.registry ?? false),
-        };
-        void refresh();
+        if (active) enqueue(change);
       },
       watchOptions,
     );
+    scheduleLiveness();
 
     return () => {
       if (!active) return;
       active = false;
       queued = null;
+      if (livenessTimer !== undefined) clearTimeout(livenessTimer);
+      livenessTimer = undefined;
       stopFiles();
     };
   }

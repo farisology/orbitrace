@@ -9,14 +9,15 @@
  *   append-stability rules in core's `model/replay.ts`). Compressed times after the cut then
  *   mean a different real moment. So the playhead is carried across a snapshot through real
  *   time: compressed time on the old timeline, to real seconds (`toRealSeconds`), back to
- *   compressed time on the new one (`toCompressedSeconds`). A paused user stays on the same real
- *   moment, and the real time at a following playhead never goes backwards.
+ *   compressed time on the new one (`toCompressedSeconds`), both from core. A paused user stays
+ *   on the same real moment, and the real time at a following playhead never goes backwards.
  * - "Behind" is measured in real time, idle gaps included, because that is what the user waited
  *   through.
  */
 
 import {
   formatDuration,
+  toCompressedSeconds,
   toRealSeconds,
   type LiveStatus,
   type ReplayModel,
@@ -34,25 +35,6 @@ export const CUT_NUDGE_SECONDS = 0.001;
 /** Whether a session with this live status can be followed: its process is running. */
 export function isFollowable(live: LiveStatus | null | undefined): boolean {
   return live === "busy" || live === "idle";
-}
-
-/**
- * The inverse of core's `toRealSeconds`: compressed time for `real` seconds from the session
- * start. A real time inside a removed range maps to that cut's position (`at`), as the replay
- * builder maps it. `warps` must be in `at` order, as a replay holds them.
- *
- * For every compressed `t`, `toCompressedSeconds(warps, toRealSeconds(warps, t)) === t`.
- */
-export function toCompressedSeconds(warps: readonly ReplayWarp[], real: number): number {
-  if (!Number.isFinite(real)) return 0;
-  let removed = 0;
-  for (const warp of warps) {
-    const start = warp.at + removed;
-    if (real <= start) break;
-    if (real < start + warp.skipped) return warp.at;
-    removed += warp.skipped;
-  }
-  return Math.max(0, real - removed);
 }
 
 /**
