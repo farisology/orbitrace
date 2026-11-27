@@ -1,5 +1,7 @@
 /**
  * Browser benchmark for the demo page (open with `?bench=1`, or run `npm run bench:browser`).
+ * Runs at 15, 100 and 500 agents, on sessions made by the fixtures generator and core's real
+ * `parseSession` and `buildReplay` (demo/sessions.ts), never on hand-built replays (#77).
  *
  * 1. Engine cost: frames driven synchronously through an injected scheduler, timing
  *    computeFrameState + drawFrame + the canvas calls they make. Chrome may rasterise later,
@@ -12,7 +14,7 @@
 import type { ReplayModel } from "@orbitrace/core";
 import type { OrreryEnvironment } from "../src/index.js";
 import { browserEnvironment, createOrrery, createOrreryWithEnvironment } from "../src/index.js";
-import { createDemoModel } from "./demo-model.js";
+import { demoReplay, scaledReplay } from "./sessions.js";
 
 export interface EngineCost {
   readonly frames: number;
@@ -148,22 +150,27 @@ function frameRate(
   });
 }
 
-export async function runBenchmark(canvas: HTMLCanvasElement): Promise<BenchResult> {
-  const cases: { name: string; model: ReplayModel }[] = [
-    { name: "demo (3 waves x 5)", model: createDemoModel() },
-    {
-      name: "large (6 waves x 12)",
-      model: createDemoModel({ seed: 9, waves: 6, agentsPerWave: 12 }),
-    },
-  ];
+/** Agent counts the benchmark runs at (#14): the demo session, and two scaled sessions. */
+export const BENCH_AGENTS = [15, 100, 500] as const;
+
+/** A session of `agents` agents, made by the fixtures generator and core's real pipeline. */
+export function benchModel(agents: number): Promise<ReplayModel> {
+  return agents === 15 ? demoReplay() : scaledReplay(agents);
+}
+
+export async function runBenchmark(
+  canvas: HTMLCanvasElement,
+  agentCounts: readonly number[] = BENCH_AGENTS,
+): Promise<BenchResult> {
   const results: BenchCase[] = [];
-  for (const c of cases) {
-    const cost = engineCost(canvas, c.model, 600);
-    const rate = await frameRate(canvas, c.model, 5);
+  for (const agents of agentCounts) {
+    const model = await benchModel(agents);
+    const cost = engineCost(canvas, model, 600);
+    const rate = await frameRate(canvas, model, 5);
     results.push({
-      name: c.name,
-      agents: c.model.agents.length,
-      toolCalls: c.model.totals.toolCalls,
+      name: agents === 15 ? "demo session (15 agents)" : `scaled session (${agents} agents)`,
+      agents: model.agents.length,
+      toolCalls: model.totals.toolCalls,
       cost,
       rate,
     });

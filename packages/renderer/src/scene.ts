@@ -6,6 +6,7 @@
 import type { ReplayAgent, ReplayAgentId, ReplayModel } from "@orbitrace/core";
 import { formatDuration, formatTokens } from "./format.js";
 import { FONTS, Label } from "./labels.js";
+import { lodFor } from "./lod.js";
 import { effortFill, shapeForFamily, type NodeShape } from "./shapes.js";
 import { bucketFor } from "./theme.js";
 
@@ -81,6 +82,10 @@ export interface Scene {
   /** For example `IDLE SKIPPED 12m30s`. */
   readonly warpLabel: readonly Label[];
   readonly warpLabelNarrow: readonly Label[];
+  /** Level of detail for this model's agent count (LOD_* in lod.ts). */
+  readonly lod: number;
+  /** Ring summary label of each wave once it collapses, for example `WAVE 3 · 25 done`. */
+  readonly waveSummary: readonly Label[];
 }
 
 /** A 31-bit string hash. Deterministic, so a replay looks the same on every machine. */
@@ -227,6 +232,11 @@ export function buildScene(model: ReplayModel): Scene {
     warpLabelNarrow.push(new Label(text, FONTS.warpNarrow));
   });
 
+  const waveSummary: Label[] = [];
+  for (let w = 0; w < waveCount; w++) {
+    waveSummary.push(new Label(`WAVE ${w + 1} · ${waveSizes[w]} done`, FONTS.small));
+  }
+
   return {
     model,
     agents,
@@ -239,5 +249,7 @@ export function buildScene(model: ReplayModel): Scene {
     warpAt,
     warpLabel,
     warpLabelNarrow,
+    lod: lodFor(model.agents.length),
+    waveSummary,
   };
 }

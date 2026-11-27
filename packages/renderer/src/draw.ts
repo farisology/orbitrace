@@ -2,14 +2,33 @@
  * Drawing: paints one frame from a scene, a layout and a frame state. Takes any
  * `DrawContext`, so tests pass a recording mock. The hot path allocates nothing: every
  * array is preallocated, every label is cached, every gradient and sprite is reused.
+ *
+ * Order: backdrop (with the wave labels), tethers, agents, comets, then every agent label in
+ * one pass on top, at the spots label-layout.ts chose so that none overlap. The level of
+ * detail (lod.ts) decides what is left out above 100 agents.
  */
 
 import { toRealSeconds } from "@orbitrace/core";
 import type { DrawContext } from "./context.js";
 import { WHITE_CORE } from "./generated/design.js";
+import { placeLabels, type LabelBoard } from "./label-layout.js";
 import { measureLabel, type Label } from "./labels.js";
 import type { Layout } from "./layout.js";
-import { ensureGradients, waveLabel, STAR_STRIDE, type DrawResources } from "./resources.js";
+import {
+  LABEL_BUDGET,
+  drawsMoonGlow,
+  drawsMoons,
+  drawsSpokeTags,
+  labelsAvoidNodes,
+  markCollapsedWaves,
+} from "./lod.js";
+import {
+  ensureBoard,
+  ensureGradients,
+  waveLabel,
+  STAR_STRIDE,
+  type DrawResources,
+} from "./resources.js";
 import type { AgentScene, Scene } from "./scene.js";
 import { innerScale, traceShape } from "./shapes.js";
 import { BUCKET_COUNT, BUCKET_FAILURE } from "./theme.js";
@@ -87,13 +106,30 @@ export function drawFrame(
   if (scene === null || layout.width <= 0 || layout.height <= 0) return;
 
   ensureGradients(ctx, res, layout.width, layout.height, layout.cx, layout.cy, layout.base);
-  drawBackdrop(ctx, layout, frame, view, res);
-  drawTethers(ctx, scene, layout, frame, view, res);
+  const board = ensureBoard(res, scene.agents.length, scene.waveCount);
+  markCollapsedWaves(scene, frame, scene.lod, board.waveCollapsed, board.waveOpen);
+  prepareLabels(ctx, scene, layout, frame, view, res, board);
+  placeLabels(
+    scene,
+    layout,
+    frame,
+    view.selected,
+    view.hovered,
+    LABEL_BUDGET[scene.lod] ?? 0,
+    labelsAvoidNodes(scene.lod),
+    board,
+  );
+  drawBackdrop(ctx, scene, layout, frame, view, res, board);
+  drawTethers(ctx, scene, layout, frame, view, res, board);
   // Subagents first, the main agent last so it sits on top.
-  for (let i = 1; i < scene.agents.length; i++)
+  for (let i = 1; i < scene.agents.length; i++) {
+    if (collapsedAgent(scene, board, view, i)) continue;
     drawAgent(ctx, scene, scene.agents[i]!, layout, frame, view, res);
+  }
+  drawCollapsedAgents(ctx, scene, layout, view, res, board);
   drawAgent(ctx, scene, scene.agents[0]!, layout, frame, view, res);
   drawComets(ctx, scene, layout, frame, res);
+  drawLabels(ctx, scene, frame, view, res, board);
 
   const g = res.gradients;
   if (g.vignette !== null) {
@@ -114,10 +150,12 @@ export function drawFrame(
 
 function drawBackdrop(
   ctx: DrawContext,
+  scene: Scene,
   layout: Layout,
   frame: FrameState,
   view: ViewState,
   res: DrawResources,
+  board: LabelBoard,
 ): void {
   const pal = res.palette;
   const { width: W, height: H, cx, cy, base } = layout;
@@ -190,13 +228,31 @@ function drawBackdrop(
   ctx.strokeStyle = pal.rimHi;
   ctx.setLineDash(RING_DASH);
   ctx.beginPath();
+  let collapsed = 0;
   for (let i = 0; i < layout.ringCount; i++) {
     const R = layout.ringRadius[i]!;
+    if (board.waveCollapsed[i] === 1) {
+      collapsed++;
+      continue;
+    }
     ctx.moveTo(cx + R, cy);
     ctx.arc(cx, cy, R, 0, TAU);
   }
   ctx.stroke();
   ctx.setLineDash(NO_DASH);
+  // Ring summaries (lod.ts): a finished wave is one solid orbit.
+  if (collapsed > 0) {
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < layout.ringCount; i++) {
+      if (board.waveCollapsed[i] !== 1) continue;
+      const R = layout.ringRadius[i]!;
+      ctx.moveTo(cx + R, cy);
+      ctx.arc(cx, cy, R, 0, TAU);
+    }
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
   ctx.beginPath();
   ctx.moveTo(cx + bezel, cy);
   ctx.arc(cx, cy, bezel, 0, TAU);
@@ -211,14 +267,13 @@ function drawBackdrop(
   ctx.stroke();
   ctx.globalAlpha = 1;
 
-  if (layout.wide && layout.ringCount > 0) {
-    ctx.fillStyle = pal.faint;
-    for (let i = 0; i < layout.ringCount; i++) {
-      // Left of the vertical axis: the first node of every orbit sits just right of it.
-      const label = layout.ringCount > 1 ? waveLabel(res, i) : res.subagentsLabel;
-      const w = measureLabel(ctx, label);
-      ctx.fillText(label.text, cx - 6 - w, cy - layout.ringRadius[i]! - 5);
-    }
+  // Wave labels, at the spots label-layout.ts kept: left of the vertical axis, above each orbit.
+  for (let i = 0; i < layout.ringCount; i++) {
+    if (board.waveShown[i] !== 1) continue;
+    const label = waveLabelFor(scene, layout, res, board, i);
+    ctx.font = label.font.css;
+    ctx.fillStyle = board.waveCollapsed[i] === 1 ? pal.dim : pal.faint;
+    ctx.fillText(label.text, board.waveLeft[i]!, board.waveBase[i]!);
   }
 
   // The sweep turns with replay time, so it is still in a still frame and omitted when reduced.
@@ -251,6 +306,7 @@ function drawTethers(
   frame: FrameState,
   view: ViewState,
   res: DrawResources,
+  board: LabelBoard,
 ): void {
   const pal = res.palette;
   const mx = layout.x[0]!;
@@ -266,6 +322,7 @@ function drawTethers(
       const a = scene.agents[i]!;
       if (frame.t < a.start - lead) continue;
       if ((frame.phase[i] === PHASE_ACTIVE) !== running) continue;
+      if (collapsedAgent(scene, board, view, i)) continue;
       const x = layout.x[i]!;
       const y = layout.y[i]!;
       curvePoint(0.5, mx, my, x, y);
@@ -318,8 +375,11 @@ function drawAgent(
   const selected = view.selected === i;
   const hovered = view.hovered === i;
 
-  // Moons: calls whose spoke is over, batched into one path per colour.
-  const started = frame.started[i]!;
+  // Moons: calls whose spoke is over, batched into one path per colour. Above 100 agents the
+  // level of detail leaves some out (lod.ts); the call count stays in the detail row.
+  const lod = scene.lod;
+  const started = drawsMoons(lod, phase, selected || hovered) ? frame.started[i]! : 0;
+  const moonGlow = drawsMoonGlow(lod);
   const first = Math.max(0, started - MAX_MOONS_PER_AGENT);
   const rotation = reduced ? 0 : t * 0.006 * dir;
   const cosR = Math.cos(rotation);
@@ -339,7 +399,7 @@ function drawAgent(
       const rr = ro + a.moonRing[j]!;
       const mx = x + (c * cosR - s * sinR) * rr;
       const my = y + (s * cosR + c * sinR) * rr;
-      if (!reduced && sprites !== null) {
+      if (moonGlow && !reduced && sprites !== null) {
         const age = (t - shownUntil) / fresh;
         if (age < 1) {
           const glow = sprites.moon[b]!;
@@ -362,7 +422,7 @@ function drawAgent(
   ctx.globalAlpha = 1;
 
   // Spokes: calls in flight.
-  let labelled = 0;
+  let labelled = drawsSpokeTags(lod) ? 0 : 2;
   const from = frame.flightOffset[i]!;
   const to = frame.flightOffset[i + 1]!;
   for (let k = from; k < to; k++) {
@@ -508,33 +568,160 @@ function drawAgent(
       ctx.stroke();
     }
   }
+}
 
-  // Labels. Finished agents lose their label unless selected or hovered.
-  const up = !a.isMain && y < layout.cy;
-  const dy = up ? -1 : 1;
-  const ly = y + dy * (ro + (a.isMain ? 35 : 33)) + (up ? 0 : 9);
-  if (!done || a.isMain || selected || hovered || frame.activeSubagents === 0) {
-    const label = a.isMain || selected ? a.callsignBold : a.callsign;
-    drawTag(ctx, layout, res, x, ly, label, done && !selected ? pal.faint : pal.text);
+/** True when agent `i` is drawn as a dot of a ring summary (lod.ts), not as a full node. */
+function collapsedAgent(scene: Scene, board: LabelBoard, view: ViewState, i: number): boolean {
+  if (i === view.selected || i === view.hovered) return false;
+  const wave = scene.agents[i]!.wave;
+  return wave >= 0 && board.waveCollapsed[wave] === 1;
+}
+
+/** Agents of collapsed waves: one batched path of plain dots. */
+function drawCollapsedAgents(
+  ctx: DrawContext,
+  scene: Scene,
+  layout: Layout,
+  view: ViewState,
+  res: DrawResources,
+  board: LabelBoard,
+): void {
+  let any = false;
+  ctx.beginPath();
+  for (let i = 1; i < scene.agents.length; i++) {
+    if (!collapsedAgent(scene, board, view, i)) continue;
+    const x = layout.x[i]!;
+    const y = layout.y[i]!;
+    const r = Math.min(2.5, layout.r[i]!);
+    ctx.moveTo(x + r, y);
+    ctx.arc(x, y, r, 0, TAU);
+    any = true;
   }
-  if ((selected || hovered) && layout.wide) {
-    const end = Math.min(t, a.end);
-    const warps = scene.model.warps;
-    const elapsed =
-      phase === PHASE_QUEUED ? 0 : toRealSeconds(warps, end) - toRealSeconds(warps, a.start);
-    const failed = frame.failed[i]!;
-    drawTagRow(
-      ctx,
-      layout,
-      res,
-      x,
-      ly + dy * 14,
-      a.identity,
-      res.durations.get(elapsed),
-      res.calls.get(frame.started[i]!),
-      failed > 0 ? res.failures.get(failed) : null,
-      done ? pal.faint : pal.dim,
-    );
+  if (!any) return;
+  ctx.fillStyle = res.palette.rimHi;
+  ctx.globalAlpha = 0.9;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+/** The label above orbit `wave`: its ring summary once collapsed, else `WAVE n` or `SUBAGENTS`. */
+function waveLabelFor(
+  scene: Scene,
+  layout: Layout,
+  res: DrawResources,
+  board: LabelBoard,
+  wave: number,
+): Label {
+  if (board.waveCollapsed[wave] === 1) return scene.waveSummary[wave]!;
+  return layout.ringCount > 1 ? waveLabel(res, wave) : res.subagentsLabel;
+}
+
+/** Width of a label, touching `ctx.font` only the first time (setting a font is not free). */
+function labelWidth(ctx: DrawContext, label: Label): number {
+  return label.width >= 0 ? label.width : measureLabel(ctx, label);
+}
+
+/** The labels of the selected (slot 0) and hovered (slot 1) agents' detail rows. */
+const detailRow: (Label | null)[] = [null, null, null, null, null, null, null, null];
+
+/**
+ * Fill the board's inputs for `placeLabels`: label widths and sizes, the detail rows of the
+ * selected and hovered agents (wide canvases only), and the wave labels (wide canvases only).
+ */
+function prepareLabels(
+  ctx: DrawContext,
+  scene: Scene,
+  layout: Layout,
+  frame: FrameState,
+  view: ViewState,
+  res: DrawResources,
+  board: LabelBoard,
+): void {
+  for (let i = 0; i < scene.agents.length; i++) {
+    const a = scene.agents[i]!;
+    const label = a.isMain || view.selected === i ? a.callsignBold : a.callsign;
+    board.agentWidth[i] = labelWidth(ctx, label);
+    board.agentSize[i] = label.font.size;
+    board.detailWidth[i] = 0;
+  }
+  for (let slot = 0; slot < 2; slot++) {
+    const i = slot === 0 ? view.selected : view.hovered;
+    detailRow[slot * 4] = null;
+    if (i < 0 || i >= scene.agents.length || !layout.wide) continue;
+    if (slot === 1 && i === view.selected) continue;
+    board.detailWidth[i] = fillDetailRow(ctx, scene, frame, res, i, slot * 4);
+  }
+  for (let w = 0; w < layout.ringCount; w++) {
+    board.waveWidth[w] = layout.wide
+      ? labelWidth(ctx, waveLabelFor(scene, layout, res, board, w))
+      : 0;
+  }
+}
+
+/** Put agent `i`'s detail labels in `detailRow` from `at`; return the row's width. */
+function fillDetailRow(
+  ctx: DrawContext,
+  scene: Scene,
+  frame: FrameState,
+  res: DrawResources,
+  i: number,
+  at: number,
+): number {
+  const a = scene.agents[i]!;
+  const phase = frame.phase[i]!;
+  const end = Math.min(frame.t, a.end);
+  const warps = scene.model.warps;
+  const elapsed =
+    phase === PHASE_QUEUED ? 0 : toRealSeconds(warps, end) - toRealSeconds(warps, a.start);
+  const failed = frame.failed[i]!;
+  detailRow[at] = a.identity;
+  detailRow[at + 1] = res.durations.get(elapsed);
+  detailRow[at + 2] = res.calls.get(frame.started[i]!);
+  detailRow[at + 3] = failed > 0 ? res.failures.get(failed) : null;
+  const sep = labelWidth(ctx, res.separator);
+  let width = 0;
+  for (let k = 0; k < 4; k++) {
+    const label = detailRow[at + k];
+    if (label === null || label === undefined) continue;
+    width += labelWidth(ctx, label) + (k > 0 ? sep : 0);
+  }
+  return width;
+}
+
+/** Every agent label the board kept, with the selected and hovered detail rows. */
+function drawLabels(
+  ctx: DrawContext,
+  scene: Scene,
+  frame: FrameState,
+  view: ViewState,
+  res: DrawResources,
+  board: LabelBoard,
+): void {
+  const pal = res.palette;
+  for (let i = 0; i < scene.agents.length; i++) {
+    if (board.agentShown[i] !== 1) continue;
+    const a = scene.agents[i]!;
+    const selected = view.selected === i;
+    const done = frame.phase[i] === PHASE_DONE;
+    const label = a.isMain || selected ? a.callsignBold : a.callsign;
+    const color = done && !selected ? pal.faint : pal.text;
+    drawTagAt(ctx, res, board.agentLeft[i]!, board.agentBase[i]!, label, null, null, null, color);
+    if (board.detailWidth[i]! > 0) {
+      const at = selected ? 0 : 4;
+      const first = detailRow[at];
+      if (first === null || first === undefined) continue;
+      drawTagAt(
+        ctx,
+        res,
+        board.detailLeft[i]!,
+        board.detailBase[i]!,
+        first,
+        detailRow[at + 1] ?? null,
+        detailRow[at + 2] ?? null,
+        detailRow[at + 3] ?? null,
+        done ? pal.faint : pal.dim,
+      );
+    }
   }
 }
 
@@ -639,15 +826,43 @@ function drawTagRow(
   l3: Label | null,
   color: string,
 ): void {
+  const w = rowWidth(ctx, res, l0, l1, l2, l3);
+  const left = Math.max(4, Math.min(layout.width - w - 4, x - w / 2));
+  drawTagAt(ctx, res, left, y, l0, l1, l2, l3, color);
+}
+
+function rowWidth(
+  ctx: DrawContext,
+  res: DrawResources,
+  l0: Label,
+  l1: Label | null,
+  l2: Label | null,
+  l3: Label | null,
+): number {
+  const sepWidth = l1 !== null ? labelWidth(ctx, res.separator) : 0;
+  let w = labelWidth(ctx, l0);
+  if (l1 !== null) w += labelWidth(ctx, l1) + sepWidth;
+  if (l2 !== null) w += labelWidth(ctx, l2) + sepWidth;
+  if (l3 !== null) w += labelWidth(ctx, l3) + sepWidth;
+  return w;
+}
+
+/** Up to four labels drawn as one tag with its text starting at `left`, baseline `y`. */
+function drawTagAt(
+  ctx: DrawContext,
+  res: DrawResources,
+  left: number,
+  y: number,
+  l0: Label,
+  l1: Label | null,
+  l2: Label | null,
+  l3: Label | null,
+  color: string,
+): void {
   const sep = res.separator;
-  const sepWidth = l1 !== null ? measureLabel(ctx, sep) : 0;
-  let w = measureLabel(ctx, l0);
-  if (l1 !== null) w += measureLabel(ctx, l1) + sepWidth;
-  if (l2 !== null) w += measureLabel(ctx, l2) + sepWidth;
-  if (l3 !== null) w += measureLabel(ctx, l3) + sepWidth;
+  const w = rowWidth(ctx, res, l0, l1, l2, l3);
+  const sepWidth = l1 !== null ? sep.width : 0;
   const size = l0.font.size;
-  let left = x - w / 2;
-  left = Math.max(4, Math.min(layout.width - w - 4, left));
   ctx.globalAlpha = 0.72;
   ctx.fillStyle = res.palette.background;
   ctx.fillRect(left - 3, y - size + 1, w + 6, size + 3);

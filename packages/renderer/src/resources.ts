@@ -5,6 +5,7 @@
 
 import type { DrawContext, OrreryEnvironment } from "./context.js";
 import { formatDuration } from "./format.js";
+import { createLabelBoard, boardFits, type LabelBoard } from "./label-layout.js";
 import { FONTS, IntLabelCache, Label } from "./labels.js";
 import { BUCKET_COUNT, type Palette } from "./theme.js";
 
@@ -49,6 +50,8 @@ export interface DrawResources {
   readonly separator: Label;
   readonly waveLabels: Label[];
   readonly subagentsLabel: Label;
+  /** Label placement scratch, grown when a larger model is drawn (never per frame). */
+  board: LabelBoard;
 }
 
 /** Number of background stars. */
@@ -148,7 +151,19 @@ export function createResources(
     separator: new Label(" · ", FONTS.small),
     waveLabels: [],
     subagentsLabel: new Label("SUBAGENTS", FONTS.small),
+    board: createLabelBoard(1, 1),
   };
+}
+
+/** The label board, replaced by a larger one when the scene does not fit the current one. */
+export function ensureBoard(resources: DrawResources, agents: number, waves: number): LabelBoard {
+  if (!boardFits(resources.board, agents, waves)) {
+    resources.board = createLabelBoard(
+      Math.max(agents, resources.board.agentCapacity),
+      Math.max(waves, resources.board.waveCapacity),
+    );
+  }
+  return resources.board;
 }
 
 /** Label for orbit `wave` (zero-based), created on first use. */

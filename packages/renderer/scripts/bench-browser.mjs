@@ -3,6 +3,12 @@
 //
 //   npm run bench:browser                  (in packages/renderer, after `npm run build` at the root)
 //   CHROME_PATH=/path/to/chrome npm run bench:browser
+//   BENCH_DPR=2 BENCH_CPU_THROTTLE=4 BENCH_AGENTS=15,100,500 npm run bench:browser
+//
+// BENCH_DPR sets the device pixel ratio (default 2, a high-density laptop screen; the backing
+// store has four times the pixels of DPR 1). BENCH_CPU_THROTTLE slows the page's CPU by that
+// factor through the DevTools protocol, to stand in for a slower machine (default 1, off).
+// BENCH_AGENTS picks the session sizes (default 15, 100 and 500 agents).
 //
 // Starts the demo's Vite dev server on 127.0.0.1, launches Chrome headless with a throwaway
 // profile, opens the page with ?bench=1 and waits for window.__orbitraceBench through the
@@ -12,7 +18,7 @@
 
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpus, tmpdir, totalmem } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
@@ -34,6 +40,10 @@ function findChrome() {
   return found;
 }
 
+const DPR = Number(process.env.BENCH_DPR ?? 2) || 2;
+const CPU_THROTTLE = Math.max(1, Number(process.env.BENCH_CPU_THROTTLE ?? 1) || 1);
+const AGENTS = (process.env.BENCH_AGENTS ?? "").replace(/[^0-9,]/g, "");
+
 function launchChrome(path, profileDir) {
   const chrome = spawn(
     path,
@@ -42,6 +52,7 @@ function launchChrome(path, profileDir) {
       "--remote-debugging-port=0",
       `--user-data-dir=${profileDir}`,
       "--enable-precise-memory-info",
+      `--force-device-scale-factor=${DPR}`,
       "--window-size=1280,860",
       "--no-first-run",
       "--no-default-browser-check",
@@ -101,11 +112,16 @@ async function main() {
   try {
     const client = cdp(await endpoint);
     await client.open;
-    const { targetId } = await client.send("Target.createTarget", { url: `${base}?bench=1` });
+    const { targetId } = await client.send("Target.createTarget", { url: "about:blank" });
     const { sessionId } = await client.send("Target.attachToTarget", { targetId, flatten: true });
+    if (CPU_THROTTLE > 1) {
+      await client.send("Emulation.setCPUThrottlingRate", { rate: CPU_THROTTLE }, sessionId);
+    }
+    const query = `?bench=1${AGENTS ? `&agents=${AGENTS}` : ""}`;
+    await client.send("Page.navigate", { url: `${base}${query}` }, sessionId);
     const evaluate = (expression, awaitPromise = false) =>
       client.send("Runtime.evaluate", { expression, awaitPromise, returnByValue: true }, sessionId);
-    const deadline = Date.now() + 30000;
+    const deadline = Date.now() + 120000;
     for (;;) {
       const { result } = await evaluate("typeof window.__orbitraceBench");
       if (result.value === "object") break;
@@ -116,7 +132,25 @@ async function main() {
     const { result: renderer } = await evaluate(
       "(() => { const g = document.createElement('canvas').getContext('webgl'); const i = g && g.getExtension('WEBGL_debug_renderer_info'); return i ? /SwiftShader|llvmpipe|Software/i.test(g.getParameter(i.UNMASKED_RENDERER_WEBGL)) : null; })()",
     );
-    console.log(JSON.stringify({ softwareRendering: renderer.value, ...result.value }, null, 2));
+    const { result: version } = await evaluate("navigator.userAgent");
+    console.log(
+      JSON.stringify(
+        {
+          machine: {
+            cpu: cpus()[0]?.model,
+            cores: cpus().length,
+            memoryGB: Math.round(totalmem() / 2 ** 30),
+          },
+          browser: (version.value.match(/Chrome\/[\d.]+/) ?? ["unknown"])[0],
+          headless: true,
+          softwareRendering: renderer.value,
+          cpuThrottle: CPU_THROTTLE,
+          ...result.value,
+        },
+        null,
+        2,
+      ),
+    );
     client.close();
   } finally {
     const exited = new Promise((done) => {
