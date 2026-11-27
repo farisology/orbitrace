@@ -7,6 +7,7 @@ import {
   parseCommandLine,
   parseLimit,
   parsePort,
+  parseRoundTimes,
   wantsJson,
 } from "../src/args.js";
 import { CliError } from "../src/errors.js";
@@ -74,6 +75,7 @@ describe("parseCommandLine", () => {
       latest: false,
       force: false,
       pretty: false,
+      exportOptions: { names: "as-written", roundTimes: null, bucketTokens: false },
     });
     expect(
       parseCommandLine(["export", "--latest", "-o", "out.json", "--force", "--pretty", "--json"]),
@@ -85,9 +87,34 @@ describe("parseCommandLine", () => {
       output: "out.json",
       force: true,
       pretty: true,
+      exportOptions: { names: "as-written", roundTimes: null, bucketTokens: false },
     });
     expect(parseCommandLine(["export", "--latest", "--output=-"])).toMatchObject({ output: "-" });
     expect(parseCommandLine(["export", "--latest", "-o", "-"])).toMatchObject({ output: "-" });
+  });
+
+  it("parses the opt-in export options (#122, #123)", () => {
+    expect(
+      parseCommandLine([
+        "export",
+        "--latest",
+        "--opaque-names",
+        "--round-times",
+        "0.1",
+        "--bucket-tokens",
+      ]),
+    ).toMatchObject({
+      kind: "export",
+      exportOptions: { names: "opaque", roundTimes: 0.1, bucketTokens: true },
+    });
+    expect(parseCommandLine(["export", "--latest", "--round-times=5"])).toMatchObject({
+      exportOptions: { names: "as-written", roundTimes: 5, bucketTokens: false },
+    });
+    expect(usageMessage(["export", "--latest", "--round-times", "0"])).toContain("--round-times");
+    expect(usageMessage(["export", "--latest", "--round-times"])).toContain("--round-times");
+    expect(usageMessage(["export", "--latest", "--opaque-names=yes"])).toContain("--opaque-names");
+    expect(usageMessage(["export", "--latest", "--keep-names"])).toContain("--keep-names");
+    expect(usageMessage(["list", "--opaque-names"])).toContain("--opaque-names");
   });
 
   it("turns --help after a command, and help <command>, into that command's help", () => {
@@ -153,6 +180,44 @@ describe("parseLimit", () => {
   it("rejects anything else", () => {
     for (const value of ["0", "-3", "1.5", "ten", "", "99999999999999999999"]) {
       expect(() => parseLimit(value)).toThrow(CliError);
+    }
+  });
+});
+
+describe("parseRoundTimes", () => {
+  it("accepts 0.001 to 3600 seconds in whole milliseconds", () => {
+    expect(parseRoundTimes("0.1")).toBe(0.1);
+    expect(parseRoundTimes(" 1 ")).toBe(1);
+    expect(parseRoundTimes(".25")).toBe(0.25);
+    expect(parseRoundTimes("0.001")).toBe(0.001);
+    expect(parseRoundTimes("3600")).toBe(3600);
+  });
+
+  it("rejects anything else without repeating the value", () => {
+    for (const value of [
+      "0",
+      "0.0001",
+      "3601",
+      "-1",
+      "1e2",
+      "0x10",
+      "",
+      "ten",
+      "1.",
+      "1/3",
+      "NaN",
+    ]) {
+      let thrown: unknown;
+      try {
+        parseRoundTimes(value);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(CliError);
+      expect((thrown as CliError).code).toBe("usage");
+      expect((thrown as CliError).message).toBe(
+        "--round-times needs a number of seconds from 0.001 to 3600, in whole milliseconds, such as 0.1.",
+      );
     }
   });
 });

@@ -126,7 +126,15 @@ describe("orbitrace export with marked session data", () => {
     const result = await capture(["export", "--latest", "--config-dir", configDir, "--json"]);
     expect(result.code).toBe(0);
     const doc = JSON.parse(result.stdout) as Record<string, unknown>;
-    expect(Object.keys(doc)).toEqual(["key", "fileName", "output", "bytes", "warnings", "replay"]);
+    expect(Object.keys(doc)).toEqual([
+      "key",
+      "fileName",
+      "output",
+      "bytes",
+      "warnings",
+      "options",
+      "replay",
+    ]);
     expect(doc["key"]).toMatch(/^claude-code:[0-9a-f]{32}$/);
     expect(hasToken(result.stdout)).toBe(false);
     expect(result.stderr).toBe("");

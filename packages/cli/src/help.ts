@@ -65,6 +65,13 @@ export function commandHelpText(name: CommandName): string {
       "Without -o the replay is written to stdout. An existing file is never replaced without --force.",
       "The replay holds structure only. Agent type and MCP server names are kept as they are:",
       "check them before you share the file.",
+      "",
+      "--opaque-names, --round-times and --bucket-tokens are off unless given; without them the",
+      "file is the same as before they existed. --opaque-names hides the names you chose (agent",
+      "types, MCP servers, tools that are not built in, model ids that are not known Claude ids),",
+      "but not how many there are or which calls share one. --round-times hides exact times, not",
+      "the order or rough length of anything. --bucket-tokens hides exact token counts, not their",
+      "rough size. None of them hides the structure: agents, waves, calls, failures and replies.",
     );
   }
   if (name === "open") {

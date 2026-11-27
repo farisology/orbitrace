@@ -109,9 +109,9 @@ to an identifier pattern.
 | Id  | Severity | Status                       | Title                                                               |
 | --- | -------- | ---------------------------- | ------------------------------------------------------------------- |
 | F1  | Medium   | Fixed                        | Name clean-up kept the words of free text                           |
-| F2  | Medium   | Open, proposal filed         | Identifier-shaped names are exported as written                     |
-| F3  | Low      | Open, proposal filed         | Non-built-in tool names can be model output                         |
-| F4  | Low      | Accepted, proposal filed     | Timing and counts show the shape of the work                        |
+| F2  | Medium   | Mitigated, opt-in (#122)     | Identifier-shaped names are exported as written                     |
+| F3  | Low      | Mitigated, opt-in (#122)     | Non-built-in tool names can be model output                         |
+| F4  | Low      | Accepted, opt-in (#123)      | Timing and counts show the shape of the work                        |
 | F5  | Info     | Accepted                     | Order of simultaneous unlinked subagents follows runtime id order   |
 | F6  | Low      | Accepted                     | Validation names an extra property when it looks like an identifier |
 | F7  | Low      | Accepted, docs request filed | `export --json` adds a session key and typed paths                  |
@@ -137,7 +137,7 @@ match the pattern, such as the built-in tool names and every agent type and MCP 
 fixtures, are unchanged: every golden replay is byte for byte the same
 (`npm run goldens:check -w @orbitrace/fixtures`: "golden replays match the pipeline"). Regression tests: `names.test.ts`, `build.test.ts`, and the audit tests above.
 
-### F2. Identifier-shaped names are exported as written (Medium, open)
+### F2. Identifier-shaped names are exported as written (Medium, mitigated by an opt-in option)
 
 Agent types, MCP server names, tool names and model ids that already match the identifier
 pattern are copied as they are, up to 64 characters, with `.`, `:`, `-` and `_` allowed. These
@@ -150,13 +150,33 @@ tests plant `zqx-client-rollout` and a made-up API-key-shaped value and find the
 Already in place: [privacy.md](../privacy.md) says so under "Not guaranteed" and "Check before
 you share", and `orbitrace export -o` prints a note to check agent type and MCP server names.
 
-Not changed here, because it changes what a replay says and needs a contract change. Proposal
-(fits format v1, no schema change): an export option, for example
-`ExportOptions.names: "as-written" | "opaque"`, where `opaque` replaces every agent type with
-`agent-1`, `agent-2`, ... (stable per replay), every MCP server with `mcp:server-1`, ..., every
-tool name outside a known built-in list with `tool-1`, ..., and every model id that does not
-match a known vendor pattern with `null` while keeping `family`. Optionally make it the default
-for `orbitrace export` and add `--keep-names`. Filed as a cross-ticket request.
+Not changed in this audit, because it changes what a replay says and needs a contract change.
+Proposal (fits format v1, no schema change): an export option,
+`ExportOptions.names: "as-written" | "opaque"`, filed as #122.
+
+**Status (#122): mitigated by an opt-in option.** `ExportOptions.names: "opaque"`
+(`packages/core/src/export/opaque-names.ts`) and `orbitrace export --opaque-names` now exist. With
+it, every subagent's agent type becomes `agent-1`, `agent-2`, ... (callsigns keep their `#n`),
+every MCP server `mcp:server-1`, ..., every tool name outside `OPAQUE_KEPT_TOOL_NAMES` `tool_1`,
+... (an underscore, not the proposal's `-`, because the schema's tool name pattern allows no
+`-`), and every model id that is not a known Claude model id `null`. The family is kept only when
+it is one of `KNOWN_MODEL_FAMILIES` and becomes `unknown` otherwise, which is stricter than the
+proposal: a family word outside that list is cut from a custom model id (`claude-<word>-...`) and
+would carry it. Labels are counters in order of first appearance within one export, never a hash
+of the name, and no mapping is written. The result still passes the unchanged v1 schema.
+
+The owner decided the option is opt-in (decision on #122): the default export is unchanged, byte
+for byte, so `--keep-names` was not added and F2 still applies to an export made without the
+option. [privacy.md](../privacy.md#export-options-opt-in) and [cli.md](../cli.md#orbitrace-export)
+say what the option hides and what it does not (how many distinct names there are, which agents
+and calls share one, built-in tool names, known model ids).
+
+Evidence, in `packages/core/test/export/export-options.test.ts`: with no option, every golden
+replay is written byte for byte; with the option, on every fixture session, none of the
+session's own identifier-shaped names appears anywhere in the serialised text, and invented
+identifier-shaped markers (including `zqx-client-rollout` and the made-up API-key-shaped value)
+planted in every name position, all at once and one position at a time, never appear. Unit tests
+are in `opaque-names.test.ts`; the command line is tested in `packages/cli/test/export-options.test.ts`.
 
 ### F3. Non-built-in tool names can be model output (Low, open)
 
@@ -166,6 +186,10 @@ name is then model output, and if it is an identifier it is exported. Such names
 to be rare and short; this was not measured, because real transcripts are not read. A fix is a list of known built-in names with every other non-MCP name labelled
 `unknown`; that is a product choice (new built-in tools would show as `unknown` until the list is
 updated), so it is part of the F2 proposal rather than changed here.
+
+**Status (#122): mitigated by the same opt-in option.** With `names: "opaque"`, a non-MCP name
+outside `OPAQUE_KEPT_TOOL_NAMES` is written as `tool_<n>` (a counter, not `unknown`, so calls of
+the same tool still share a label). Without the option it is exported as written.
 
 ### F4. Timing and counts show the shape of the work (Low, accepted)
 
@@ -177,7 +201,14 @@ token counts per reply. Token counts tell how large a prompt, a file read or a r
 number and timing of calls can help someone who already holds a copy of the transcript to
 recognise the session. This is the purpose of a replay and is listed under "Contains" in
 privacy.md. Proposal (fits v1): an export option to round times (for example to 0.1 s) and
-bucket token counts. Low priority; filed with F2.
+bucket token counts. Low priority; filed with F2 as #123.
+
+**Status (#123): opt-in options exist; still accepted by default.** `ExportOptions.roundTimes`
+(`orbitrace export --round-times <seconds>`) rounds every time, cut gap and duration to a step;
+`ExportOptions.bucketTokens` (`--bucket-tokens`) writes reply token counts as the nearest of 1, 2,
+5, 10, ... and totals as their sums (`packages/core/src/export/coarsen.ts`). The default export
+keeps exact times and counts, and neither option hides the number, order or rough size of calls
+and replies.
 
 ### F5. Order of simultaneous unlinked subagents follows runtime id order (Info, accepted)
 
@@ -246,9 +277,11 @@ For a replay built by `buildReplay` and written by `exportReplay`, tested as abo
 ## What is not guaranteed
 
 - **Agent type names, MCP server names, tool names and model ids are exported as written when
-  they are already identifiers** (F2, F3). A name you chose after a client or a project, or a
-  secret placed in a name, is in the file. Look at the names before you share a replay.
-- Timing and size information is exported (F4).
+  they are already identifiers** (F2, F3), unless the export uses the opt-in `names: "opaque"`
+  (`--opaque-names`). A name you chose after a client or a project, or a secret placed in a name,
+  is otherwise in the file. Look at the names before you share a replay.
+- Timing and size information is exported (F4), coarsened only with the opt-in `roundTimes` and
+  `bucketTokens` options.
 - The guarantees cover the export file. They do not cover the `--json` document of the command
   (F7), session lists, or a replay file someone edited by hand.
 - The tests attack the code with invented data in the transcript shapes known today. Claude

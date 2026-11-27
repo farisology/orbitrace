@@ -100,11 +100,50 @@ export type ListSessions = (
 /** Export formats. v1 has one: the replay as JSON. */
 export type ExportFormat = "replay-json";
 
+/**
+ * Tickets #122 and #123. How `exportReplay` writes the names a user can choose:
+ *
+ * - `as-written` (the default): agent types, MCP server names, tool names and model ids are
+ *   written as the replay holds them.
+ * - `opaque`: they are replaced by labels numbered in order of first appearance within the one
+ *   export (`agent-1`, `mcp:server-1`, `tool_1`); see `ExportOptions.names`.
+ */
+export type ExportNames = "as-written" | "opaque";
+
+/**
+ * Every option is opt-in (owner decision on #122 and #123): with none given, or each given its
+ * default, `exportReplay` writes exactly the bytes it wrote before these options existed. Every
+ * option keeps the output a valid replay v1; none changes the format.
+ */
 export interface ExportOptions {
   /** Default `replay-json`. */
   readonly format?: ExportFormat;
   /** Indent the JSON for reading. Default false. */
   readonly pretty?: boolean;
+  /**
+   * Ticket #122. Default `as-written`. With `opaque`: every subagent's agent type becomes
+   * `agent-1`, `agent-2`, ... (its callsign keeps its `#n`), every MCP server `mcp:server-1`, ...,
+   * every tool name outside a fixed built-in list `tool_1`, ... (an underscore, because the
+   * schema allows no `-` in a tool name), and every model id that is not a known Claude model id
+   * `null`, with `family` kept when it is a known family and `unknown` otherwise. The same name
+   * gets the same label within one export; numbering follows first appearance (agents in id
+   * order, then tools in order within each agent). No mapping is written and a label is not
+   * derived from the name, so it cannot be turned back into it.
+   */
+  readonly names?: ExportNames;
+  /**
+   * Ticket #123. Round every time (agent, tool and reply times, warps, `duration`,
+   * `realDuration`) to this step in seconds, for example `0.1`. A step from 0.001 to 3600 that
+   * is a whole number of milliseconds. A cut gap's `skipped` is never rounded below one step,
+   * and `realDuration` is `duration` plus the rounded `skipped` values. Default: not rounded.
+   */
+  readonly roundTimes?: number;
+  /**
+   * Ticket #123. Write each reply's token counts as buckets: 0 stays 0, any other count becomes
+   * the nearest value of the form 1, 2 or 5 times a power of ten. Agent and session token totals
+   * are then the sums of the bucketed reply counts. Default false.
+   */
+  readonly bucketTokens?: boolean;
 }
 
 export interface ExportResult {

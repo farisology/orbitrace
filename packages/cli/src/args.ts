@@ -4,6 +4,12 @@
  */
 
 import { parseArgs, type ParseArgsConfig } from "node:util";
+import {
+  isRoundTimesStep,
+  ROUND_TIMES_MAX_STEP,
+  ROUND_TIMES_MIN_STEP,
+  type ExportNames,
+} from "@orbitrace/core";
 import { usageError } from "./errors.js";
 
 export interface OptionSpec {
@@ -127,7 +133,7 @@ export const COMMANDS: Readonly<Record<CommandName, CommandSpec>> = {
     name: "export",
     summary: "Export a structure-only replay of one session.",
     usage:
-      "orbitrace export (<session-key> | --latest) [-o <file>] [--force] [--pretty] [--config-dir <path>]... [--extra-roots] [--json]",
+      "orbitrace export (<session-key> | --latest) [-o <file>] [--force] [--pretty] [--opaque-names] [--round-times <seconds>] [--bucket-tokens] [--config-dir <path>]... [--extra-roots] [--json]",
     arguments: [
       {
         name: "session-key",
@@ -160,6 +166,25 @@ export const COMMANDS: Readonly<Record<CommandName, CommandSpec>> = {
         type: "boolean",
         description: "Indent the JSON for reading.",
       },
+      {
+        name: "opaque-names",
+        type: "boolean",
+        description:
+          "Write agent types as agent-1, agent-2, ..., MCP servers as mcp:server-1, ..., tool names that are not built in as tool_1, ..., and model ids that are not known Claude ids as null. Does not hide structure, counts, times or token counts.",
+      },
+      {
+        name: "round-times",
+        type: "string",
+        value: "seconds",
+        description:
+          "Round every time to this step, for example 0.1 (0.001 to 3600, whole milliseconds). Hides exact durations; the order and rough length of everything stay.",
+      },
+      {
+        name: "bucket-tokens",
+        type: "boolean",
+        description:
+          "Write each reply's token counts as the nearest of 1, 2, 5, 10, 20, 50, ...; totals are the sums of those. Hides exact sizes, not rough ones.",
+      },
       ...SOURCE_OPTIONS,
       JSON_OPTION,
       HELP_OPTION,
@@ -173,6 +198,17 @@ export const COMMANDS: Readonly<Record<CommandName, CommandSpec>> = {
     options: [JSON_OPTION, HELP_OPTION],
   },
 };
+
+/**
+ * The opt-in export options of `orbitrace export` (#122, #123), in the shape the `--json`
+ * document reports them: `--opaque-names`, `--round-times <seconds>` (`null` without it) and
+ * `--bucket-tokens`. Without any flag the export is the plain one, byte for byte.
+ */
+export interface ExportFlags {
+  readonly names: ExportNames;
+  readonly roundTimes: number | null;
+  readonly bucketTokens: boolean;
+}
 
 /** Options shared by the commands that read sessions. */
 export interface SourceFlags {
@@ -198,6 +234,8 @@ export type ParsedCommand =
       readonly output?: string;
       readonly force: boolean;
       readonly pretty: boolean;
+      /** The opt-in export options (#122, #123) the flags asked for. */
+      readonly exportOptions: ExportFlags;
     }
   | {
       readonly kind: "open";
@@ -289,6 +327,33 @@ export function parseLimit(value: string, command: CommandName = "list"): number
     throw usageError("--limit needs a whole number of at least 1.", command);
   }
   return limit;
+}
+
+const ROUND_TIMES_MESSAGE = `--round-times needs a number of seconds from ${ROUND_TIMES_MIN_STEP} to ${ROUND_TIMES_MAX_STEP}, in whole milliseconds, such as 0.1.`;
+
+/**
+ * A `--round-times` step: a plain decimal number of seconds that core's `isRoundTimesStep`
+ * accepts (0.001 to 3600, whole milliseconds), or a usage error. The message does not repeat
+ * the value.
+ */
+export function parseRoundTimes(value: string): number {
+  const trimmed = value.trim();
+  if (!/^\d{1,4}(\.\d{1,3})?$|^\.\d{1,3}$/.test(trimmed)) {
+    throw usageError(ROUND_TIMES_MESSAGE, "export");
+  }
+  const step = Number(trimmed);
+  if (!isRoundTimesStep(step)) throw usageError(ROUND_TIMES_MESSAGE, "export");
+  return step;
+}
+
+/** The export options the parsed flags ask for. */
+function exportFlags(values: Values): ExportFlags {
+  return {
+    names: values["opaque-names"] === true ? "opaque" : "as-written",
+    roundTimes:
+      typeof values["round-times"] === "string" ? parseRoundTimes(values["round-times"]) : null,
+    bucketTokens: values["bucket-tokens"] === true,
+  };
 }
 
 /** A port number from 1 to 65535, or a usage error. */
@@ -409,6 +474,7 @@ export function parseCommandLine(argv: readonly string[]): ParsedCommand {
         ...(output === undefined ? {} : { output }),
         force: values.force === true,
         pretty: values.pretty === true,
+        exportOptions: exportFlags(values),
       };
     }
     case "open": {

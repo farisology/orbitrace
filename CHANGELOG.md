@@ -87,5 +87,9 @@ merged so far.
   with a fixed label (`subagent`, `unknown`, `mcp:unknown`), so free text in such a name cannot
   reach a shared replay. The audit of the export path is in `docs/security/export-audit.md` (#23,
   #114).
+- Opt-in export options: `--opaque-names` (`ExportOptions.names: "opaque"`) writes agent types,
+  MCP servers, non-built-in tool names and unknown model ids as numbered labels, and
+  `--round-times` and `--bucket-tokens` coarsen times and token counts; the default export is
+  unchanged (#122, #123).
 
 [Unreleased]: https://github.com/farisology/orbitrace/commits/dev
