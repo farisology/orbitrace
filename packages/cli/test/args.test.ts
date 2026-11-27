@@ -290,7 +290,7 @@ describe("wantsJson", () => {
 
 describe("isCommandName and COMMANDS", () => {
   it("knows exactly the commands it has specs for", () => {
-    expect(COMMAND_NAMES).toEqual(["open", "list", "export", "history", "doctor", "help"]);
+    expect(COMMAND_NAMES).toEqual(["open", "list", "export", "pulse", "history", "doctor", "help"]);
     for (const name of COMMAND_NAMES) {
       expect(isCommandName(name)).toBe(true);
       expect(COMMANDS[name].name).toBe(name);

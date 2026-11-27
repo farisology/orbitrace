@@ -119,15 +119,16 @@ describe("orbitrace (built binary): version and help", () => {
       const result = run(args);
       expect(result.status).toBe(0);
       expect(result.stdout).toContain("Usage:");
-      for (const name of ["open", "list", "export", "doctor", "help"])
+      for (const name of ["open", "list", "export", "pulse", "doctor", "help"])
         expect(result.stdout).toContain(name);
       expect(result.stdout).toContain("With no command, orbitrace runs 'open'");
       expect(result.stderr).toBe("");
     }
   });
 
-  it("prints help for every command, three ways", () => {
-    for (const name of ["open", "list", "export", "doctor", "help"]) {
+  // Three runs of the binary per command; give it room on a busy machine.
+  it("prints help for every command, three ways", { timeout: 30_000 }, () => {
+    for (const name of ["open", "list", "export", "pulse", "doctor", "help"]) {
       const outputs = [
         [name, "--help"],
         [name, "-h"],
@@ -151,6 +152,7 @@ describe("orbitrace (built binary): version and help", () => {
       "open",
       "list",
       "export",
+      "pulse",
       "history",
       "doctor",
       "help",
