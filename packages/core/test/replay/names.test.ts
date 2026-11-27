@@ -11,12 +11,17 @@ import {
 } from "../../src/replay/names.js";
 
 describe("agentNameOf", () => {
-  it("keeps identifier agent types and reduces the rest", () => {
+  it("keeps identifier agent types and replaces the rest whole (no words kept)", () => {
     expect(agentNameOf("code-reviewer")).toBe("code-reviewer");
     expect(agentNameOf("example-plugin:helper")).toBe("example-plugin:helper");
-    expect(agentNameOf("two words")).toBe("two-words");
-    expect(agentNameOf("--lead")).toBe("lead");
-    expect(agentNameOf("x".repeat(80))).toHaveLength(64);
+    expect(agentNameOf("x".repeat(64))).toBe("x".repeat(64));
+    expect(agentNameOf("two words")).toBe("subagent");
+    expect(agentNameOf("--lead")).toBe("subagent");
+    expect(agentNameOf("x".repeat(65))).toBe("subagent");
+    expect(agentNameOf("src/widget.ts")).toBe("subagent");
+    expect(agentNameOf("someone@example.com")).toBe("subagent");
+    expect(agentNameOf("line\nbreak")).toBe("subagent");
+    expect(agentNameOf("café")).toBe("subagent");
   });
 
   it("falls back to subagent", () => {
@@ -62,14 +67,22 @@ describe("toolLabelOf", () => {
     expect(toolLabelOf("mcp__docs__search", "mcp", "docs")).toBe("mcp:docs");
     expect(toolLabelOf("mcp__docs__search", "mcp", null)).toBe("mcp:docs");
     expect(toolLabelOf("weird", "mcp", null)).toBe("mcp:unknown");
-    expect(toolLabelOf("mcp__a b__c", "mcp", null)).toBe("mcp:a-b");
+    expect(toolLabelOf("mcp__example_server-2__c", "mcp", null)).toBe("mcp:example_server-2");
+    expect(toolLabelOf("mcp__a b__c", "mcp", null)).toBe("mcp:unknown");
+    expect(toolLabelOf("mcp__x__y", "mcp", "a/b")).toBe("mcp:unknown");
+    expect(toolLabelOf("mcp__x__y", "mcp", "-lead")).toBe("mcp:unknown");
+    expect(toolLabelOf("mcp__x__y", "mcp", "s".repeat(65))).toBe("mcp:unknown");
   });
 
-  it("keeps other names as identifiers", () => {
+  it("keeps other names that are identifiers and replaces the rest whole", () => {
     expect(toolLabelOf("Bash", "shell", null)).toBe("Bash");
     expect(toolLabelOf("apply_patch", "edit", null)).toBe("apply_patch");
-    expect(toolLabelOf("do it", "other", null)).toBe("do_it");
+    expect(toolLabelOf("T".repeat(64), "other", null)).toBe("T".repeat(64));
+    expect(toolLabelOf("do it", "other", null)).toBe("unknown");
     expect(toolLabelOf("123", "other", null)).toBe("unknown");
+    expect(toolLabelOf("9Read", "other", null)).toBe("unknown");
+    expect(toolLabelOf("read-file", "other", null)).toBe("unknown");
+    expect(toolLabelOf("T".repeat(65), "other", null)).toBe("unknown");
     expect(toolLabelOf("mcp__x__y", "other", null)).toBe("mcp");
   });
 });

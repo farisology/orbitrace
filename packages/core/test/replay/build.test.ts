@@ -526,7 +526,7 @@ describe("buildReplay edge cases", () => {
     ]);
   });
 
-  it("reduces names and models that are not identifiers", () => {
+  it("replaces names and models that are not identifiers with fixed labels", () => {
     const parsed = session(
       run(
         [
@@ -563,12 +563,8 @@ describe("buildReplay edge cases", () => {
     const model = buildReplay(parsed);
     expectValidReplay(model);
     expect(model.agents[0]).toMatchObject({ model: null, family: "unknown" });
-    expect(model.agents[0].tools.map((t) => t.name)).toEqual([
-      "Agent",
-      "mcp:odd-server-",
-      "weird_tool",
-    ]);
-    expect(model.agents[1]).toMatchObject({ name: "my-agent-v2-", model: null, family: "unknown" });
+    expect(model.agents[0].tools.map((t) => t.name)).toEqual(["Agent", "mcp:unknown", "unknown"]);
+    expect(model.agents[1]).toMatchObject({ name: "subagent", model: null, family: "unknown" });
   });
 
   it("uses the meta model when no reply names one", () => {

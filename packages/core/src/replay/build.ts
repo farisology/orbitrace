@@ -15,7 +15,8 @@
  *
  * Nothing that identifies the session or holds content is copied: runtime agent ids, tool use
  * ids, message ids and the session id are used for linking only, and every string written is
- * reduced to the schema's identifier patterns (see `names.ts`).
+ * kept only when it already matches the schema's identifier patterns and is otherwise replaced
+ * by a fixed label (see `names.ts`).
  */
 
 import { REPLAY_BUILD_DEFAULTS, type BuildReplay, type BuildReplayOptions } from "../api.js";
