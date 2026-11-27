@@ -52,7 +52,7 @@ The repository uses npm workspaces with these packages:
 | `app`      | React and Vite shell that hosts the renderer and talks to its host through a transport interface.                                                                                     |
 | `fixtures` | Seeded generator of synthetic transcripts and the golden replay files. For tests and the demo; private.                                                                               |
 | `vscode`   | VS Code extension.                                                                                                                                                                    |
-| `cli`      | Command-line entry: `orbitrace list`, `export`, `open` and `doctor`.                                                                                                                  |
+| `cli`      | Command-line entry: `orbitrace list`, `export`, `open`, `history` and `doctor`.                                                                                                       |
 
 A `plugin` package for Claude Code is planned for later. How the packages fit together is in [docs/architecture.md](docs/architecture.md).
 
@@ -85,9 +85,12 @@ npm run privacy     # fail if forbidden strings appear
 
 ## Other checks
 
-These are not part of `npm test`. Run them when your change touches what they cover.
+What each package tests, what CI runs, what is not tested and the manual checklist for a release are in [docs/test-plan.md](docs/test-plan.md). One rule from it for the app's tests: after `findBy…` or `waitFor`, await `rendererCreated(orrery)` (from `packages/app/test/helpers.tsx`) before you read the fake renderer, because React can run the effect that creates it later. `ORBITRACE_TEST_EFFECT_GAP_MS=30 npm test -w @orbitrace/app` widens that gap and makes a test that reads too early fail every time.
 
-- **VS Code integration test.** `npm run test:integration -w orbitrace-vscode`, after `npm run build`, with Node 22 or later. It downloads VS Code into `packages/vscode/node_modules/.cache/vscode-test/` and runs the built extension in a real window against synthetic sessions only. CI runs it in a separate job on Node 22, and a failure fails the CI run. What it checks and its settings are in [packages/vscode/README.md](packages/vscode/README.md#integration-test).
+The checks below are not part of `npm test`. Run them when your change touches what they cover.
+
+- **VS Code integration test.** `npm run test:integration -w orbitrace-vscode`, after `npm run build`, with Node 22 or later. It downloads VS Code into `packages/vscode/node_modules/.cache/vscode-test/` and runs the built extension in a real window against synthetic sessions only. It also runs the history store inside the extension host, with `ORBITRACE_DATA_DIR` set to a temporary folder. `ORBITRACE_IT_PROBE_ONLY=1` downloads the editor, prints the Node, Electron and SQLite versions it bundles and whether `node:sqlite` loads, then stops. `ORBITRACE_IT_CACHE_DIR=<absolute path>` downloads into that folder instead. CI runs the test in a separate job on Node 22, twice: on the current stable VS Code and on 1.96.0, the lowest version `engines.vscode` allows. A failure in either fails the CI run. What it checks and its other settings are in [packages/vscode/README.md](packages/vscode/README.md#integration-test).
+- **Core tests on Windows.** CI also runs the core package's tests on `windows-latest` with Node 24. That job does not fail the CI run yet (`continue-on-error`), so read its result on the run page.
 - **Benchmarks.** In `packages/renderer`, after `npm run build` at the root: `npm run bench:node` (draw path and parse/build in Node) and `npm run bench:browser` (draw benchmark in headless Chrome, Node 22 or later). `bench:browser` reads `BENCH_DPR` (default 2), `BENCH_CPU_THROTTLE` (default 1) and `BENCH_AGENTS` (default `15,100,500`), and `CHROME_PATH`. The targets and the last measured results are in [docs/performance.md](docs/performance.md); the commands are also in [packages/renderer/README.md](packages/renderer/README.md#commands).
 - **Accessibility.** The WCAG 2.1 AA audit of the app shell, its fixes, what still needs a person with a screen reader, and how to run the checks are in [packages/app/ACCESSIBILITY.md](packages/app/ACCESSIBILITY.md#running-the-checks).
 - **Export privacy.** The field-by-field audit of what can reach a shared replay, with its findings and the tests that guard them, is [docs/security/export-audit.md](docs/security/export-audit.md). A change to what a replay contains updates [docs/privacy.md](docs/privacy.md) in the same pull request.
