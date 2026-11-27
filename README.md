@@ -4,7 +4,16 @@ Replay and visualise Claude Code agent sessions.
 
 Orbitrace reads the session transcripts that Claude Code already writes on your machine and plays them back as an orrery: the main agent in the centre, subagents in orbit, every tool call a flare. The name is orbit plus trace.
 
-> **Status: not released.** From a clone of the `dev` branch you can build and run the web app with a bundled demo, the `orbitrace` command (`list`, `export` and `open`), and an editor extension that you package and install by hand. Nothing is on npm, the VS Code Marketplace or Open VSX yet. See [docs/getting-started.md](docs/getting-started.md). What has changed so far is in [CHANGELOG.md](CHANGELOG.md), and how a release is cut is in [docs/releasing.md](docs/releasing.md).
+> **Status: not released.** From a clone of the `dev` branch you can build and run the web app with a bundled demo, the `orbitrace` command (`list`, `export`, `open` and `doctor`), and an editor extension that you package and install by hand. Nothing is on npm, the VS Code Marketplace or Open VSX yet. See [docs/getting-started.md](docs/getting-started.md). What has changed so far is in [CHANGELOG.md](CHANGELOG.md), and how a release is cut is in [docs/releasing.md](docs/releasing.md).
+
+## What works on `dev`
+
+- **Follow live.** A running session opens at its newest moment and keeps up as it grows ([below](#follow-a-running-session)).
+- **Public replay player.** A static page that opens a shared replay file in the browser; you build it yourself ([below](#public-replay-player)).
+- **Export with privacy options.** `orbitrace export` and the app's Export button write a structure-only replay file. Opaque names, rounded times and bucketed tokens are opt-in and off by default. See [docs/privacy.md](docs/privacy.md#export-options-opt-in).
+- **Cost estimate.** The inspector shows a session's tokens in four classes and an estimated cost at list prices, by model and by agent. See [docs/ledger.md](docs/ledger.md).
+- **`orbitrace doctor`.** Checks the set-up, says what is wrong and how to fix it, and changes nothing. See [docs/cli.md](docs/cli.md#orbitrace-doctor).
+- **History store, not switched on.** Code that keeps a redacted copy of sessions exists in `@orbitrace/core`, but no command or editor tab uses it on `dev`, so nothing is recorded. See [docs/privacy.md](docs/privacy.md#history-store-25).
 
 ## What it is for
 

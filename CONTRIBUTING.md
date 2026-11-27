@@ -45,14 +45,14 @@ The root range is where all five overlap. Two exceptions: `npm run bench:browser
 
 The repository uses npm workspaces with these packages:
 
-| Package    | Purpose                                                                                                                                     |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `core`     | Transcript parser, source resolution, replay model builder and export. No editor dependency. Node-only parts are on `@orbitrace/core/node`. |
-| `renderer` | Framework-free Canvas 2D engine that draws a replay model.                                                                                  |
-| `app`      | React and Vite shell that hosts the renderer and talks to its host through a transport interface.                                           |
-| `fixtures` | Seeded generator of synthetic transcripts and the golden replay files. For tests and the demo; private.                                     |
-| `vscode`   | VS Code extension.                                                                                                                          |
-| `cli`      | Command-line entry: `orbitrace list`, `export` and `open`.                                                                                  |
+| Package    | Purpose                                                                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core`     | Transcript parser, source resolution, replay model builder, export and the ledger. No editor dependency. Node-only parts, including the history store, are on `@orbitrace/core/node`. |
+| `renderer` | Framework-free Canvas 2D engine that draws a replay model.                                                                                                                            |
+| `app`      | React and Vite shell that hosts the renderer and talks to its host through a transport interface.                                                                                     |
+| `fixtures` | Seeded generator of synthetic transcripts and the golden replay files. For tests and the demo; private.                                                                               |
+| `vscode`   | VS Code extension.                                                                                                                                                                    |
+| `cli`      | Command-line entry: `orbitrace list`, `export`, `open` and `doctor`.                                                                                                                  |
 
 A `plugin` package for Claude Code is planned for later. How the packages fit together is in [docs/architecture.md](docs/architecture.md).
 
@@ -100,7 +100,7 @@ Nothing is released yet. How a release is cut, what it publishes, and a local dr
 
 Where possible, a change touches one package. If it has to touch more than one, say why in the pull request. Keep the dependency direction: `core` must not depend on an editor, and `renderer` must not depend on a UI framework.
 
-The main entry of `core` runs in a browser, so it must not use Node. Node-only code goes behind `@orbitrace/core/node`: today that is `src/sources/node.ts` and everything in `src/sources/claude-code/`. `npm run typecheck` checks the rest of `packages/core/src` without Node's types (`packages/core/tsconfig.browser.json`), so:
+The main entry of `core` runs in a browser, so it must not use Node. Node-only code goes behind `@orbitrace/core/node`: today that is `src/sources/node.ts`, everything in `src/sources/claude-code/` and everything in `src/history/`. `npm run typecheck` checks the rest of `packages/core/src` without Node's types (`packages/core/tsconfig.browser.json`), so:
 
 - using `process` or `Buffer`, or importing a `node:` module, in a browser-side file fails with `error TS2591: Cannot find name 'process'`. Ignore the hint to add `node` to `types`; move the code to a Node-only file instead;
 - importing a Node-only file from a browser-side file fails with `error TS6307: File '...' is not listed within the file list of project '.../packages/core/tsconfig.browser.json'`;

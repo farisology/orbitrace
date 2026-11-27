@@ -26,6 +26,8 @@ Each session opens in its own tab. Running the command again for the same sessio
 
 A session belongs to the workspace only when Claude Code was started in the workspace folder itself. A session started in a subfolder counts as another project. When there are sessions of both kinds, the view groups them under "This workspace" and "Other projects".
 
+To save a replay file, press **Export** in a session tab. The tab offers three privacy options, all off, then the editor's save dialog asks where to save the file (suggested name `orbitrace.replay.json`). The file holds structure only. The demo tab has no Export button, and there is no Export command in the Command Palette.
+
 ## Follow a running session
 
 The extension sends live updates to a tab while it is open. A running session opens at the live edge, the newest moment, and the tab keeps up as the session grows. Scrubbing back, Home or Pause stops following. **Go live** or the End key returns to the edge.
@@ -33,7 +35,7 @@ The extension sends live updates to a tab while it is open. A running session op
 ## What it reads
 
 - The Claude Code config folders: the one named by `CLAUDE_CONFIG_DIR` when the extension host has it set, and `.claude` in the home folder. Both are read when both exist. Inside each, the session transcripts under `projects/`, and the entries under `sessions/` that say which sessions are running.
-- Files are only read, never written. The extension stores nothing of its own.
+- Claude Code's files are only read, never written. The extension stores nothing of its own. The only file it writes is a replay you save with **Export**, where you choose.
 - It has no setting, needs no hooks and needs no account.
 
 ## Nothing leaves the machine

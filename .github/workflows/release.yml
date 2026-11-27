@@ -54,7 +54,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # Node 22: vsce 4 and ovsx 1.4 need it. CI covers Node 20 and 22 for the code itself.
+      # Node 22: vsce 4 and ovsx 1.4 need it. CI covers Node 20, 22, 24 and 26 for the code itself.
       - name: Set up Node 22
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

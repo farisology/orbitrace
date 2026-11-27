@@ -96,15 +96,18 @@ replay that session, because it keeps no record of its own (next section).
 
 ## What Orbitrace stores
 
-**Nothing yet.** There is no database and no history record.
+**No session data.** No command, editor tab or browser view keeps a copy of your sessions.
 
-- A history record that outlives Claude Code's cleanup is planned. Its format, location and
-  retention are not decided (see issues #24 and #25). Until that is decided, treat any stored copy
-  of a session as being as sensitive as the transcript it came from.
-- The files Orbitrace writes today: a replay file, only when you run `orbitrace export` with
-  `-o`; and, while `orbitrace open` runs, a launcher page (`open.html`, readable by your account
-  only) in a new private folder under the system's temporary folder, deleted when the command
-  stops. See [architecture.md](architecture.md#opening-the-browser).
+- A history store exists in core (see [History store (#25)](#history-store-25) below), but no
+  command or host uses it, so nothing is stored today.
+- The files Orbitrace writes today:
+  - a replay file, only when you ask for one: `orbitrace export` with `-o`, or the app's
+    **Export** button. In a browser the app downloads the file; in an editor tab the extension
+    writes it where you choose in the editor's save dialog. See
+    [What a shared replay contains](#what-a-shared-replay-contains);
+  - while `orbitrace open` runs, a launcher page (`open.html`, readable by your account only) in a
+    new private folder under the system's temporary folder, deleted when the command stops. See
+    [architecture.md](architecture.md#opening-the-browser).
 - Nothing is uploaded. Orbitrace has no telemetry.
 
 ## History store (#25)
@@ -285,7 +288,9 @@ the [export audit](security/export-audit.md).
 ### What export guarantees
 
 A replay file is written by `exportReplay` (issue #18, `packages/core/src/export/export-replay.ts`).
-`orbitrace export` uses it. The whole path from a transcript line to a shared file, field by
+`orbitrace export` uses it, and so does the app's Export button (#168). In an editor tab the app
+sends the exported text, with no path or file name, to the extension, which checks it against the
+schema and writes it again through `exportReplay` before saving it. The whole path from a transcript line to a shared file, field by
 field, was audited in [security/export-audit.md](security/export-audit.md) (#23), with its
 findings and the tests that guard them. For every file it writes:
 
@@ -295,8 +300,8 @@ findings and the tests that guard them. For every file it writes:
   string to an identifier pattern with no spaces, slashes, backslashes or line breaks, so message
   text, file paths and command lines cannot be stored in any string field.
 - The same input gives the same bytes: keys are written in a fixed order.
-- The suggested file name is always `orbitrace.replay.json`. It holds no session id or project
-  name.
+- The suggested file name is always `orbitrace.replay.json`, from the command line, the app's
+  download and the editor's save dialog alike. It holds no session id or project name.
 
 Not guaranteed:
 
@@ -321,7 +326,9 @@ Three export options make a shared replay coarser (issues #122 and #123). They a
 ask for them: with none of them, the file is the same, byte for byte, as before the options
 existed (a test checks this against every golden replay). Each one keeps the file a valid replay
 v1; the format does not change. On the command line they are `orbitrace export --opaque-names`,
-`--round-times <seconds>` and `--bucket-tokens` (see [cli.md](cli.md#orbitrace-export)); in code
+`--round-times <seconds>` and `--bucket-tokens` (see [cli.md](cli.md#orbitrace-export)); in the
+app they are the **Opaque names**, **Round times** and **Bucket tokens** boxes of the Export
+dialog, unticked each time it opens; in code
 they are the `names: "opaque"`, `roundTimes` and `bucketTokens` fields of `ExportOptions`
 (`exportReplay`, `packages/core/src/export/`).
 
