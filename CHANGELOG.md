@@ -72,6 +72,7 @@ merged so far.
   hand uploads the page as a GitHub Pages artefact; it does not deploy it. See `docs/player.md`
   (#19, #148).
 - `orbitrace doctor`: a read-only check of the set-up (Node version, config folder, session folders, parser health, running-sessions folder, web app, loopback port, `node:sqlite`) with a stable code, a status and an exact fix per check, `--json` and exit code 12 when a check fails; see `docs/cli.md` (#31).
+- Ledger: `sessionLedger` in `@orbitrace/core` totals one session's tokens in four classes and estimates their cost at Anthropic's list prices (read 27 Nov 2026), per model and per agent, with unpriced models marked and never guessed; the inspector shows it, every cost labelled an estimate. See `docs/ledger.md` (#26).
 
 ### Changed
 

@@ -1,0 +1,61 @@
+/*
+ * The inspector's ledger (#26): token classes with a cost estimate. Builds on `.stat-table` in
+ * app.css and uses only design tokens from generated/tokens.css. `--ledger` is the cost colour
+ * (design/identity.md); on the panel it passes 4.5:1 text contrast (contrast.test.ts).
+ */
+
+.ledger {
+  margin: var(--space-3) 0 0;
+}
+
+.ledger-table td.ledger-cost {
+  color: var(--ledger);
+  white-space: normal;
+}
+
+/*
+ * The amount and its "(partial)" qualifier each stay on one line, but the cell may break between
+ * them, so a large partial total wraps instead of pushing the table past the inspector (WCAG
+ * 1.4.12 text spacing, 1.4.10 reflow; measured in Chrome at 320 and 1280 px, see docs/ledger.md).
+ */
+.ledger-table .ledger-amount,
+.ledger-table .ledger-qualifier {
+  white-space: nowrap;
+}
+
+/* Row headers ("Cache creation", a long model id or callsign) may break anywhere. */
+.ledger-table th[scope="row"] {
+  overflow-wrap: anywhere;
+}
+
+/* "not priced": no cost to show, so not in the cost colour. */
+.ledger-table td.ledger-unpriced-cost {
+  color: var(--dim);
+}
+
+.ledger-table thead th:not(:first-child) {
+  text-align: right;
+}
+
+/* A model id or callsign can be long and has no spaces: let it wrap anywhere. */
+.ledger-table .ledger-name {
+  overflow-wrap: anywhere;
+  padding-right: var(--space-2);
+}
+
+.ledger-table td + td {
+  padding-left: var(--space-2);
+}
+
+.ledger-note {
+  margin: var(--space-2) 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--faint);
+}
+
+.ledger-unpriced {
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--ledger);
+  color: var(--dim);
+}
