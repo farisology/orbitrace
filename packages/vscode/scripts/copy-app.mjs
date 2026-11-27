@@ -2,7 +2,9 @@
 // Copies the built web app (packages/app/dist) into packages/vscode/dist/app, so the .vsix
 // carries the app its editor tab loads. The same approach as the CLI (decision on #76); this
 // package keeps its own copy step because packages do not import each other's build scripts.
-// The app's type declarations (dist/types) are left out: they are not loaded.
+// The app's type declarations (dist/types) are left out: they are not loaded. The app's
+// THIRD-PARTY-NOTICES.txt and third-party-modules.json are copied with the bundle (#143);
+// noticesProblem() checks the notices are there.
 //
 // The workspace build runs @orbitrace/app before this package, because it is listed as a
 // devDependency (scripts/run-workspaces.mjs orders by that).
@@ -12,6 +14,9 @@ import { join } from "node:path";
 
 /** Top-level entries of the app's dist folder that are not copied. */
 export const SKIPPED_ENTRIES = ["types"];
+
+/** The licence notices of the third-party code in the web app bundle, next to index.html. */
+export const NOTICES_FILE = "THIRD-PARTY-NOTICES.txt";
 
 /**
  * @param {string} from
@@ -57,4 +62,19 @@ export function copyAppBundle(sourceDir, targetDir) {
   const copied = [];
   copyTree(sourceDir, targetDir, "", copied);
   return copied;
+}
+
+/**
+ * The problem with a copied web app, or null: it holds script bundles (which carry third-party
+ * code) but no THIRD-PARTY-NOTICES.txt beside them.
+ * @param {string} appDir the copied app folder
+ * @returns {string | null}
+ */
+export function noticesProblem(appDir) {
+  const assets = join(appDir, "assets");
+  const scripts = existsSync(assets)
+    ? readdirSync(assets).filter((name) => name.endsWith(".js"))
+    : [];
+  if (scripts.length === 0 || existsSync(join(appDir, NOTICES_FILE))) return null;
+  return `the web app has ${scripts.length} script file(s) but no ${NOTICES_FILE}. Rebuild it with 'npm run build -w @orbitrace/app', which writes the notices.`;
 }

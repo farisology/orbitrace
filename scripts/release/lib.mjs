@@ -60,6 +60,11 @@ export const DENIED_PATHS = [
  * Node.js built-ins and files shipped beside it, and the manifest may declare no dependencies,
  * so the tarball installs alone. `installCheck`: pack-release.mjs installs the tarball alone into
  * an empty project and runs it (install-check.mjs).
+ *
+ * Third-party notices (#143): an artefact that carries the web app bundle (an `index.html` with
+ * `assets/*.js` beside it) must carry the app's THIRD-PARTY-NOTICES.txt and its module list,
+ * third-party-modules.json, in the same folder, so the CLI and .vsix allow-lists accept both;
+ * check-package.mjs (checkThirdPartyNotices) requires them and compares one with the other.
  * @type {readonly { dir: string, name: string, allow: readonly string[], require: readonly string[], selfContained?: readonly string[], installCheck?: boolean }[]}
  */
 export const NPM_PACKAGES = [
@@ -91,6 +96,8 @@ export const NPM_PACKAGES = [
       "LICENSE",
       "dist/index.js",
       "dist/app/index.html",
+      "dist/app/THIRD-PARTY-NOTICES.txt",
+      "dist/app/third-party-modules.json",
       "dist/app/*.svg",
       "dist/app/assets/*.js",
       "dist/app/assets/*.css",
@@ -113,6 +120,8 @@ export const VSIX_PACKAGE = {
     "extension/LICENSE.txt",
     "extension/dist/extension.js",
     "extension/dist/app/index.html",
+    "extension/dist/app/THIRD-PARTY-NOTICES.txt",
+    "extension/dist/app/third-party-modules.json",
     "extension/dist/app/*.svg",
     "extension/dist/app/assets/*.js",
     "extension/dist/app/assets/*.css",

@@ -55,6 +55,9 @@ merged so far.
   never overlap and the selected and hovered agents always keep theirs. New `bench:node`
   benchmarks and settings for `bench:browser`; the results are in `docs/performance.md` (#14,
   #115).
+- The web app ships a `THIRD-PARTY-NOTICES.txt`, with the licence of each bundled package, in the
+  CLI tarball, the `.vsix` and the public player; the release check fails when it is missing or
+  stale (#143).
 
 ### Changed
 

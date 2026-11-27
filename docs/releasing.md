@@ -76,14 +76,14 @@ Jobs:
 `pack-release.mjs` writes these files. Sizes are from a local run on 27 Nov 2026 at version
 `0.0.0`; KiB is 1024 bytes.
 
-| File                         | Packed    | Unpacked  | Files | Contents                                                                                                 |
-| ---------------------------- | --------- | --------- | ----- | -------------------------------------------------------------------------------------------------------- |
-| `orbitrace-core-<v>.tgz`     | 95.3 KiB  | 420.3 KiB | 76    | `dist/**/*.js`, `dist/**/*.d.ts`, `schema/replay-v1.schema.json`, `README.md`, `LICENSE`, `package.json` |
-| `orbitrace-renderer-<v>.tgz` | 31.6 KiB  | 104.6 KiB | 33    | `dist/**/*.js`, `dist/**/*.d.ts`, `README.md`, `LICENSE`, `package.json`                                 |
-| `orbitrace-<v>.tgz` (CLI)    | 158.0 KiB | 633.9 KiB | 10    | `dist/index.js` (core bundled in), the web app in `dist/app`, `README.md`, `LICENSE`, `package.json`     |
-| `orbitrace-vscode-<v>.vsix`  | 151.1 KiB | 600.9 KiB | 13    | `extension/dist/extension.js` (core bundled in), `extension/dist/app`, the icon, readme, licence         |
-| `SHA256SUMS`                 |           |           |       | One `<sha256>  <file>` line per artefact. `sha256sum -c SHA256SUMS` (or `shasum -a 256 -c`) checks them. |
-| `release-manifest.json`      |           |           |       | The version, the commit, and each artefact's size, SHA-256, file list, warnings and errors.              |
+| File                         | Packed    | Unpacked  | Files | Contents                                                                                                                          |
+| ---------------------------- | --------- | --------- | ----- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `orbitrace-core-<v>.tgz`     | 95.3 KiB  | 420.3 KiB | 76    | `dist/**/*.js`, `dist/**/*.d.ts`, `schema/replay-v1.schema.json`, `README.md`, `LICENSE`, `package.json`                          |
+| `orbitrace-renderer-<v>.tgz` | 31.6 KiB  | 104.6 KiB | 33    | `dist/**/*.js`, `dist/**/*.d.ts`, `README.md`, `LICENSE`, `package.json`                                                          |
+| `orbitrace-<v>.tgz` (CLI)    | 165.1 KiB | 659.9 KiB | 12    | `dist/index.js` (core bundled in), the web app, its notices and module list in `dist/app`, `README.md`, `LICENSE`, `package.json` |
+| `orbitrace-vscode-<v>.vsix`  | 163.4 KiB | 641.3 KiB | 15    | `extension/dist/extension.js` (core bundled in), `extension/dist/app` with notices and module list, the icon, readme, licence     |
+| `SHA256SUMS`                 |           |           |       | One `<sha256>  <file>` line per artefact. `sha256sum -c SHA256SUMS` (or `shasum -a 256 -c`) checks them.                          |
+| `release-manifest.json`      |           |           |       | The version, the commit, and each artefact's size, SHA-256, file list, warnings and errors.                                       |
 
 Each tarball is checked for:
 
@@ -98,6 +98,10 @@ Each tarball is checked for:
 - every `bin` file starts with `#!/usr/bin/env node` and is executable;
 - for the CLI (`selfContained` in `lib.mjs`): no `dependencies`, `peerDependencies` or
   `optionalDependencies`, and `dist/index.js` imports only Node.js built-ins and shipped files;
+- where it carries the web app (an `index.html` with `assets/*.js` beside it):
+  `THIRD-PARTY-NOTICES.txt` and `third-party-modules.json` in the same folder, every script listed
+  in the module list, and notices that name exactly the packages the list puts in those scripts
+  (see [Third-party notices](#third-party-notices));
 - the privacy rules of `scripts/privacy-check.mjs`, and the build machine's repository and home
   folder paths, in every text file. A finding names the file and the rule, never the text.
 
@@ -127,6 +131,25 @@ with the CLI. The build fails if code from a third-party package ends up in the 
 bundled dependency cannot ship before its licence is noted in `NOTICE`; today the bundle holds
 only Orbitrace's own code. The CLI tarball went from 183.6 KiB packed, 675.9 KiB unpacked and
 89 files to 158.0 KiB, 633.9 KiB and 10 files (local runs on 27 Nov 2026).
+
+### Third-party notices
+
+The web app bundle contains third-party code (React, React DOM and scheduler, plus small helpers
+from Vite and its bundler, Rolldown), and it is copied into the CLI tarball, the `.vsix` and the
+public player (#143). When the app is built, `packages/app/scripts/third-party-notices.mjs`, a
+Vite plugin with no dependency, reads the modules the bundler actually put into each output
+chunk and writes `THIRD-PARTY-NOTICES.txt` next to `index.html` in `dist/` and `dist-player/`:
+each package's name, version, licence and the full text of the licence file(s) in its installed
+folder, sorted by name, plus a one-line note that core's replay validator is code generated by
+Ajv with no Ajv module in it. The build fails when a bundled package declares no licence, has no
+licence file, or has a licence outside the allow-list (`0BSD`, `Apache-2.0`, `BSD-2-Clause`,
+`BSD-3-Clause`, `ISC`, `MIT`; today every bundled package is `MIT`). The app build also writes
+`dist/third-party-modules.json`, which packages are in which chunk. The CLI and extension builds
+copy both files with the app and fail when the app's scripts have no notices beside them, and
+the release check compares the notices with the module list in each artefact, so a missing,
+stale or hand-edited notices file fails it. The CLI's and extension's own esbuild bundles hold
+only Orbitrace's code: both builds fail when esbuild's metafile lists an input from
+`node_modules`.
 
 ## Try the artefacts
 

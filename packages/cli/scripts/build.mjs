@@ -10,7 +10,8 @@
 // 2. fails when anything from a third-party package ended up in the bundle, so a new bundled
 //    dependency cannot ship without its licence being reviewed and noted (see NOTICE at the
 //    repository root);
-// 3. copies the built web app into dist/app (scripts/copy-app.mjs).
+// 3. copies the built web app into dist/app (scripts/copy-app.mjs), and fails when its script
+//    bundles have no THIRD-PARTY-NOTICES.txt beside them (#143).
 //
 // The workspace build runs @orbitrace/core and @orbitrace/app before this package, because the
 // CLI lists both as devDependencies (scripts/run-workspaces.mjs orders by that). esbuild
@@ -20,7 +21,7 @@ import { chmodSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
-import { copyAppBundle } from "./copy-app.mjs";
+import { copyAppBundle, noticesProblem } from "./copy-app.mjs";
 
 const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -96,6 +97,8 @@ export async function buildCli(dir) {
   }
   chmodSync(join(dir, BUNDLE_FILE), 0o755);
   const copied = copyAppBundle(resolve(dir, "..", "app", "dist"), join(dir, "dist", "app"));
+  const problem = noticesProblem(join(dir, "dist", "app"));
+  if (problem) throw new Error(problem);
   return { workspaces: bundledWorkspaces(result.metafile), appFiles: copied.length };
 }
 

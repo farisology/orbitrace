@@ -10,7 +10,14 @@ import tseslint from "typescript-eslint";
 export default defineConfig(
   {
     // .vscode-test/ is where @vscode/test-electron downloads VS Code by default (#106).
-    ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**", "**/.vscode-test/**"],
+    // dist-player/ is the public replay player build of packages/app (#152).
+    ignores: [
+      "**/dist/**",
+      "**/dist-player/**",
+      "**/node_modules/**",
+      "**/coverage/**",
+      "**/.vscode-test/**",
+    ],
   },
   js.configs.recommended,
   tseslint.configs.recommended,
