@@ -1,7 +1,11 @@
+// Node side: type-checks src and test with Node's types, for the ./node entry
+// (src/sources/node.ts and src/sources/claude-code/) and the tests, which run on Node.
+// tsconfig.browser.json checks the browser-safe main entry without them (#72).
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "types": ["node"]
   },
   "include": ["src", "test"]
 }

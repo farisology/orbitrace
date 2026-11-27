@@ -1,3 +1,4 @@
+import { EDITOR_HOST_META_VALUE, HOST_META_NAME, SESSION_META_NAME } from "@orbitrace/core";
 import { beforeEach, describe, expect, it } from "vitest";
 import * as vscode from "vscode";
 import { PANEL_VIEW_TYPE, PanelManager, panelId } from "../src/panels.js";
@@ -51,8 +52,8 @@ describe("PanelManager", () => {
     expect(html).toContain(
       `<base href="https:///webview-resource.example/workspace/ext/dist/app/">`,
     );
-    expect(html).toContain(`<meta name="orbitrace-host" content="editor">`);
-    expect(html).toContain(`<meta name="orbitrace-session" content="${summary.key}">`);
+    expect(html).toContain(`<meta name="${HOST_META_NAME}" content="${EDITOR_HOST_META_VALUE}">`);
+    expect(html).toContain(`<meta name="${SESSION_META_NAME}" content="${summary.key}">`);
   });
 
   it("reveals the open tab instead of opening a second one", () => {
@@ -93,7 +94,7 @@ describe("PanelManager", () => {
     manager.open({ kind: "demo" });
     const panel = fake.panels[0];
     expect(panel?.title).toBe("Orbitrace: demo");
-    expect(panel?.webview.html).not.toContain("orbitrace-host");
+    expect(panel?.webview.html).not.toContain(HOST_META_NAME);
     expect(panel?.webview.receiverCount).toBe(0);
     panel?.webview.receive({ id: 1, method: "listSessions", params: {} });
     await flush();

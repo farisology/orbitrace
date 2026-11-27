@@ -1,3 +1,4 @@
+import { HOST_META_NAME } from "@orbitrace/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as vscode from "vscode";
 import { activate, deactivate, SESSIONS_VIEW, workspaceFolderPaths } from "../src/extension.js";
@@ -83,7 +84,7 @@ describe("activate", () => {
     });
     await vscode.commands.executeCommand(COMMANDS.visualiseCurrent);
     expect(fake.panels[0]?.title).toBe("Orbitrace: demo");
-    expect(fake.panels[0]?.webview.html).not.toContain("orbitrace-host");
+    expect(fake.panels[0]?.webview.html).not.toContain(HOST_META_NAME);
     expect(fake.infos).toEqual([COMMAND_MESSAGES.noSessions]);
   });
 

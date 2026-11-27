@@ -30,3 +30,19 @@ updates:
         update-types: [minor, patch]
     commit-message:
       prefix: deps
+
+  # The pinned packaging tools of the release workflow (@vscode/vsce, ovsx). Not a
+  # workspace: the folder has its own package-lock.json, which the root entry does not see.
+  - package-ecosystem: npm
+    directory: /scripts/release/tools
+    target-branch: dev
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      release-tools-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: deps
