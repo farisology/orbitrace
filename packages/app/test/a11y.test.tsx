@@ -83,6 +83,31 @@ describe("axe-core: no WCAG 2.1 A or AA failures", () => {
     expect(await axeProblems()).toEqual([]);
   });
 
+  it("live host session following the live edge (Go live marked unavailable)", async () => {
+    const host = scriptedHost(SESSIONS);
+    renderApp(host, { sessions: SESSIONS, start: { paused: false } });
+    await vi.waitFor(() => expect(host.subscribed).toHaveLength(1));
+    act(() => host.push(replayUpdate(makeModel(), "busy")));
+    expect(screen.getByText("Live: working").textContent).toBe("Live: working, following");
+    expect(screen.getByRole("button", { name: "Go live" }).getAttribute("aria-disabled")).toBe(
+      "true",
+    );
+    expect(await axeProblems()).toEqual([]);
+  });
+
+  it("live host session behind the live edge, with Go live available", async () => {
+    const host = scriptedHost(SESSIONS);
+    renderApp(host, { sessions: SESSIONS, start: { paused: false } });
+    await vi.waitFor(() => expect(host.subscribed).toHaveLength(1));
+    act(() => host.push(replayUpdate(makeModel(), "idle")));
+    fireEvent.keyDown(document.body, { key: "ArrowLeft", shiftKey: true });
+    expect(screen.getByText("Live: idle").textContent).toMatch(/behind$/);
+    expect(screen.getByRole("button", { name: "Go live" }).getAttribute("aria-disabled")).toBe(
+      "false",
+    );
+    expect(await axeProblems()).toEqual([]);
+  });
+
   it("error state: the host cannot load the session", async () => {
     const host: HostTransport = {
       ...scriptedHost(),

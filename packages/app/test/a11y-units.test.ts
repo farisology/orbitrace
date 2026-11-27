@@ -112,6 +112,14 @@ describe("scrubValueText", () => {
     expect(scrubValueText(model, 10, true)).toBe(scrubValueText(model, 20, true));
     expect(scrubValueText(model, 0, true)).toBe("Playing, past 0:00 of 11:00, real time");
   });
+
+  it("leaves out the growing length while following the live edge", () => {
+    expect(scrubValueText(model, 42, true, true)).toBe("Following live, past 10:00, real time");
+    // A longer snapshot at the same minute reads the same, so a new snapshot is not re-read.
+    expect(scrubValueText(makeModel(59), 42, true, true)).toBe(
+      scrubValueText(model, 42, true, true),
+    );
+  });
 });
 
 describe("laneFocusIndex", () => {

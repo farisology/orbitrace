@@ -1,7 +1,7 @@
 /** React bindings for the replay clock: a context, a selector hook and the frame driver. */
 
 import { createContext, useCallback, useContext, useEffect, useSyncExternalStore } from "react";
-import type { Clock, ClockState } from "./clock";
+import { needsFrames, type Clock, type ClockState } from "./clock";
 
 export const ClockContext = createContext<Clock | null>(null);
 
@@ -33,23 +33,26 @@ export const browserFrames: FrameScheduler = {
   cancel: (handle) => window.cancelAnimationFrame(handle),
 };
 
-/** Advances the clock once per frame while it is playing. */
+/**
+ * Advances the clock once per frame while it needs frames (`needsFrames`): while it plays, but not
+ * while it holds still at the live edge between snapshots.
+ */
 export function useClockDriver(clock: Clock, frames: FrameScheduler = browserFrames): void {
-  const playing = useSyncExternalStore(
+  const running = useSyncExternalStore(
     clock.subscribe,
-    () => clock.getState().playing,
+    () => needsFrames(clock.getState()),
     () => false,
   );
   useEffect(() => {
-    if (!playing) return;
+    if (!running) return;
     let handle = 0;
     let last = -1;
     const frame = (now: number): void => {
       if (last >= 0) clock.tick((now - last) / 1000);
       last = now;
-      if (clock.getState().playing) handle = frames.request(frame);
+      if (needsFrames(clock.getState())) handle = frames.request(frame);
     };
     handle = frames.request(frame);
     return () => frames.cancel(handle);
-  }, [clock, frames, playing]);
+  }, [clock, frames, running]);
 }

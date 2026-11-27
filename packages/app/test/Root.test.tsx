@@ -162,7 +162,9 @@ describe("live session through Root", () => {
     await waitFor(() => expect(scripted.subscribed).toEqual(["session-1"]));
     act(() => scripted.push(replayUpdate(makeModel(40), "busy")));
     const marker = screen.getByText("Live: working");
-    expect(marker.className).toContain("badge-live");
+    expect(marker.closest(".badge")?.className).toContain("badge-live");
+    // The start options say paused, so the view does not follow: it says how far behind it is.
+    expect(marker.textContent).toBe("Live: working, 10 min 40 s behind");
     act(() => orrery.emit("select", { agentId: "a1" }));
     const scrubber = screen.getByRole("slider", { name: "Replay position" }) as HTMLInputElement;
     fireEvent.change(scrubber, { target: { value: "12" } });
@@ -173,7 +175,7 @@ describe("live session through Root", () => {
     expect(scrubber.value).toBe("12");
     expect(scrubber.max).toBe("55");
     act(() => scripted.push({ type: "ended" }));
-    expect(screen.getByText("Replay").className).not.toContain("badge-live");
+    expect(screen.getByText("Replay").closest(".badge")?.className).not.toContain("badge-live");
   });
 
   it("works end to end over the HTTP transport with a streamed live response", async () => {

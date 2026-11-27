@@ -1,6 +1,7 @@
 /**
  * Words for the polite live region: what a screen reader user hears when a replay loads, when a
- * live session changes state and when a live snapshot adds agents. Pure.
+ * live session changes state, when a live snapshot adds agents and when the view starts or stops
+ * following the live edge. Pure.
  *
  * Nothing here runs per frame. Playback position is not announced: the scrubber carries it.
  */
@@ -32,6 +33,23 @@ export function liveStatusAnnouncement(before: LiveStatus, after: LiveStatus): s
     default:
       return null;
   }
+}
+
+/** What is said when the view starts or stops following the live edge (issue 127). */
+export const FOLLOW_ANNOUNCEMENTS = {
+  entered: "Following the live session.",
+  left: "Stopped following the live session. Go live, or press End, to return.",
+} as const;
+
+/**
+ * What to say when follow mode changed from `before` to `after`, or `null`. Leaving follow
+ * because the session ended (`live` is false) says nothing here: "Live session ended." covers it.
+ * Called on transitions only, so it is said once per change and never per snapshot.
+ */
+export function followAnnouncement(before: boolean, after: boolean, live: boolean): string | null {
+  if (before === after) return null;
+  if (after) return FOLLOW_ANNOUNCEMENTS.entered;
+  return live ? FOLLOW_ANNOUNCEMENTS.left : null;
 }
 
 /**
