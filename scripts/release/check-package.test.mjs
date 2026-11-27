@@ -672,3 +672,23 @@ describe.skipIf(!built)("the real tarballs (after npm run build)", () => {
     },
   );
 });
+
+describe("the .vsix allow-list", () => {
+  it("accepts the listing icon that the extension manifest names in the .vsix, and no other image", () => {
+    const manifest = JSON.parse(
+      readFileSync(join(REPO_ROOT, "packages", "vscode", "package.json"), "utf8"),
+    );
+    expect(manifest.icon).toBe("media/icon.png");
+    expect(existsSync(join(REPO_ROOT, "packages", "vscode", manifest.icon))).toBe(true);
+    expect(checkPaths([`extension/${manifest.icon}`], VSIX_PACKAGE.allow)).toEqual([]);
+    expect(
+      checkPaths(
+        ["extension/media/screenshot.png", "extension/media/listing/session.png"],
+        VSIX_PACKAGE.allow,
+      ),
+    ).toEqual([
+      "extension/media/screenshot.png: not in the allow-list",
+      "extension/media/listing/session.png: not in the allow-list",
+    ]);
+  });
+});

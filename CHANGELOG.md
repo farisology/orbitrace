@@ -67,6 +67,9 @@ merged so far.
   origin (its Content-Security-Policy enforces this). A workflow that runs only when started by
   hand uploads the page as a GitHub Pages artefact; it does not deploy it. See `docs/player.md`
   (#19, #148).
+- VS Code extension: listing text for the VS Code Marketplace and Open VSX (description,
+  keywords, category, a 256x256 icon drawn from the Orbitrace mark, banner colour, and a readme
+  written as the listing page); nothing is published (#22).
 
 ### Changed
 

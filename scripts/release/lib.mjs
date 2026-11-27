@@ -126,6 +126,9 @@ export const VSIX_PACKAGE = {
     "extension/dist/app/assets/*.js",
     "extension/dist/app/assets/*.css",
     "extension/media/*.svg",
+    // The listing icon (#22), named by `icon` in packages/vscode/package.json. Only this one PNG:
+    // README images are loaded by URL and stay out of the .vsix.
+    "extension/media/icon.png",
   ],
   require: [
     "extension.vsixmanifest",
