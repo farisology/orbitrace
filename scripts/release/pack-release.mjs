@@ -11,6 +11,9 @@
 // Writes into <out>:
 //   orbitrace-core-<v>.tgz, orbitrace-renderer-<v>.tgz, orbitrace-<v>.tgz   (npm pack)
 //   orbitrace-vscode-<v>.vsix                                               (vsce package)
+//
+// The CLI tarball is also installed alone into an empty temporary project and run against a
+// synthetic config folder (install-check.mjs); a failure is an error of that artefact.
 //   SHA256SUMS            one "<sha256>  <file>" line per artefact (sha256sum -c reads it)
 //   release-manifest.json the version, the commit, and each artefact's size, hash and file list
 //
@@ -18,7 +21,7 @@
 // published. <out> must be empty or missing, and outside the repository, so artefacts are never
 // committed by mistake.
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   appendFileSync,
   existsSync,
@@ -31,7 +34,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   buildMachineLiterals,
   checkArtefact,
@@ -50,6 +53,9 @@ import {
   sha256File,
 } from "./lib.mjs";
 import { isValidVersion, readManifests, versionProblems } from "./version.mjs";
+
+/** The script that installs the CLI tarball alone and runs it. */
+export const INSTALL_CHECK_SCRIPT = fileURLToPath(new URL("./install-check.mjs", import.meta.url));
 
 export const USAGE =
   "usage: node scripts/release/pack-release.mjs --out <dir> [--version <v>] [--skip-vsix] [--require-publisher] [--summary <file>]";
@@ -221,6 +227,33 @@ function currentCommit(root) {
 }
 
 /**
+ * Run install-check.mjs on a tarball in a child process and return its errors. The child gets
+ * its own temporary folders and environment; see that script.
+ * @param {string} tarball
+ * @param {string} [script] the install check script, for tests
+ * @returns {string[]} errors, prefixed with "install: "
+ */
+export function runInstallCheckChild(tarball, script = INSTALL_CHECK_SCRIPT) {
+  const result = spawnSync(process.execPath, [script, "--tarball", tarball, "--json"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (result.error) return [`install: could not run the install check (${result.error.name})`];
+  try {
+    const parsed = JSON.parse(result.stdout.trim().split("\n").pop() ?? "");
+    if (!Array.isArray(parsed.errors)) throw new Error("no errors array");
+    const errors = parsed.errors.map((error) => `install: ${error}`);
+    if (result.status !== 0 && errors.length === 0) {
+      errors.push(`install: the install check exited with ${result.status}`);
+    }
+    return errors;
+  } catch {
+    return [`install: the install check failed before it reported (exit ${result.status})`];
+  }
+}
+
+/**
  * Build, check and hash every artefact.
  * @param {ReturnType<typeof parseArgs>} options
  * @param {string} [root]
@@ -240,9 +273,11 @@ export function packRelease(options, root = REPO_ROOT) {
   const workDir = mkdtempSync(join(tmpdir(), "orbitrace-release-"));
   try {
     const workspaces = readWorkspaceIndex(root);
-    const reports = NPM_PACKAGES.map((spec) =>
-      packAndCheck(spec, { root, destDir: out, workDir, workspaces }),
-    );
+    const reports = NPM_PACKAGES.map((spec) => {
+      const report = packAndCheck(spec, { root, destDir: out, workDir, workspaces });
+      if (spec.installCheck) report.errors.push(...runInstallCheckChild(report.path));
+      return report;
+    });
     if (!options.skipVsix) {
       reports.push(
         packAndCheckVsix({

@@ -2,19 +2,30 @@
 // Synthetic trees are written into temporary folders that each test removes. Planted private
 // strings are assembled at run time from fragments, so this file holds no literal match for the
 // privacy check. The last block packs the real core, renderer and cli (after `npm run build`).
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   buildMachineLiterals,
   checkArtefact,
+  checkBins,
   checkContents,
   checkManifest,
   checkPaths,
+  checkSelfContained,
   checkSourceMaps,
   entryPoints,
   formatReport,
+  moduleSpecifiers,
   packAndCheck,
   readWorkspaceIndex,
 } from "./check-package.mjs";
@@ -269,6 +280,113 @@ describe("checkSourceMaps", () => {
   });
 });
 
+describe("moduleSpecifiers", () => {
+  it("finds static, side-effect and dynamic imports and require calls, in order", () => {
+    const text = [
+      "#!/usr/bin/env node",
+      'import { a } from "node:fs";',
+      "import {",
+      "  b,",
+      "  c",
+      "} from 'widget-lib/sub';",
+      'import "./side.js";',
+      'export { d } from "../d.js";',
+      'export * from "@scope/pkg";',
+      'const e = await import("./lazy.js");',
+      'const f = require("os");',
+      'const g = requireFromHere("../package.json");',
+      'const text = "import x from y";',
+      "",
+    ].join("\n");
+    expect(moduleSpecifiers(text)).toEqual([
+      "node:fs",
+      "widget-lib/sub",
+      "./side.js",
+      "../d.js",
+      "@scope/pkg",
+      "./lazy.js",
+      "os",
+    ]);
+  });
+});
+
+describe("checkSelfContained", () => {
+  const files = {
+    "package.json": "{}",
+    "dist/index.js":
+      'import { a } from "node:fs";\nimport { b } from "path";\nimport "./chunk.js";\n',
+    "dist/chunk.js": "export {};\n",
+  };
+
+  it("accepts Node built-ins and shipped files with no dependencies", () => {
+    writeTree(dir, files);
+    const paths = new Set(listTree(dir).map((file) => file.path));
+    expect(checkSelfContained(dir, paths, ["dist/*.js"], { devDependencies: { x: "1" } })).toEqual(
+      [],
+    );
+  });
+
+  it("reports dependencies, foreign packages, unshipped files and path-like imports", () => {
+    writeTree(dir, {
+      ...files,
+      "dist/index.js": [
+        'import { a } from "@orbitrace/core";',
+        'import { b } from "@orbitrace/core";',
+        'import "./missing.js";',
+        'const c = await import("/synthetic/abs/x.js");',
+        'const d = require("widget-lib");',
+        "",
+      ].join("\n"),
+    });
+    const paths = new Set(listTree(dir).map((file) => file.path));
+    const errors = checkSelfContained(dir, paths, ["dist/index.js"], {
+      dependencies: { "@orbitrace/core": "1.0.0" },
+      peerDependencies: { widget: "1" },
+      optionalDependencies: {},
+    });
+    expect(errors).toEqual([
+      "package.json: declares 1 dependencies; a self-contained package installs with none",
+      "package.json: declares 1 peerDependencies; a self-contained package installs with none",
+      "dist/index.js: imports @orbitrace/core, which is not inside the tarball",
+      "dist/index.js: imports dist/missing.js, which is not shipped",
+      "dist/index.js: imports a module that is neither a Node.js built-in nor shipped",
+      "dist/index.js: imports widget-lib, which is not inside the tarball",
+    ]);
+    expect(errors.join("\n")).not.toContain("synthetic/abs");
+  });
+
+  it("reports globs that match no file", () => {
+    writeTree(dir, files);
+    const paths = new Set(listTree(dir).map((file) => file.path));
+    expect(checkSelfContained(dir, paths, ["bin/*.js"], {})).toEqual([
+      "no file matches the self-contained globs",
+    ]);
+  });
+});
+
+describe("checkBins", () => {
+  it("accepts an executable bin file with the node shebang", () => {
+    writeTree(dir, { "dist/cli.js": "#!/usr/bin/env node\nexport {};\n" });
+    chmodSync(join(dir, "dist", "cli.js"), 0o755);
+    expect(checkBins(dir, { bin: { tool: "./dist/cli.js" } }, "linux")).toEqual([]);
+    expect(checkBins(dir, { bin: "./dist/cli.js" }, "linux")).toEqual([]);
+    expect(checkBins(dir, {}, "linux")).toEqual([]);
+  });
+
+  it("reports a bin without the shebang or without the executable bit, and skips missing ones", () => {
+    writeTree(dir, { "dist/cli.js": "export {};\n" });
+    chmodSync(join(dir, "dist", "cli.js"), 0o644);
+    const manifest = { bin: { tool: "./dist/cli.js", other: "./dist/missing.js" } };
+    expect(checkBins(dir, manifest, "linux")).toEqual([
+      "dist/cli.js: a bin file must start with #!/usr/bin/env node",
+      "dist/cli.js: a bin file must be executable",
+    ]);
+    expect(checkBins(dir, manifest, "win32")).toEqual([
+      "dist/cli.js: a bin file must start with #!/usr/bin/env node",
+    ]);
+  });
+});
+
 describe("checkContents", () => {
   it("reports privacy findings and build-machine folders without printing them", () => {
     const home = "/" + "home/" + "synthetic-person";
@@ -401,7 +519,15 @@ describe.skipIf(!built)("the real tarballs (after npm run build)", () => {
         expect(library.files.some((file) => file.path.startsWith("src/"))).toBe(false);
       }
       expect(core.files.map((file) => file.path)).toContain("schema/replay-v1.schema.json");
-      expect(cli.files.map((file) => file.path)).toContain("dist/app/index.html");
+      // #120: the CLI is one bundle beside the web app: no src, no maps, no declarations.
+      const cliPaths = cli.files.map((file) => file.path);
+      expect(cliPaths).toContain("dist/app/index.html");
+      expect(cliPaths.filter((path) => !path.startsWith("dist/app/"))).toEqual([
+        "LICENSE",
+        "README.md",
+        "dist/index.js",
+        "package.json",
+      ]);
     },
   );
 });

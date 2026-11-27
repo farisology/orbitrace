@@ -53,10 +53,14 @@ export const DENIED_PATHS = [
  * manifest names (main, types, bin, exports), which are always required.
  *
  * Source maps: core and renderer build without them (tsconfig.build.json), so no map can point
- * at `src/`, which they do not ship. The CLI's build still writes maps (its tsconfig belongs to
- * the CLI), so it ships `src/` beside them and every map resolves inside the tarball. See
- * docs/releasing.md.
- * @type {readonly { dir: string, name: string, allow: readonly string[], require: readonly string[] }[]}
+ * at `src/`, which they do not ship. The CLI bundles itself and @orbitrace/core into one file,
+ * dist/index.js, with no source map and no declarations (#120). See docs/releasing.md.
+ *
+ * `selfContained` (the CLI only): globs of the files that run in Node. Each may import only
+ * Node.js built-ins and files shipped beside it, and the manifest may declare no dependencies,
+ * so the tarball installs alone. `installCheck`: pack-release.mjs installs the tarball alone into
+ * an empty project and runs it (install-check.mjs).
+ * @type {readonly { dir: string, name: string, allow: readonly string[], require: readonly string[], selfContained?: readonly string[], installCheck?: boolean }[]}
  */
 export const NPM_PACKAGES = [
   {
@@ -85,17 +89,15 @@ export const NPM_PACKAGES = [
       "package.json",
       "README.md",
       "LICENSE",
-      "dist/**/*.js",
-      "dist/**/*.d.ts",
-      "dist/**/*.js.map",
-      "dist/**/*.d.ts.map",
+      "dist/index.js",
       "dist/app/index.html",
       "dist/app/*.svg",
       "dist/app/assets/*.js",
       "dist/app/assets/*.css",
-      "src/**/*.ts",
     ],
-    require: ["README.md", "LICENSE", "dist/app/index.html"],
+    require: ["README.md", "LICENSE", "dist/index.js", "dist/app/index.html"],
+    selfContained: ["dist/index.js"],
+    installCheck: true,
   },
 ];
 

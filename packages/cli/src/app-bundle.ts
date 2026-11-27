@@ -3,8 +3,8 @@
  *
  * `npm run build` copies the web app's build output (`packages/app/dist`, without its type
  * declarations) into `packages/cli/dist/app`, so the one published package carries the app.
- * This module is compiled to `dist/app-bundle.js`, so the folder is `app/` beside it. The
- * loopback server (#17) serves files from the folder this returns.
+ * The build bundles this module into `dist/index.js` (#120), so the folder is `app/` beside
+ * the bundle. The loopback server (#17) serves files from the folder this returns.
  */
 
 import { existsSync } from "node:fs";

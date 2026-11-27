@@ -3,7 +3,7 @@
 import { createRequire } from "node:module";
 import { CORE_STATUS } from "@orbitrace/core";
 
-// `src/` and `dist/` are both one level below the package folder.
+// `src/version.ts` and the bundle `dist/index.js` are both one level below the package folder.
 const requireFromHere = createRequire(import.meta.url);
 const manifest = requireFromHere("../package.json") as { version: string };
 

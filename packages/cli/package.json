@@ -25,10 +25,9 @@
     "orbitrace": "./dist/index.js"
   },
   "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "files": [
-    "dist",
-    "src"
+    "dist/index.js",
+    "dist/app"
   ],
   "publishConfig": {
     "access": "public",
@@ -38,17 +37,16 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/copy-app.mjs",
+    "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@orbitrace/core": "0.0.0"
-  },
   "devDependencies": {
     "@orbitrace/app": "0.0.0",
+    "@orbitrace/core": "0.0.0",
     "@orbitrace/fixtures": "0.0.0",
     "@orbitrace/renderer": "0.0.0",
-    "@types/node": "^20.19.43"
+    "@types/node": "^20.19.43",
+    "esbuild": "^0.28.2"
   }
 }

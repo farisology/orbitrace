@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Copies the built web app (packages/app/dist) into packages/cli/dist/app, so the published CLI
-// carries the app it serves (decision on #76, option (a)). Runs after `tsc` in `npm run build`.
+// carries the app it serves (decision on #76, option (a)). scripts/build.mjs calls it after
+// bundling; it can also run on its own.
 // The app's type declarations (dist/types) are left out: they are not served.
 //
 // The workspace build runs @orbitrace/app before this package, because the CLI lists it as a
