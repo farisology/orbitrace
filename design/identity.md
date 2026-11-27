@@ -211,4 +211,16 @@ Brand, dimension and status colours, for labels, headings and links set in these
 | `--ok` `#5BE39A` | 12.31 | 11.71 | 11.04 | 8.67 |
 <!-- contrast:end -->
 
-Not measured: text on `rim-hi`, text on translucent overlays and gradients, and canvas text drawn over glows or at reduced opacity. Finished agents in the prototype draw their inner fill in `faint` at 55% opacity; any text drawn at reduced opacity needs its own check.
+### Canvas text
+
+The renderer holds every text it draws on the canvas to 4.5:1 (#117, built in #128). Each label sits on a backing box in `void`. The box's opacity is computed from the theme, once per palette, so that the text keeps 4.5:1 against the box composited over any colour, from black up to pure white. White is the worst case: glows can stack up to it, and the effort core and comet heads are white. The computation aims at 4.6:1 (`CONTRAST_TARGET`) and never goes below an opacity of 0.72 (`MIN_BACKING_ALPHA`). The code is in `packages/renderer/src/contrast.ts` and `theme.ts`.
+
+Backing opacity with the default theme:
+
+- 0.72 (the minimum; these colours need less): `text` for agent labels and the idle-skip label, `bench` for the handback tag and edit tags, `pulse` for shell tags, `rig` for read tags.
+- 0.81: `dim` for detail rows and wave ring summaries, `wire` for agent tags.
+- 0.86: `faint` for finished agents' labels and detail rows and for wave labels, `fault` for failure tags.
+
+A host theme with other colours gets its own opacities. A colour that does not parse, or is translucent, gets an opaque backing. `packages/renderer/test/contrast.test.ts` checks every kind of canvas text against the floor, and checks the texts of drawn still frames against the boxes under them.
+
+Not measured: text on `rim-hi`, text on translucent overlays and gradients in the app shell, and canvas text while it fades in or out (for example a wave label's 0.3 s move), when it is briefly below full opacity. Finished agents in the prototype draw their inner fill in `faint` at 55% opacity; that fill is a mark, not text.

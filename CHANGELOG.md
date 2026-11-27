@@ -42,5 +42,46 @@ merged so far.
 - A manual release workflow that builds and checks the npm tarballs and the `.vsix` and uploads
   them with their SHA-256 sums; it publishes nothing (#20). Each npm package now ships a README,
   the licence and repository links (#110).
+- Web app: follow a running session. A session the host lists as running opens at its newest
+  moment and keeps up as it grows. Scrubbing, Home or Pause leaves follow; the Go live button or
+  the End key returns to it. The Live badge says "following" or how far behind the view is
+  (#127, #133).
+- Web app: an accessibility pass for WCAG 2.1 AA. Screen readers get a hidden table of the agents
+  and a polite live region; failures, selection and tool kinds no longer rely on colour alone;
+  focus outlines show in editor tabs; the layout reflows at narrow widths and 200% zoom. The audit
+  is in `packages/app/ACCESSIBILITY.md` (#13, #116).
+- `@orbitrace/renderer`: a frame-time budget with level of detail (full up to 100 agents, reduced
+  up to 250, minimal above that with finished waves collapsed), and a label layout in which labels
+  never overlap and the selected and hovered agents always keep theirs. New `bench:node`
+  benchmarks and settings for `bench:browser`; the results are in `docs/performance.md` (#14,
+  #115).
+
+### Changed
+
+- The privacy check scans file and folder names as well as file contents. Its `--range` mode
+  warns about author and committer emails that are not noreply addresses (`--strict-authors`
+  makes them failures), and extra patterns can come from `.privacy-denylist.local` or
+  `ORBITRACE_PRIVACY_DENYLIST`. CI runs the VS Code integration test in a job that does not block
+  a merge yet (#57, #112).
+- The app's session picker and the extension's Sessions view format relative times with one
+  shared function, `formatAgo` from `@orbitrace/core`, and the extension builds its host meta tags
+  from core's constants. A new test runs the app's HTTP transport against the built CLI (#129,
+  #131).
+
+### Fixed
+
+- `@orbitrace/renderer`: wave labels sit on their own ring, clear of nodes, arcs, beams and tags.
+  Every canvas label is drawn on a backing box that keeps its text at 4.5:1 or more over anything
+  behind it. Flashes start at least 0.35 s apart, so no more than three fall in one second (#128,
+  #117, #118, #134).
+- The CLI tarball installs on its own: `@orbitrace/core` is bundled into its `dist/index.js`, and
+  it no longer ships `src/`, source maps or type declarations (#120, #132).
+
+### Security
+
+- A replay replaces an agent type, tool name or MCP server name that is not a plain identifier
+  with a fixed label (`subagent`, `unknown`, `mcp:unknown`), so free text in such a name cannot
+  reach a shared replay. The audit of the export path is in `docs/security/export-audit.md` (#23,
+  #114).
 
 [Unreleased]: https://github.com/farisology/orbitrace/commits/dev

@@ -19,7 +19,7 @@ Nothing is published to npm or a marketplace; see [getting-started.md](getting-s
 | `@orbitrace/app`      | `packages/app`      | React and Vite shell: orrery, inspector, timeline, controls, event feed and session picker. Talks to its host only through `HostTransport`. Private.                                                                                                                       | core (`parseSession`, `buildReplay`, `validateReplay`, `describeReplayProblems`, `replayFeed`, `toRealSeconds`); renderer (`createOrrery`)                     |
 | `@orbitrace/fixtures` | `packages/fixtures` | Seeded generator of synthetic transcripts, the paths of the files in `fixtures/`, and the golden replay files. Used by tests and for the demo. Private.                                                                                                                    | core                                                                                                                                                           |
 | `orbitrace-vscode`    | `packages/vscode`   | Editor extension: a Sessions view, four commands and one editor tab per session, answered by the editor side of `HostTransport`. Private.                                                                                                                                  | core, bundled into `dist/extension.js`; the built app, copied into `dist/app` (both are devDependencies, see [below](#how-the-extension-ships-the-web-app-87)) |
-| `orbitrace`           | `packages/cli`      | Command line: `list`, `export` and `open`; `open` serves the app over a loopback server. Private.                                                                                                                                                                          | core; the built app, copied into `dist/app` (a devDependency, see [below](#how-the-cli-ships-the-web-app-76))                                                  |
+| `orbitrace`           | `packages/cli`      | Command line: `list`, `export` and `open`; `open` serves the app over a loopback server. Private.                                                                                                                                                                          | core, bundled into `dist/index.js` (#120); the built app, copied into `dist/app` (both are devDependencies, see [below](#how-the-cli-ships-the-web-app-76))    |
 
 Rules:
 
@@ -206,21 +206,35 @@ install. The renderer's own README describes the demo page parameters and the mo
 
 ## How the CLI ships the web app (#76)
 
-Decision by the lead on #76: option (a). Implemented by #16.
+Decision by the lead on #76: option (a). Implemented by #16; since #120 the CLI is one bundled
+file that needs no other package.
 
-- `npm run build` in `packages/cli` runs `tsc`, then `scripts/copy-app.mjs`, which copies the
-  built web app (`packages/app/dist`, without its `types/` folder of declarations) into
-  `packages/cli/dist/app`. An older copy is removed first. The script fails when
+- `npm run build` in `packages/cli` runs `scripts/build.mjs`. It removes the old `dist/`, then
+  esbuild bundles `src/index.ts` and everything it imports, `@orbitrace/core` included (its main
+  and its `/node` entry), into one ES module, `dist/index.js`, for Node.js 20 or later. Node
+  built-ins stay external. There are no source maps and no type declarations, and the file is
+  made executable. The build fails if code from a third-party package (any input under
+  `node_modules`) ends up in the bundle, so a new bundled dependency cannot ship before its
+  licence is noted in `NOTICE`.
+- Then `scripts/copy-app.mjs` copies the built web app (`packages/app/dist`, without its `types/`
+  folder of declarations) into `packages/cli/dist/app`. It fails when
   `packages/app/dist/index.html` is missing, so a CLI build never ships without the app.
-- `@orbitrace/app` stays a devDependency of the CLI. That is enough for
-  `scripts/run-workspaces.mjs` to build the app before the CLI. The app does not need to be
-  published or to export its build output.
-- `files` in `packages/cli/package.json` is `dist`, so a packed CLI carries the app. The package
-  is marked private and is not published yet.
-- At run time `appBundleDir()` (`packages/cli/src/app-bundle.ts`, compiled to
-  `dist/app-bundle.js`) returns the `app/` folder beside it, or `null` when it holds no
-  `index.html`. The loopback server (#17) serves from that folder. A test imports the built
-  module and checks that it finds `index.html`.
+- `@orbitrace/core` and `@orbitrace/app` are devDependencies of the CLI. That is enough for
+  `scripts/run-workspaces.mjs` to build both before the CLI. Neither is a run-time dependency:
+  the CLI's `package.json` has no `dependencies`, so an installed tarball needs nothing else. The
+  app does not need to be published or to export its build output.
+- `files` in `packages/cli/package.json` is `["dist/index.js", "dist/app"]`, so a packed CLI
+  carries the command and the app, and no `src/`, maps or declarations. The package is marked
+  private and is not published yet.
+- At run time `appBundleDir()` (`packages/cli/src/app-bundle.ts`, bundled into `dist/index.js`)
+  returns the `app/` folder beside the bundle, or `null` when it holds no `index.html`. The
+  loopback server (#17) serves from that folder. `test/app-bundle.test.ts` imports the built
+  `dist/index.js` and checks that it finds `index.html`; `test/build.test.ts` checks that `dist/`
+  holds only `index.js` and `app/`, and that the bundle is executable and imports only Node
+  built-ins.
+
+The tarball checks and the offline install check of the CLI are in
+[releasing.md](releasing.md#artefacts).
 
 Option (b), publishing `@orbitrace/app` with its assets as a runtime dependency and resolving
 them with `import.meta.resolve`, was not chosen: it adds a second published package and an

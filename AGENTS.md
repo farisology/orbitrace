@@ -2,7 +2,7 @@
 
 These rules apply to every coding agent working in this repository. Humans can read them too: this is the detailed form of [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**Status: nothing is released yet.** Nothing is on npm or an extension marketplace. Every command below is a script in the root `package.json`, and CI runs them. How the packages fit together is in [docs/architecture.md](docs/architecture.md); how to build and try them is in [docs/getting-started.md](docs/getting-started.md).
+**Status: nothing is released yet.** Nothing is on npm or an extension marketplace. Every command below is a script in the root `package.json`, and CI runs them. How the packages fit together is in [docs/architecture.md](docs/architecture.md); how to build and try them is in [docs/getting-started.md](docs/getting-started.md). How a release is cut, and how to add a changelog entry, is in [docs/releasing.md](docs/releasing.md); the changes so far are in [CHANGELOG.md](CHANGELOG.md).
 
 ## 1. Privacy rules (hard rules)
 
@@ -47,7 +47,10 @@ npm run privacy
 
 - If a command fails, fix the cause or report the failure in the pull request. Do not hide it or skip it.
 - If you could not run a command, say so and why. Never report a result you did not see.
-- `npm run privacy` fails when forbidden strings appear in the files. `npm run privacy -- --range <base>..<head>` checks every line your commits add and every commit message; CI runs both (`.github/workflows/ci.yml`). Passing them does not prove a change is clean; they only catch known patterns, so also check the privacy rules above by hand.
+- `npm run privacy` fails when forbidden strings appear in the files or in their file and folder names. `npm run privacy -- --range <base>..<head>` checks every line your commits add, every path they add or rename to, and every commit message; CI runs both (`.github/workflows/ci.yml`). Findings name the file, line and rule, never the matched text.
+- The range check also warns about each commit whose author or committer email is not a noreply address. The warning names the short sha, never the address, and the check still passes; `--strict-authors` turns these warnings into failures. CI does not use it yet.
+- Extra private-name patterns come from the git-ignored `.privacy-denylist.local` at the repository root and from the environment variable `ORBITRACE_PRIVACY_DENYLIST`; both apply. Never commit or print them. The details are in [CONTRIBUTING.md](CONTRIBUTING.md#before-you-open-a-pull-request).
+- Passing these checks does not prove a change is clean; they only catch known patterns, so also check the privacy rules above by hand.
 - Use a Node version that matches `engines` in the root `package.json` (`.nvmrc` names the lowest).
 - Fill in every box of the privacy checklist in [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md).
 
