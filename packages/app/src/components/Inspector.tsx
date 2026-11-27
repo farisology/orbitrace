@@ -1,7 +1,8 @@
 /**
  * Details of the selected agent: callsign, model family, effort, wave, start and end, token
- * classes and tool calls by kind with failures. With nothing selected it shows the session
- * totals. All times are real time (idle gaps included), converted with `toRealSeconds`.
+ * classes with a cost estimate (#26, `LedgerTables.tsx`) and tool calls by kind with failures.
+ * With nothing selected it shows the session totals, and the estimate by model and by agent.
+ * All times are real time (idle gaps included), converted with `toRealSeconds`.
  */
 
 import { useCallback, useRef } from "react";
@@ -10,7 +11,6 @@ import {
   type ReplayAgent,
   type ReplayAgentId,
   type ReplayModel,
-  type ReplayTotals,
 } from "@orbitrace/core";
 import {
   KIND_LABELS,
@@ -24,36 +24,16 @@ import {
 } from "../agent-stats";
 import type { ClockState } from "../clock";
 import { formatClock, formatCount, formatDuration } from "../format";
+import { agentLedger, ledgerOf } from "../ledger";
 import { useClockValue } from "../use-clock";
 import { CallMark } from "./CallMark";
+import { AgentLedgerView, SessionLedgerView } from "./LedgerTables";
 
 const PHASE_LABELS: Readonly<Record<AgentPhase, string>> = {
   waiting: "Not started",
   running: "Running",
   finished: "Finished",
 };
-
-function TokenTable({ totals, caption }: { totals: ReplayTotals; caption: string }) {
-  const rows: [string, number][] = [
-    ["Input", totals.inputTokens],
-    ["Output", totals.outputTokens],
-    ["Cache read", totals.cacheReadTokens],
-    ["Cache creation", totals.cacheCreationTokens],
-  ];
-  return (
-    <table className="stat-table">
-      <caption>{caption}</caption>
-      <tbody>
-        {rows.map(([label, value]) => (
-          <tr key={label}>
-            <th scope="row">{label}</th>
-            <td>{formatCount(value)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
 
 function KindTable({ agent }: { agent: ReplayAgent }) {
   const kinds = toolCallsByKind(agent);
@@ -91,6 +71,13 @@ function KindTable({ agent }: { agent: ReplayAgent }) {
       </tfoot>
     </table>
   );
+}
+
+/** The selected agent's tokens and cost estimate (#26). */
+function AgentLedger({ model, agent }: { model: ReplayModel; agent: ReplayAgent }) {
+  const ledger = ledgerOf(model);
+  const entry = agentLedger(ledger, agent.id);
+  return entry === undefined ? null : <AgentLedgerView ledger={ledger} entry={entry} />;
 }
 
 function AgentDetails({ model, agent }: { model: ReplayModel; agent: ReplayAgent }) {
@@ -137,7 +124,7 @@ function AgentDetails({ model, agent }: { model: ReplayModel; agent: ReplayAgent
         <dt>Replies</dt>
         <dd>{formatCount(agent.totals.replies)}</dd>
       </dl>
-      <TokenTable totals={agent.totals} caption="Tokens" />
+      <AgentLedger model={model} agent={agent} />
       <KindTable agent={agent} />
     </>
   );
@@ -164,7 +151,7 @@ function SessionDetails({ model }: { model: ReplayModel }) {
         <dt>Idle cut</dt>
         <dd>{formatDuration(totals.realDuration - totals.duration)}</dd>
       </dl>
-      <TokenTable totals={totals} caption="Session tokens" />
+      <SessionLedgerView ledger={ledgerOf(model)} />
     </>
   );
 }

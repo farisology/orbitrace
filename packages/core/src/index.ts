@@ -47,5 +47,6 @@ export * from "./sources/index.js";
 export * from "./host/errors.js";
 export * from "./protocol/index.js";
 export * from "./format/index.js";
+export * from "./ledger/index.js";
 // Types only (#84): erased at build time, so no code of the Node-entry replayer reaches this entry.
 export type { SessionReplayUpdate, SessionReplayListener } from "./host/session-replayer.js";
