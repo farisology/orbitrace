@@ -2,7 +2,8 @@
  * Parse one agent transcript (the main one or a subagent's) into a `ParsedRun`.
  *
  * Only structural facts are taken from each line: type, timestamp, message id, model,
- * effort, usage numbers, tool_use ids and names, tool_result ids and `is_error`. Text,
+ * effort, usage numbers (including the cache-write split by lifetime, #191), tool_use ids and
+ * names, tool_result ids and `is_error`. Text,
  * thinking, tool inputs and outputs, paths and every other value are never read into the
  * result.
  *
@@ -26,8 +27,10 @@ import { classifyClaudeCodeTool } from "./tools.js";
 import {
   asArray,
   asNonEmptyString,
+  asOptionalTokenCount,
   asRecord,
   asTokenCount,
+  maxOptional,
   parseTimestamp,
   type JsonRecord,
 } from "./values.js";
@@ -66,6 +69,10 @@ interface PendingReply {
   outputTokens: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
+  /** `null` until a line records `usage.cache_creation.ephemeral_5m_input_tokens`. */
+  cacheWrite5mTokens: number | null;
+  /** `null` until a line records `usage.cache_creation.ephemeral_1h_input_tokens`. */
+  cacheWrite1hTokens: number | null;
   readonly toolUseIds: string[];
 }
 
@@ -143,6 +150,8 @@ class RunAccumulator {
         outputTokens: 0,
         cacheReadTokens: 0,
         cacheCreationTokens: 0,
+        cacheWrite5mTokens: null,
+        cacheWrite1hTokens: null,
         toolUseIds: [],
       };
       this.replies.set(messageId, reply);
@@ -168,6 +177,19 @@ class RunAccumulator {
         reply.cacheCreationTokens,
         asTokenCount(usage["cache_creation_input_tokens"]),
       );
+      // #191: the split by cache lifetime, when this Claude Code version writes it. Kept as
+      // "not recorded" (null) until a line has a readable count, so it is never zero-filled.
+      const split = asRecord(usage["cache_creation"]);
+      if (split !== null) {
+        reply.cacheWrite5mTokens = maxOptional(
+          reply.cacheWrite5mTokens,
+          asOptionalTokenCount(split["ephemeral_5m_input_tokens"]),
+        );
+        reply.cacheWrite1hTokens = maxOptional(
+          reply.cacheWrite1hTokens,
+          asOptionalTokenCount(split["ephemeral_1h_input_tokens"]),
+        );
+      }
     }
 
     for (const raw of asArray(message["content"])) {
@@ -221,6 +243,12 @@ class RunAccumulator {
           outputTokens: reply.outputTokens,
           cacheReadTokens: reply.cacheReadTokens,
           cacheCreationTokens: reply.cacheCreationTokens,
+          ...(reply.cacheWrite5mTokens === null
+            ? {}
+            : { cacheWrite5mTokens: reply.cacheWrite5mTokens }),
+          ...(reply.cacheWrite1hTokens === null
+            ? {}
+            : { cacheWrite1hTokens: reply.cacheWrite1hTokens }),
         };
         return {
           order: reply.order,

@@ -1,23 +1,31 @@
 /**
- * Ticket #26. The price table the ledger uses by default, and its checks.
+ * Tickets #26 and #191. The price table the ledger uses by default, and its checks.
  *
  * Source: https://platform.claude.com/docs/en/about-claude/pricing ("Model pricing" table,
- * "Prompt caching" and "Long context pricing" sections), read on 27 Nov 2026. Model ids are
- * the Claude API ids from https://platform.claude.com/docs/en/models/overview, the model pages
- * under https://platform.claude.com/docs/en/models/ and
- * https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions, read the same
- * day. Prices are in US dollars per million tokens, written as the page writes them and kept
- * as integer micro-dollars per million tokens. docs/ledger.md lists the same source and date.
+ * "Prompt caching" section), read on 27 Nov 2026 and read again the same day for #191: every
+ * price below was compared with the page and matches it. Model ids are the Claude API ids from
+ * https://platform.claude.com/docs/en/models/overview, the model pages linked from it (for
+ * example https://platform.claude.com/docs/en/models/opus-5-5/overview),
+ * https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions and, for the
+ * retired models, https://platform.claude.com/docs/en/about-claude/model-deprecations, all
+ * checked the same day. Prices are in US dollars per million tokens, written as the page writes
+ * them and kept as integer micro-dollars per million tokens. docs/ledger.md lists the same source
+ * and date.
  *
  * Rules:
  * - A model is matched by its exact id, as Claude Code writes it in `message.model`. A dated
- *   form is listed only where the documentation names it (`claude-haiku-4-5-20251001` and its
- *   alias `claude-haiku-4-5`). No prefix, family or pattern match: an id the table does not list
- *   is unpriced, and its cost is never guessed.
- * - Cache writes have two prices, for the 5-minute and the 1-hour cache lifetime. A transcript
- *   (and so a replay) records only the total of cache creation tokens, not which lifetime was
- *   written. The ledger uses the 5-minute price by default, the lifetime the prompt caching
- *   documentation names as the default; a caller can choose the 1-hour price.
+ *   form is listed only where a public page names it; the page is noted next to each entry that
+ *   has one. The current models' pages name only dateless ids (from the 4.6 generation on, the
+ *   dateless id is the pinned snapshot), so they have no dated form. A date is never added or
+ *   stripped by guess. No prefix, family or pattern match: an id the table does not list is
+ *   unpriced, and its cost is never guessed.
+ * - Cache writes have two prices, for the 5-minute and the 1-hour cache lifetime. Recent Claude
+ *   Code transcripts record the split (`usage.cache_creation`, #191) and the ledger prices each
+ *   part at its own price. Where the split is not recorded (a replay file, which never carries
+ *   it, or an older transcript), the ledger uses the 5-minute price by default, the lifetime the
+ *   prompt caching documentation names as the default
+ *   (https://platform.claude.com/docs/en/build-with-claude/prompt-caching); a caller can choose
+ *   the 1-hour price.
  * - Claude Haiku 5.5 has a second set of prices for a request whose prompt is over 100,000
  *   tokens. Its prompt length counts input, cache read and cache write tokens; each reply is
  *   one request and is priced on its own.
@@ -180,16 +188,19 @@ export const DEFAULT_PRICE_TABLE: PriceTable = {
       prices: row("5", "6.25", "10", "0.50", "25"),
     },
     {
+      // Dated id: https://platform.claude.com/docs/en/models/opus-4-5/overview
       ids: ["claude-opus-4-5", "claude-opus-4-5-20251101"],
       label: "Claude Opus 4.5",
       prices: row("5", "6.25", "10", "0.50", "25"),
     },
     {
+      // Dated id: https://platform.claude.com/docs/en/about-claude/model-deprecations
       ids: ["claude-opus-4-1-20250805"],
       label: "Claude Opus 4.1",
       prices: row("15", "18.75", "30", "1.50", "75"),
     },
     {
+      // Dated id: https://platform.claude.com/docs/en/about-claude/model-deprecations
       ids: ["claude-opus-4-20250514"],
       label: "Claude Opus 4",
       prices: row("15", "18.75", "30", "1.50", "75"),
@@ -210,11 +221,13 @@ export const DEFAULT_PRICE_TABLE: PriceTable = {
       prices: row("3", "3.75", "6", "0.30", "15"),
     },
     {
+      // Dated id: https://platform.claude.com/docs/en/models/sonnet-4-5/overview
       ids: ["claude-sonnet-4-5", "claude-sonnet-4-5-20250929"],
       label: "Claude Sonnet 4.5",
       prices: row("3", "3.75", "6", "0.30", "15"),
     },
     {
+      // Dated id: https://platform.claude.com/docs/en/about-claude/model-deprecations
       ids: ["claude-sonnet-4-20250514"],
       label: "Claude Sonnet 4",
       prices: row("3", "3.75", "6", "0.30", "15"),
@@ -226,6 +239,8 @@ export const DEFAULT_PRICE_TABLE: PriceTable = {
       longPrompt: { overPromptTokens: 100_000, prices: row("0.50", "0.625", "1", "0.05", "2.50") },
     },
     {
+      // Dated id: https://platform.claude.com/docs/en/models/haiku-4-5/overview and
+      // https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions
       ids: ["claude-haiku-4-5", "claude-haiku-4-5-20251001"],
       label: "Claude Haiku 4.5",
       prices: row("1", "1.25", "2", "0.10", "5"),

@@ -57,12 +57,29 @@ export interface RawLineBase {
   readonly [key: string]: unknown;
 }
 
+/**
+ * Cache writes of one request by cache lifetime (#191). Anthropic's prompt caching
+ * documentation (https://platform.claude.com/docs/en/build-with-claude/prompt-caching) shows this
+ * object in the API's usage and says `cache_creation_input_tokens` equals the sum of its values.
+ * Seen in Claude Code transcripts (key names checked on one machine, 27 Nov 2026); older
+ * transcripts may not have it.
+ */
+export interface RawCacheCreation {
+  /** Tokens written to the 5-minute prompt cache. */
+  readonly ephemeral_5m_input_tokens?: number;
+  /** Tokens written to the 1-hour prompt cache. */
+  readonly ephemeral_1h_input_tokens?: number;
+  readonly [key: string]: unknown;
+}
+
 /** Token usage on an assistant message. When merging lines of one message, take the maximum of each field. */
 export interface RawUsage {
   readonly input_tokens?: number;
   readonly output_tokens?: number;
   readonly cache_read_input_tokens?: number;
   readonly cache_creation_input_tokens?: number;
+  /** The cache writes split by lifetime (#191). Merged like the counts: the maximum of each key. */
+  readonly cache_creation?: RawCacheCreation;
   readonly [key: string]: unknown;
 }
 

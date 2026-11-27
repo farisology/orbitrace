@@ -7,6 +7,7 @@ import {
   CONFIG_FOLDER,
   MANIFEST_FILE,
   renderFixtureTree,
+  type BuiltSession,
   type GenerateOptions,
 } from "./generator.js";
 
@@ -82,4 +83,21 @@ export function checkFixtureTree(
 /** True when the folder holds exactly what the generator writes. */
 export function isFixtureTreeCurrent(diff: FixtureTreeDiff): boolean {
   return diff.missing.length === 0 && diff.changed.length === 0 && diff.extra.length === 0;
+}
+
+/**
+ * #191. Write the files of one generated session (for example an on-demand scenario from
+ * `generateExtraSession`) into `configDir`, a folder laid out like a Claude Code config folder,
+ * which must be a temporary or synthetic one. Existing files are overwritten; nothing else is
+ * removed. Returns the absolute paths written.
+ */
+export function writeGeneratedSession(configDir: string, session: BuiltSession): string[] {
+  const written: string[] = [];
+  for (const file of session.files) {
+    const target = toDiskPath(configDir, file.path);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, file.content, "utf8");
+    written.push(target);
+  }
+  return written;
 }

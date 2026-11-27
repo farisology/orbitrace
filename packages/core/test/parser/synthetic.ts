@@ -69,6 +69,8 @@ export interface Usage {
   readonly output?: number;
   readonly cacheRead?: number;
   readonly cacheCreation?: number;
+  /** Written as `usage.cache_creation` exactly as given (#191). Left out when undefined. */
+  readonly cacheCreationSplit?: unknown;
 }
 
 export function assistant(
@@ -94,6 +96,10 @@ export function assistant(
       cache_creation_input_tokens: options.usage.cacheCreation ?? 0,
       service_tier: "standard",
     };
+    if (options.usage.cacheCreationSplit !== undefined) {
+      (message["usage"] as Record<string, unknown>)["cache_creation"] =
+        options.usage.cacheCreationSplit;
+    }
   }
   const line: Record<string, unknown> = { type: "assistant", ...common(options), message };
   if (options.effort !== undefined) line["effort"] = options.effort;

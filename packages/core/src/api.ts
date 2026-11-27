@@ -62,6 +62,17 @@ export interface BuildReplayOptions {
    * builder makes a fresh build; the guarantees do not hold across that one step.
    */
   readonly previous?: ReplayModel;
+  /**
+   * Tickets #190 and #191. Also write each reply's `ReplayReplyDetails` (its cache writes by
+   * lifetime and its own model id) when the transcript recorded them, for the ledger. Default
+   * false, so the result is exactly what it was before the option existed.
+   *
+   * In memory only. Replay format v1 has no field for the details, so a model built with this
+   * option does not pass `validateReplay` or `describeReplayProblems`; check it with
+   * `describeReplayModelProblems` instead. `exportReplay` drops the details, so the exported
+   * bytes are the same with or without this option.
+   */
+  readonly replyDetails?: boolean;
 }
 
 /** Defaults taken from the prototype. `replyPaddingSeconds` is left to ticket #8. */
@@ -74,7 +85,8 @@ export const REPLAY_BUILD_DEFAULTS = {
 /**
  * Ticket #8. Turn a parsed session into a structure-only replay. Pure and synchronous.
  * Copies each call's `kind` from the parsed call and never derives it from the name.
- * The result must validate against `schema/replay-v1.schema.json`.
+ * The result must validate against `schema/replay-v1.schema.json`, except for the in-memory
+ * reply details that `BuildReplayOptions.replyDetails` adds.
  */
 export type BuildReplay = (session: ParsedSession, options?: BuildReplayOptions) => ReplayModel;
 
@@ -148,7 +160,12 @@ export interface ExportOptions {
 
 export interface ExportResult {
   readonly format: ExportFormat;
-  /** Suggested file name, ending in `.replay.json`. Must not contain a session id or project name. */
+  /**
+   * A suggested file name (#192): neutral, with no session id, project name or other session
+   * detail in it. `exportReplay` returns `REPLAY_EXPORT_FILE_NAME` (`orbitrace.replay.json`). A
+   * host or app may suggest another name under the same rule instead, so a caller must not rely
+   * on the exact name or its ending.
+   */
   readonly fileName: string;
   readonly mediaType: "application/json";
   readonly data: string;

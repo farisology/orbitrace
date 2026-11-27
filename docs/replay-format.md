@@ -158,6 +158,16 @@ One model reply, merged from every transcript line that shares a message id.
 | `cacheReadTokens`     | integer |                                      |
 | `cacheCreationTokens` | integer |                                      |
 
+#### In-memory reply details
+
+Replay files do not carry a reply's cache writes split by lifetime or its own model id (#190,
+#191). The in-memory model may hold them (`ReplayReplyDetails`: `cacheWrite5mTokens`,
+`cacheWrite1hTokens`, `model`) when it is built with `buildReplay(parsed, { replyDetails: true })`,
+for the ledger only. Format v1 and `schema/replay-v1.schema.json` do not change: `exportReplay`
+drops the details (its allow-list follows `ReplayReply`), `validateReplay` still rejects a file
+that has them, and every golden replay is byte for byte the same. A model with details is checked
+with `describeReplayModelProblems` instead. See [docs/ledger.md](ledger.md).
+
 ### Warp
 
 | Field     | Type           | Notes                                  |

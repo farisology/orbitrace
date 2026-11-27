@@ -8,8 +8,12 @@
 import { INVENTED_LINE_TYPES } from "./lines.js";
 import type { Seed } from "./rng.js";
 import {
+  EXTRA_SCENARIOS,
+  EXTRA_SCENARIO_NAMES,
   SCENARIOS,
   SCENARIO_NAMES,
+  type ExtraScenarioDefinition,
+  type ExtraScenarioName,
   type ScenarioDefinition,
   type ScenarioName,
 } from "./scenarios.js";
@@ -109,6 +113,26 @@ export function getScenario(name: string): ScenarioDefinition {
   return SCENARIOS[name];
 }
 
+/** Run a scenario's script with a seed of its own, and build the session. */
+function runScenario(
+  scenario: ScenarioDefinition | ExtraScenarioDefinition,
+  seed: string,
+): BuiltSession {
+  const session = new SessionBuilder({
+    seed: `${seed}/${scenario.name}`,
+    project: scenario.project,
+    startTime: scenario.startTime,
+    model: scenario.model,
+    effort: scenario.effort,
+    inventedLineTypes: INVENTED_LINE_TYPES,
+    ...(scenario.gitBranch === undefined ? {} : { gitBranch: scenario.gitBranch }),
+    ...(scenario.entrypoint === undefined ? {} : { entrypoint: scenario.entrypoint }),
+    ...(scenario.cacheWrites === undefined ? {} : { cacheWrites: scenario.cacheWrites }),
+  });
+  scenario.script(session);
+  return session.build();
+}
+
 /**
  * Generate one session. The same scenario and seed always give the same bytes, and a
  * scenario's output does not depend on which other scenarios exist.
@@ -119,23 +143,44 @@ export function generateSession(
 ): GeneratedSession {
   const scenario = getScenario(name);
   const seed = String(options.seed ?? DEFAULT_SEED);
-  const session = new SessionBuilder({
-    seed: `${seed}/${scenario.name}`,
-    project: scenario.project,
-    startTime: scenario.startTime,
-    model: scenario.model,
-    effort: scenario.effort,
-    inventedLineTypes: INVENTED_LINE_TYPES,
-    ...(scenario.gitBranch === undefined ? {} : { gitBranch: scenario.gitBranch }),
-    ...(scenario.entrypoint === undefined ? {} : { entrypoint: scenario.entrypoint }),
-  });
-  scenario.script(session);
   return {
     name: scenario.name,
     description: scenario.description,
     seed,
     project: scenario.project,
-    ...session.build(),
+    ...runScenario(scenario, seed),
+  };
+}
+
+/** #191. A session of an on-demand scenario (`EXTRA_SCENARIO_NAMES`). */
+export interface GeneratedExtraSession extends Omit<GeneratedSession, "name"> {
+  name: ExtraScenarioName;
+}
+
+function isExtraScenarioName(name: string): name is ExtraScenarioName {
+  return (EXTRA_SCENARIO_NAMES as readonly string[]).includes(name);
+}
+
+/**
+ * #191. Generate a session of an on-demand scenario, the same way as `generateSession`. It is
+ * never part of `generateAll`, the manifest or the committed fixtures; write it with
+ * `writeGeneratedSession` where a test needs it on disk. Throws on a name that does not exist.
+ */
+export function generateExtraSession(
+  name: string,
+  options: GenerateOptions = {},
+): GeneratedExtraSession {
+  if (!isExtraScenarioName(name)) {
+    throw new Error(`unknown extra scenario "${name}". Known: ${EXTRA_SCENARIO_NAMES.join(", ")}`);
+  }
+  const scenario = EXTRA_SCENARIOS[name];
+  const seed = String(options.seed ?? DEFAULT_SEED);
+  return {
+    name: scenario.name,
+    description: scenario.description,
+    seed,
+    project: scenario.project,
+    ...runScenario(scenario, seed),
   };
 }
 

@@ -35,6 +35,8 @@ import {
   type ReplayMainAgent,
   type ReplayModel,
   type ReplayReply,
+  type ReplayReplyDetails,
+  type ReplayReplyWithDetails,
   type ReplaySubagent,
   type ReplayToolCall,
   type ReplayTotals,
@@ -72,6 +74,8 @@ interface ResolvedOptions {
   readonly padMs: number;
   readonly now: number | undefined;
   readonly previous: ReplayModel | undefined;
+  /** `BuildReplayOptions.replyDetails`. */
+  readonly details: boolean;
 }
 
 function seconds(name: string, value: number | undefined, fallback: number): number {
@@ -101,6 +105,7 @@ function resolveOptions(options: BuildReplayOptions | undefined): ResolvedOption
     ),
     now: now === undefined ? undefined : Math.round(now),
     previous: options?.previous,
+    details: options?.replyDetails === true,
   };
 }
 
@@ -309,10 +314,27 @@ function sumTotals(
 const count = (value: number): number =>
   Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 
+/**
+ * The in-memory details of one reply (#190, #191): only what the transcript recorded, so a
+ * missing split or model stays absent instead of becoming 0 or a guess. The model goes through
+ * the same identifier check as an agent's model.
+ */
+export function replyDetailsOf(reply: ParsedReply): ReplayReplyDetails {
+  const { cacheWrite5mTokens, cacheWrite1hTokens } = reply.usage;
+  const model = modelIdOf(reply.model);
+  return {
+    ...(cacheWrite5mTokens === undefined ? {} : { cacheWrite5mTokens: count(cacheWrite5mTokens) }),
+    ...(cacheWrite1hTokens === undefined ? {} : { cacheWrite1hTokens: count(cacheWrite1hTokens) }),
+    ...(model === null ? {} : { model }),
+  };
+}
+
 class Assembler {
   constructor(
     private readonly timeline: Timeline,
     private readonly t0: number,
+    /** Write each reply's in-memory details (`BuildReplayOptions.replyDetails`). */
+    private readonly details: boolean,
   ) {}
 
   /** Absolute milliseconds to compressed seconds. */
@@ -333,14 +355,17 @@ class Assembler {
     });
   }
 
-  replies(snap: SnapRun): ReplayReply[] {
-    return snap.replies.map((reply) => ({
-      t: this.at(reply.first),
-      inputTokens: count(reply.source.usage.inputTokens),
-      outputTokens: count(reply.source.usage.outputTokens),
-      cacheReadTokens: count(reply.source.usage.cacheReadTokens),
-      cacheCreationTokens: count(reply.source.usage.cacheCreationTokens),
-    }));
+  replies(snap: SnapRun): ReplayReplyWithDetails[] {
+    return snap.replies.map((reply) => {
+      const base: ReplayReply = {
+        t: this.at(reply.first),
+        inputTokens: count(reply.source.usage.inputTokens),
+        outputTokens: count(reply.source.usage.outputTokens),
+        cacheReadTokens: count(reply.source.usage.cacheReadTokens),
+        cacheCreationTokens: count(reply.source.usage.cacheCreationTokens),
+      };
+      return this.details ? { ...base, ...replyDetailsOf(reply.source) } : base;
+    });
   }
 }
 
@@ -548,7 +573,7 @@ function build(session: ParsedSession, options: ResolvedOptions, live: boolean):
     cuts = mergeLiveCuts(kept, fresh);
   }
   const timeline = new Timeline(cuts);
-  const assembler = new Assembler(timeline, t0);
+  const assembler = new Assembler(timeline, t0, options.details);
 
   // Numbering. Previous agents keep their ids; new ones follow in fresh order.
   const order = freshOrder(visible, parents);

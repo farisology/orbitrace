@@ -117,7 +117,10 @@ export interface ReplayToolCall {
   readonly failed: boolean;
 }
 
-/** One model reply (merged from all lines that share a message id) and its token usage. */
+/**
+ * One model reply (merged from all lines that share a message id) and its token usage. These are
+ * the fields a replay file holds; the in-memory model may add `ReplayReplyDetails`.
+ */
 export interface ReplayReply {
   /** Time of the first line of the reply. */
   readonly t: ReplaySeconds;
@@ -126,6 +129,27 @@ export interface ReplayReply {
   readonly cacheReadTokens: number;
   readonly cacheCreationTokens: number;
 }
+
+/**
+ * Tickets #190 and #191 (lead decision on #191). Optional facts about a reply that the
+ * in-memory model may carry and a replay file never does: format v1 and its schema have no field
+ * for them, `exportReplay` drops them (its allow-list follows `ReplayReply`), and `validateReplay`
+ * rejects a value that has them. `buildReplay` writes them only with
+ * `BuildReplayOptions.replyDetails`, and only the ones the transcript recorded: a missing value
+ * stays absent, it is never written as 0. Check a model that may hold them with
+ * `describeReplayModelProblems`. The ledger prices a reply more exactly with them.
+ */
+export interface ReplayReplyDetails {
+  /** Cache creation tokens written to the 5-minute cache. */
+  readonly cacheWrite5mTokens?: number;
+  /** Cache creation tokens written to the 1-hour cache. */
+  readonly cacheWrite1hTokens?: number;
+  /** This reply's own model id (same pattern as `ReplayAgentBase.model`). */
+  readonly model?: string;
+}
+
+/** A reply as the in-memory model holds it: the replay file's fields and the optional details. */
+export type ReplayReplyWithDetails = ReplayReply & ReplayReplyDetails;
 
 /** Sums over one agent, or over the whole session. Token fields are sums of reply values. */
 export interface ReplayTotals {
@@ -143,7 +167,10 @@ interface ReplayAgentBase {
   readonly name: string;
   /** `name`, plus `#n` when the same name appears more than once (`code-reviewer#2`). */
   readonly callsign: string;
-  /** Model id, such as `claude-opus-5-5`. `null` when unknown. */
+  /**
+   * Model id, such as `claude-opus-5-5`: the model most of its replies used. `null` when unknown.
+   * A reply's own model, when the in-memory model has it, is `ReplayReplyDetails.model`.
+   */
   readonly model: string | null;
   /** Open identifier; see `ModelFamily`. */
   readonly family: ModelFamily;
@@ -156,8 +183,8 @@ interface ReplayAgentBase {
   readonly end: ReplaySeconds | null;
   /** In start order. */
   readonly tools: readonly ReplayToolCall[];
-  /** In time order. */
-  readonly replies: readonly ReplayReply[];
+  /** In time order. A reply may carry `ReplayReplyDetails` in memory; a replay file has none. */
+  readonly replies: readonly ReplayReplyWithDetails[];
   readonly totals: ReplayTotals;
 }
 

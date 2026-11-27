@@ -15,6 +15,7 @@ import {
   KNOWN_RAW_LINE_TYPES,
   type KnownEffortLevel,
   type KnownRawLineType,
+  type RawCacheCreation,
   type RawLine,
   type RawLineBase,
   type RawSubagentMeta,
@@ -22,7 +23,14 @@ import {
 } from "@orbitrace/core";
 
 export { KNOWN_EFFORT_LEVELS, KNOWN_RAW_LINE_TYPES };
-export type { KnownEffortLevel, KnownRawLineType, RawLine, RawSubagentMeta, RawUsage };
+export type {
+  KnownEffortLevel,
+  KnownRawLineType,
+  RawCacheCreation,
+  RawLine,
+  RawSubagentMeta,
+  RawUsage,
+};
 
 /**
  * The keys a contract type declares by name, without its index signature. The raw types
@@ -91,13 +99,62 @@ export const INVENTED_BLOCK_TYPE = "synthetic_future_block";
 /** A tool name that does not exist in Claude Code, for the same purpose. */
 export const INVENTED_TOOL_NAME = "SyntheticFutureTool";
 
-/** The token counts of `message.usage`: the keys `RawUsage` declares. */
+/**
+ * The token counts of `message.usage`: every key `RawUsage` declares except
+ * `USAGE_SPLIT_KEY`, which holds an object, not a count.
+ */
 export const USAGE_KEYS = [
   "input_tokens",
   "output_tokens",
   "cache_read_input_tokens",
   "cache_creation_input_tokens",
 ] as const satisfies readonly DeclaredKeys<RawUsage>[];
+
+/**
+ * #191. The `message.usage` key that holds the cache writes split by lifetime. The generator
+ * writes it only for an agent or reply given a `CacheWriteSplit`, so the committed fixtures,
+ * which never set one, do not have it.
+ */
+export const USAGE_SPLIT_KEY = "cache_creation" as const satisfies DeclaredKeys<RawUsage>;
+
+/** #191. The keys of `usage.cache_creation`: the keys `RawCacheCreation` declares. */
+export const CACHE_CREATION_KEYS = [
+  "ephemeral_5m_input_tokens",
+  "ephemeral_1h_input_tokens",
+] as const satisfies readonly DeclaredKeys<RawCacheCreation>[];
+
+/** `usage.cache_creation` as the generator writes it: both counts present. */
+export type FullCacheCreation = Required<
+  Pick<RawCacheCreation, (typeof CACHE_CREATION_KEYS)[number]>
+>;
+
+/**
+ * #191. How the generator splits a line's cache creation tokens by lifetime: all to the
+ * 5-minute cache, all to the 1-hour cache, or half to each (the odd token to 5 minutes).
+ */
+export type CacheWriteSplit = "5m" | "1h" | "half";
+
+/** The `usage.cache_creation` object for `total` cache creation tokens. Adds up to `total`. */
+export function cacheCreationOf(total: number, split: CacheWriteSplit): FullCacheCreation {
+  const oneHour = split === "1h" ? total : split === "half" ? Math.floor(total / 2) : 0;
+  return { ephemeral_5m_input_tokens: total - oneHour, ephemeral_1h_input_tokens: oneHour };
+}
+
+/** Field-by-field maximum of two splits: how the lines of one reply are merged. */
+export function maxCacheCreation(a: FullCacheCreation, b: FullCacheCreation): FullCacheCreation {
+  return {
+    ephemeral_5m_input_tokens: Math.max(a.ephemeral_5m_input_tokens, b.ephemeral_5m_input_tokens),
+    ephemeral_1h_input_tokens: Math.max(a.ephemeral_1h_input_tokens, b.ephemeral_1h_input_tokens),
+  };
+}
+
+/** Field-by-field sum of two splits: how merged replies add up to a total. */
+export function addCacheCreation(a: FullCacheCreation, b: FullCacheCreation): FullCacheCreation {
+  return {
+    ephemeral_5m_input_tokens: a.ephemeral_5m_input_tokens + b.ephemeral_5m_input_tokens,
+    ephemeral_1h_input_tokens: a.ephemeral_1h_input_tokens + b.ephemeral_1h_input_tokens,
+  };
+}
 
 /**
  * The usage the generator writes: the contract's `RawUsage` with every token count present.

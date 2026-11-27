@@ -7,6 +7,7 @@ import type {
   ReplayMainAgent,
   ReplayModel,
   ReplayReply,
+  ReplayReplyWithDetails,
   ReplaySubagent,
   ReplayTotals,
 } from "../../src/index.js";
@@ -33,7 +34,7 @@ export function reply(
   };
 }
 
-function totalsOf(replies: readonly ReplayReply[]): ReplayTotals {
+function totalsOf(replies: readonly ReplayReplyWithDetails[]): ReplayTotals {
   const sum = (key: keyof ReplayReply): number => replies.reduce((acc, r) => acc + r[key], 0);
   return {
     toolCalls: 0,
@@ -50,7 +51,8 @@ export interface AgentSpec {
   readonly name?: string;
   readonly model: string | null;
   readonly family: ModelFamily;
-  readonly replies: readonly ReplayReply[];
+  /** Replies may carry in-memory details (#191); `totals` counts the replay v1 fields only. */
+  readonly replies: readonly ReplayReplyWithDetails[];
 }
 
 /** A valid replay: `main` first, then one subagent per further spec, all in wave 0. */

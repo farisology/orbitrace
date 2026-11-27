@@ -43,6 +43,19 @@ export function asTokenCount(value: unknown): number {
   return n !== null && n >= 0 ? n : 0;
 }
 
+/** A token count that may be missing: a finite, non-negative number, otherwise `null` (never 0). */
+export function asOptionalTokenCount(value: unknown): number | null {
+  const n = asFiniteNumber(value);
+  return n !== null && n >= 0 ? n : null;
+}
+
+/** The larger of two optional counts; `null` only when both are `null`. */
+export function maxOptional(a: number | null, b: number | null): number | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Math.max(a, b);
+}
+
 /** An ISO 8601 timestamp as Unix epoch milliseconds, or `null` when it cannot be read. */
 export function parseTimestamp(value: unknown): EpochMs | null {
   if (typeof value !== "string" || value === "") return null;
