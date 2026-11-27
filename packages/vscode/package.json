@@ -121,10 +121,11 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p test-integration/tsconfig.json",
     "test": "vitest run",
     "sync": "node scripts/sync-assets.mjs",
-    "sync:check": "node scripts/sync-assets.mjs --check"
+    "sync:check": "node scripts/sync-assets.mjs --check",
+    "test:integration": "node test-integration/build.mjs && node test-integration/dist/run.mjs"
   },
   "devDependencies": {
     "@orbitrace/app": "0.0.0",
@@ -132,6 +133,7 @@
     "@orbitrace/fixtures": "0.0.0",
     "@types/node": "^20.19.43",
     "@types/vscode": "1.96.0",
+    "@vscode/test-electron": "^3.1.0",
     "esbuild": "^0.28.2"
   }
 }
