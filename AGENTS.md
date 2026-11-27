@@ -59,6 +59,10 @@ npm run privacy
 - Work inside one package where possible: `core`, `renderer`, `app`, `fixtures`, `vscode` or `cli`.
 - `core` has no editor dependency. `renderer` has no UI framework dependency. Do not add one.
 - The main entry of `core` imports no Node module; Node-only code goes behind `@orbitrace/core/node`. Tests in `packages/core` and `packages/fixtures` fail otherwise.
+- `npm run typecheck` checks the same split. `packages/core/tsconfig.browser.json` checks every file under `packages/core/src` except the Node-only ones, without Node's types; `packages/core/tsconfig.json` checks all of `src` and `test` with them. The Node-only files are `src/sources/node.ts` and everything in `src/sources/claude-code/`.
+  - A browser-side core file that uses `process` or `Buffer`, or imports a `node:` module, fails with `error TS2591: Cannot find name 'process'` (or `'Buffer'`, `'node:path'`). Do not follow the hint in that message to add `node` to `types`: move the code to a Node-only file.
+  - A browser-side core file that imports a Node-only file fails with `error TS6307: File '.../src/sources/claude-code/adapter.ts' is not listed within the file list of project '.../packages/core/tsconfig.browser.json'`.
+  - A new Node-only core file goes in `src/sources/claude-code/`, which both lists already cover. Anywhere else, add its path to `exclude` in `packages/core/tsconfig.browser.json` and to `include` in `packages/core/tsconfig.node.build.json`. Both lists must name the same paths.
 - If a change has to cross packages, say why in the pull request description.
 - Stay inside the issue you were given. Do not build features that belong to another issue. Do not edit root files unless your issue requires it.
 

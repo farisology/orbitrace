@@ -73,15 +73,19 @@ Jobs:
 
 ## Artefacts
 
-`pack-release.mjs` writes these files. Sizes are from a local run on 27 Nov 2026 at version
-`0.0.0`; KiB is 1024 bytes.
+`pack-release.mjs` writes these files. Sizes are from a local run of
+`node scripts/release/pack-release.mjs` (with the `.vsix`) on 27 Nov 2026 on `dev` after the
+wave F merges (#158, #143, #144, #122, #149), version `0.0.0`, taken from its
+`release-manifest.json` (the manifest has no unpacked size for the `.vsix`, so that cell is the
+sum of its file sizes); KiB is 1024 bytes. The CLI tarball and the `.vsix` include the web app's
+`THIRD-PARTY-NOTICES.txt` and `third-party-modules.json` (#143).
 
 | File                         | Packed    | Unpacked  | Files | Contents                                                                                                                          |
 | ---------------------------- | --------- | --------- | ----- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `orbitrace-core-<v>.tgz`     | 95.3 KiB  | 420.3 KiB | 76    | `dist/**/*.js`, `dist/**/*.d.ts`, `schema/replay-v1.schema.json`, `README.md`, `LICENSE`, `package.json`                          |
-| `orbitrace-renderer-<v>.tgz` | 31.6 KiB  | 104.6 KiB | 33    | `dist/**/*.js`, `dist/**/*.d.ts`, `README.md`, `LICENSE`, `package.json`                                                          |
-| `orbitrace-<v>.tgz` (CLI)    | 165.1 KiB | 659.9 KiB | 12    | `dist/index.js` (core bundled in), the web app, its notices and module list in `dist/app`, `README.md`, `LICENSE`, `package.json` |
-| `orbitrace-vscode-<v>.vsix`  | 163.4 KiB | 641.3 KiB | 15    | `extension/dist/extension.js` (core bundled in), `extension/dist/app` with notices and module list, the icon, readme, licence     |
+| `orbitrace-core-<v>.tgz`     | 108.9 KiB | 462.2 KiB | 84    | `dist/**/*.js`, `dist/**/*.d.ts`, `schema/replay-v1.schema.json`, `README.md`, `LICENSE`, `package.json`                          |
+| `orbitrace-renderer-<v>.tgz` | 57.6 KiB  | 191.5 KiB | 41    | `dist/**/*.js`, `dist/**/*.d.ts`, `README.md`, `LICENSE`, `package.json`                                                          |
+| `orbitrace-<v>.tgz` (CLI)    | 169.2 KiB | 674.1 KiB | 12    | `dist/index.js` (core bundled in), the web app, its notices and module list in `dist/app`, `README.md`, `LICENSE`, `package.json` |
+| `orbitrace-vscode-<v>.vsix`  | 164.8 KiB | 645.4 KiB | 15    | `extension/dist/extension.js` (core bundled in), `extension/dist/app` with notices and module list, the icon, readme, licence     |
 | `SHA256SUMS`                 |           |           |       | One `<sha256>  <file>` line per artefact. `sha256sum -c SHA256SUMS` (or `shasum -a 256 -c`) checks them.                          |
 | `release-manifest.json`      |           |           |       | The version, the commit, and each artefact's size, SHA-256, file list, warnings and errors.                                       |
 

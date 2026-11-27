@@ -75,6 +75,12 @@ a replay.
 - A file you drop onto the app, or open with its Open file button. It is read inside the page and
   is not sent anywhere: a `.replay.json` is checked with `validateReplay`, and a `.jsonl`
   transcript is parsed with `parseSession` and built with `buildReplay`.
+- A file you open in the public replay player ([player.md](player.md)). The player reads it in
+  the page with the same loader as the app, and nothing is uploaded. Besides its own files, the
+  only request it can make is for a `?replay=` link on its own origin; a link to another origin
+  is refused and never fetched, and its Content-Security-Policy (`connect-src 'self'`) blocks
+  requests to other origins. It has no export, sets no cookie, uses no browser storage and sends
+  no telemetry.
 
 ### How Orbitrace picks a source
 

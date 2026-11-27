@@ -82,8 +82,14 @@ can be linked, but no text, inputs, outputs, paths, branch, title or subagent de
 - The main entry must stay free of Node imports. Two tests guard this:
   `packages/core/test/sources/entry-points.test.ts` walks the imports of `src/index.ts` and
   checks which entry exports what, and `packages/fixtures/test/generator.test.ts` checks that the
-  generator and the core files it reaches have no Node import. The TypeScript configuration does
-  not enforce the split yet (#72).
+  generator and the core files it reaches have no Node import. The type check enforces it too
+  (#72): `packages/core/tsconfig.browser.json` checks `src` without Node's types and leaves out
+  the `./node` entry (`src/sources/node.ts` and `src/sources/claude-code/`), so a Node global, a
+  `node:` import or an import of a `./node` file there fails `npm run typecheck`.
+  `packages/core/tsconfig.json` checks `src` and `test` with Node's types. The build
+  (`tsconfig.build.json`) emits the two entries as two projects,
+  `tsconfig.browser.build.json` and `tsconfig.node.build.json`. What a contributor sees and how
+  to add a Node-only file is in [AGENTS.md](../AGENTS.md#5-keep-changes-inside-one-package).
 
 ## Where each piece lives
 
@@ -109,7 +115,7 @@ re-exports the wire layout.
 | #16    | The `orbitrace` commands                                                                                       | `packages/cli/src/`                                                       |
 | #17    | The loopback server and its routes                                                                             | `packages/cli/src/server/`                                                |
 | #18    | `exportReplay`, `validateReplay`, `describeReplayProblems`, `assertReplay`                                     | `core/src/export/`                                                        |
-| #71    | `toRealSeconds`                                                                                                | `core/src/replay/real-time.ts`                                            |
+| #71    | `toRealSeconds`, and its inverse `toCompressedSeconds` (#135)                                                  | `core/src/replay/real-time.ts`                                            |
 | #73    | Golden replay files and their test, moved out of core                                                          | `packages/fixtures`, `fixtures/replays/`                                  |
 | #74    | `watchSession` of the Claude Code adapter and `watchSessionFiles` (`@orbitrace/core/node`)                     | `core/src/sources/claude-code/watch.ts`, `adapter.ts`                     |
 | #75    | `findSessionByKey`; the session replayer (`@orbitrace/core/node`)                                              | `core/src/sources/index.ts`, `core/src/host/session-replayer.ts`          |
@@ -173,6 +179,25 @@ in some containers `fs.watch` starts without error and then reports nothing. A h
 polling only (for example for sessions on a network drive) passes
 `adapters: [createClaudeCodeAdapter({ watch: { mode: "poll" } })]` to
 `createNodeSessionReplayer`. No core change is needed. Neither host offers this as a setting yet.
+
+A process that exits without touching a file (a crash, `kill -9`, a closed terminal) can leave
+its registry entry behind, and file events alone never notice that (#139). So while the
+session's last reported live status is `busy` or `idle`, `watchSession` also reads the live
+registry and checks the process again on a timer, with no file change. When the status has
+changed, the listener gets the session again; a process that is gone is reported as `ended`,
+which ends follow in the app. The app also ends follow, and hides Go live, when the status is
+`unknown`. The timer runs only while the status is `busy` or `idle`, starts again after each
+read, stops when the watch is stopped, and never keeps the Node process alive on its own.
+
+- `ClaudeCodeAdapterOptions.livenessIntervalMs` is the timer's interval in milliseconds; 0 turns
+  the check off. When it is not set, or is not a finite number of 0 or more, the interval is the
+  watch's `backstopIntervalMs` when that is greater than 0, otherwise 5000. So
+  `watch: { backstopIntervalMs: 0 }` turns off the backstop poll but not this check.
+- `livenessIntervalOf(options)` returns the interval a set of `ClaudeCodeAdapterOptions` gives.
+- `SESSION_WATCH_DEFAULTS` holds the defaults of `SessionWatchOptions`: `debounceMs` 100,
+  `maxWaitMs` 1000, `pollIntervalMs` 1000, `backstopIntervalMs` 5000 and `settleMs` 250.
+
+All three are exported from `@orbitrace/core/node`, not from the main entry.
 
 ## Export and validation (#18)
 
@@ -427,5 +452,4 @@ Nothing in the replay model, the renderer, the app or the transport refers to a 
 - **Opening a session in the browser from the editor.** The editor host answers `openInBrowser`
   with `unsupported`.
 - **Export from the app or the extension.** Only `orbitrace export` writes a replay file.
-- **The TypeScript split of core's two entries** (#72). Tests check the imports today.
 - **A Claude Code plugin package.**

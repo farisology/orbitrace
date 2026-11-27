@@ -25,9 +25,10 @@
 /**
  * `"ready"`: every core ticket of wave B needed for correctness is merged: the parser, sources,
  * builder and export, the Claude Code `watchSession` (#74, landed with #99) and moving the golden
- * replay test out of core (#73). The core tsconfig split for the two entries (#72) is still open;
- * it only makes tsc enforce the browser/Node split that `test/sources/entry-points.test.ts`
- * already checks for imports, so it does not hold this back. Checked by
+ * replay test out of core (#73). tsc enforces the browser/Node split of the two entries (#72):
+ * `packages/core/tsconfig.browser.json` checks this entry and everything it reaches with no Node
+ * types, and `packages/core/tsconfig.json` checks the ./node entry and the tests with them.
+ * `test/sources/entry-points.test.ts` checks the same split for imports. Checked by
  * `packages/core/test/index.test.ts` and `packages/cli/test/index.test.ts`.
  */
 export const CORE_STATUS = "ready" as const;

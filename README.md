@@ -17,6 +17,10 @@ Orbitrace reads the session transcripts that Claude Code already writes on your 
 
 Open a session that is still running, with `orbitrace open` or in the editor, and the view starts at the live edge, the newest moment, and keeps up as the session grows. Scrubbing back with the arrow keys, Home or Pause stops following; the **Go live** button or the End key returns to it. The Live badge says `Live: working, following`, or how far behind the view is, for example `Live: idle, 2 min 5 s behind`. Whether a session is running comes from Claude Code's session registry; `orbitrace list` shows it in the LIVE column. Details are in [packages/app/README.md](packages/app/README.md).
 
+## Public replay player
+
+The public replay player is a static page that opens a shared replay file in the browser, with no server part and no tracking: the file is read in the page and never uploaded. You build it from a clone; it is not hosted anywhere yet. See [docs/player.md](docs/player.md).
+
 ## How it will ship
 
 - An editor extension for VS Code and compatible editors: click the icon, press Visualise.

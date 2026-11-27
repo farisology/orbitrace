@@ -58,6 +58,15 @@ merged so far.
 - The web app ships a `THIRD-PARTY-NOTICES.txt`, with the licence of each bundled package, in the
   CLI tarball, the `.vsix` and the public player; the release check fails when it is missing or
   stale (#143).
+- `@orbitrace/core`: `toCompressedSeconds`, the inverse of `toRealSeconds`. The app imports it
+  from core and no longer keeps its own copy (#135, #147).
+- A public replay player: a static page, built with `npm run build:player -w @orbitrace/app`
+  into `packages/app/dist-player`. It opens a `.replay.json` file or the bundled demo in the
+  browser, and a replay on its own origin from a `?replay=` link. It refuses links to other
+  origins, files that fail the schema and files over 50 MB, and makes no request to another
+  origin (its Content-Security-Policy enforces this). A workflow that runs only when started by
+  hand uploads the page as a GitHub Pages artefact; it does not deploy it. See `docs/player.md`
+  (#19, #148).
 
 ### Changed
 
@@ -70,6 +79,13 @@ merged so far.
   shared function, `formatAgo` from `@orbitrace/core`, and the extension builds its host meta tags
   from core's constants. A new test runs the app's HTTP transport against the built CLI (#129,
   #131).
+- `@orbitrace/core`: `npm run typecheck` now enforces the browser/Node split.
+  `tsconfig.browser.json` checks the main entry without Node's types, so a browser-side file that
+  uses `process`, `Buffer` or a `node:` import, or imports a `./node` file, fails the check;
+  `tsconfig.json` checks the `./node` entry and the tests. CI clean-ups in the same change: a
+  named step that checks the npm packages, Dependabot updates for `scripts/release/tools` (#121),
+  no separate cache-folder step before the VS Code integration test (#125), and the extension's
+  tests take their tag text from core's constants (#107) (#72, #146).
 
 ### Fixed
 
@@ -80,6 +96,10 @@ merged so far.
 - The CLI tarball installs on its own: `@orbitrace/core` is bundled into its `dist/index.js`, and
   it no longer ships `src/`, source maps or type declarations (#120, #132).
 - Web app polish (#144): the orrery keeps its size while a followed session adds timeline lanes (the lanes scroll in a fixed-height dock, the newest shown while following); the empty event feed says "Press play." only while paused (#159); message pages are centred (#154); losing a followed session's status is announced once (#139); the public player opens replay files only and refuses transcripts (#19).
+- Follow live ends when a followed session's process exits without changing a file. While the
+  session is busy or idle, core's `watchSession` reads the live registry again every
+  `livenessIntervalMs` (5 s by default) and reports `ended` once the process is gone. The app
+  also stops following, and hides Go live, when the status becomes unknown (#139, #147).
 
 ### Security
 
