@@ -8,6 +8,7 @@
  * (`t`, `speed`): when the host pauses, `t` stops and so does every effect.
  */
 
+import { agentPhase, type AgentSpan } from "@orbitrace/core";
 import type { Scene } from "./scene.js";
 
 /** Lengths of short effects, in real seconds at the current playback speed. */
@@ -140,10 +141,20 @@ export function upperBound(values: Float64Array, count: number, x: number): numb
   return lo;
 }
 
-/** Phase of an agent at `t`. `end` is `Infinity` while the agent runs. */
-export function agentPhase(start: number, end: number, t: number): number {
-  if (t < start) return PHASE_QUEUED;
-  return t <= end ? PHASE_ACTIVE : PHASE_DONE;
+/**
+ * PHASE_* of an agent at `t`, by core's one phase rule (`agentPhase`, #108): active in
+ * `[start, end)`, done from `end` on, so the canvas and the app's inspector agree at the end
+ * instant. `end` is `Infinity` while the agent runs, which core treats like `null`.
+ */
+export function phaseCode(agent: AgentSpan, t: number): number {
+  switch (agentPhase(agent, t)) {
+    case "waiting":
+      return PHASE_QUEUED;
+    case "running":
+      return PHASE_ACTIVE;
+    default:
+      return PHASE_DONE;
+  }
 }
 
 /** End of a call's visible window: its end, but at least `minVisible` after its start. */
@@ -189,7 +200,7 @@ export function computeFrameState(
   for (let i = 0; i < agents.length; i++) {
     const a = agents[i]!;
     out.flightOffset[i] = out.flightCount;
-    const phase = agentPhase(a.start, a.end, t);
+    const phase = phaseCode(a, t);
     out.phase[i] = phase;
     if (phase === PHASE_ACTIVE) {
       out.activeAgents++;

@@ -1,3 +1,4 @@
+import { agentPhase as coreAgentPhase } from "@orbitrace/core";
 import { describe, expect, it } from "vitest";
 import {
   KIND_LABELS,
@@ -43,6 +44,19 @@ describe("agent stats", () => {
     expect(agentPhase(a1!, 4)).toBe("running");
     expect(agentPhase(a1!, 20)).toBe("finished");
     expect(agentPhase(a2!, 1000)).toBe("running");
+  });
+
+  it("uses core's phase rule, so it agrees with the renderer at the boundary instants (#108)", () => {
+    expect(agentPhase).toBe(coreAgentPhase);
+    for (const agent of DEMO.agents) {
+      const end = agent.end!;
+      expect(agentPhase(agent, agent.start - 0.001)).toBe("waiting");
+      expect(agentPhase(agent, agent.start)).toBe("running");
+      expect(agentPhase(agent, end - 0.001)).toBe("running");
+      expect(agentPhase(agent, end)).toBe("finished");
+    }
+    // The last frame of playback: the clock stops at the main agent's end, which is finished.
+    expect(agentPhase(DEMO.agents[0], DEMO.totals.duration)).toBe("finished");
   });
 
   it("labels families, shapes and waves", () => {

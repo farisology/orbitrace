@@ -43,14 +43,15 @@
     "dev": "vite --config demo/vite.config.ts",
     "generate": "node scripts/generate-design.mjs",
     "generate:check": "node scripts/generate-design.mjs --check",
-    "bench:browser": "node scripts/bench-browser.mjs"
+    "bench:browser": "node scripts/bench-browser.mjs",
+    "bench:node": "vitest run --config perf/vitest.config.ts"
   },
   "dependencies": {
     "@orbitrace/core": "0.0.0"
   },
   "devDependencies": {
+    "@orbitrace/fixtures": "0.0.0",
     "@types/node": "^20.19.43",
-    "ajv": "^8.20.0",
     "vite": "^8.3.8"
   }
 }

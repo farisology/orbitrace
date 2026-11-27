@@ -172,6 +172,7 @@ export class MockContext {
   }
   measureText(text: string): { width: number } {
     this.measureCount++;
+    if (this.recording) this.ops.push({ op: "measureText", args: [text] });
     METRICS.width = text.length * 6;
     return this.recording ? { width: text.length * 6 } : METRICS;
   }
@@ -196,9 +197,17 @@ export class MockContext {
     return this as unknown as DrawContext;
   }
 
-  /** Drawing ops only: without the one-off gradient creation of the first frame at a size. */
+  /**
+   * Drawing ops only: without the one-off work of the first frame, that is gradient creation at
+   * a size and the first measurement of a label (the font set for it and the measureText call).
+   */
   drawOps(): Op[] {
-    return this.ops.filter((o) => !o.op.startsWith("create"));
+    return this.ops.filter(
+      (o, k) =>
+        !o.op.startsWith("create") &&
+        o.op !== "measureText" &&
+        !(o.op === "set:font" && this.ops[k + 1]?.op === "measureText"),
+    );
   }
   count(op: string): number {
     return this.ops.filter((o) => o.op === op).length;

@@ -14,7 +14,8 @@
 
 import { Session } from "node:inspector/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createDemoModel } from "../demo/demo-model.js";
+import type { ReplayModel } from "@orbitrace/core";
+import { scaledReplay } from "../demo/sessions.js";
 import { drawFrame, type ViewState } from "../src/draw.js";
 import { computeLayout } from "../src/layout.js";
 import { createResources } from "../src/resources.js";
@@ -68,8 +69,14 @@ function bytesIn(byFile: Map<string, number>, fragment: string): number {
   return total;
 }
 
-function setup(reducedMotion: boolean) {
-  const scene = buildScene(createDemoModel({ seed: 7, waves: 4, agentsPerWave: 8 }));
+/** Sessions from the fixtures generator through core's pipeline (#77): full detail, and LOD. */
+const models = new Map<number, ReplayModel>();
+beforeAll(async () => {
+  for (const agents of [100, 500]) models.set(agents, await scaledReplay(agents));
+});
+
+function setup(agents: number, reducedMotion: boolean) {
+  const scene = buildScene(models.get(agents)!);
   const layout = computeLayout(scene, 1280, 800);
   const frame = createFrameState(scene);
   const res = createResources(mockSurfaces(), createPalette(DEFAULT_THEME));
@@ -89,18 +96,23 @@ function setup(reducedMotion: boolean) {
   return { run, scene, flightsSeen: () => flights };
 }
 
-describe.each([false, true])("hot path with reducedMotion=%s", (reduced) => {
-  it(`allocates nothing in src over ${FRAMES} frames`, async () => {
-    const { run, scene, flightsSeen } = setup(reduced);
+describe.each([
+  [100, false],
+  [100, true],
+  [500, false],
+  [500, true],
+])("hot path at %i agents with reducedMotion=%s", (agents, reduced) => {
+  it(`allocates nothing in src over ${FRAMES} frames`, { timeout: 120_000 }, async () => {
+    const { run, scene, flightsSeen } = setup(agents, reduced);
     expect(scene.totalTools).toBeGreaterThan(500);
-    for (let i = 0; i < 4; i++) run();
+    for (let i = 0; i < 3; i++) run();
     expect(flightsSeen()).toBeGreaterThan(0);
 
     const byFile = await sampledBytes(run);
     // Core code on the hot path (toRealSeconds) counts against the same budget.
     const inSrc = bytesIn(byFile, "/packages/renderer/src/") + bytesIn(byFile, "/packages/core/");
     console.log(
-      `reducedMotion=${reduced}: ${inSrc} bytes sampled in src over ${FRAMES} frames ` +
+      `${agents} agents, reducedMotion=${reduced}: ${inSrc} bytes sampled in src over ${FRAMES} frames ` +
         `(${(inSrc / FRAMES).toFixed(3)} bytes/frame)`,
     );
     expect(inSrc).toBeLessThan(BUDGET_BYTES);

@@ -40,14 +40,12 @@ export const KIND_LABELS: Readonly<Record<ToolKind, string>> = {
   other: "Other",
 };
 
-export type AgentPhase = "waiting" | "running" | "finished";
-
-/** Whether the agent has not started, is running or has finished at compressed time `t`. */
-export function agentPhase(agent: ReplayAgent, t: number): AgentPhase {
-  if (t < agent.start) return "waiting";
-  if (agent.end !== null && t >= agent.end) return "finished";
-  return "running";
-}
+/**
+ * Whether the agent has not started, is running or has finished at compressed time `t`. Core's
+ * one rule (issue 108), shared with the renderer, so the inspector and the orrery agree at an
+ * agent's end time: running in `[start, end)`, finished from `end` on.
+ */
+export { agentPhase, type AgentPhase } from "@orbitrace/core";
 
 /** `Opus`, `Haiku`. A family the renderer does not know keeps its own word. */
 export function familyLabel(family: string): string {

@@ -48,13 +48,25 @@ The full contract is
 | `src/scene.ts`            | Flattens a model into typed arrays once per model               | yes             |
 | `src/layout.ts`           | Orbit and node positions per canvas size                        | yes             |
 | `src/timeline.ts`         | State at time `t`: phases, calls in flight, token arcs, effects | yes             |
+| `src/label-layout.ts`     | Where each label goes so that no two overlap                    | yes             |
+| `src/lod.ts`              | Level of detail by agent count; ring summaries of done waves    | yes             |
 | `src/hit.ts`              | Agent under a point                                             | yes             |
 | `src/draw.ts`             | Paints a frame on any `DrawContext`                             | takes a context |
 | `src/orrery.ts`           | Canvas, pointer input and frame scheduling                      | no              |
 | `src/generated/design.ts` | Colours, fonts and node shapes from `design/`                   | generated       |
 
-The hot path (`computeFrameState` and `drawFrame`) allocates nothing per frame;
-`test/allocation.test.ts` checks this with V8's sampling heap profiler.
+The hot path (`computeFrameState` and `drawFrame`, label placement included) allocates nothing
+per frame; `test/allocation.test.ts` checks this with V8's sampling heap profiler at 100 and 500
+agents.
+
+An agent's phase comes from core's `agentPhase` (#108): running in `[start, end)`, finished
+from `end` on, the same rule the app's inspector uses.
+
+Labels never overlap: the main agent's label, the selected and hovered agents' labels (always
+shown), the wave labels, then running agents' labels, then finished ones, each placed at the
+first free spot around its node or dropped. Above 100 agents the level of detail leaves out
+moons, caps the labels and collapses finished waves into ring summaries. The thresholds, the
+budget and the measurements are in [docs/performance.md](../../docs/performance.md).
 
 ## Commands
 
@@ -64,11 +76,18 @@ Run from `packages/renderer`, after `npm run build` at the repository root:
 npm run dev             # demo page with a synthetic session (Vite, 127.0.0.1)
 npm run generate        # regenerate src/generated/design.ts from design/*.json
 npm run generate:check  # exit 1 when the generated module is out of date
-npm run bench:browser   # run the demo benchmark in headless Chrome (CHROME_PATH to override)
+npm run bench:browser   # draw benchmark at 15, 100, 500 agents in headless Chrome
+npm run bench:node      # draw path and parse/build benchmarks in Node (50 MB transcript included)
 ```
 
-The demo page takes `?t=<seconds>`, `?select=<agent id>`, `?paused` and `?bench=1`. All demo
-data is invented by a seeded generator in `demo/demo-model.ts`.
+`bench:browser` takes `CHROME_PATH`, `BENCH_DPR` (default 2), `BENCH_CPU_THROTTLE` (default 1)
+and `BENCH_AGENTS` (default `15,100,500`).
+
+The demo page takes `?t=<seconds>`, `?select=<agent id>`, `?paused`, `?session=large` (100
+agents) or `?session=huge` (500 agents), and `?bench=1` (with `&agents=15,100`). Every session
+on it is synthetic: `demo/sessions.ts` scripts a transcript with the seeded generator in
+`@orbitrace/fixtures` and runs it through core's real `parseSession` and `buildReplay` (#77); the
+live mode asks `buildReplay` for snapshots with `now` and `previous`, as a host does.
 
 ## Licence
 

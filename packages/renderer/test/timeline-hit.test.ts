@@ -1,3 +1,4 @@
+import { agentPhase } from "@orbitrace/core";
 import { describe, expect, it } from "vitest";
 import { HIT_PADDING, hitTestAgents } from "../src/hit.js";
 import { computeLayout } from "../src/layout.js";
@@ -7,7 +8,7 @@ import {
   PHASE_ACTIVE,
   PHASE_DONE,
   PHASE_QUEUED,
-  agentPhase,
+  phaseCode,
   computeFrameState,
   createFrameState,
   effectProgress,
@@ -16,6 +17,7 @@ import {
   visibleEnd,
   type TimingParams,
 } from "../src/timeline.js";
+import { DEMO_GOLDEN } from "./support/golden.js";
 import { emptyModel, smallModel } from "./support/models.js";
 
 const timing = (over: Partial<TimingParams> = {}): TimingParams => ({
@@ -34,12 +36,33 @@ describe("timeline helpers", () => {
     expect(upperBound(values, 3, 100)).toBe(3);
   });
 
-  it("gives an agent's phase", () => {
-    expect(agentPhase(10, 20, 5)).toBe(PHASE_QUEUED);
-    expect(agentPhase(10, 20, 10)).toBe(PHASE_ACTIVE);
-    expect(agentPhase(10, 20, 20)).toBe(PHASE_ACTIVE);
-    expect(agentPhase(10, 20, 21)).toBe(PHASE_DONE);
-    expect(agentPhase(10, Infinity, 1e9)).toBe(PHASE_ACTIVE);
+  it("gives an agent's phase by core's half-open rule, at the boundary instants (#108)", () => {
+    const span = { start: 10, end: 20 };
+    expect(phaseCode(span, 5)).toBe(PHASE_QUEUED);
+    expect(phaseCode(span, 9.999)).toBe(PHASE_QUEUED);
+    expect(phaseCode(span, 10)).toBe(PHASE_ACTIVE);
+    expect(phaseCode(span, 19.999)).toBe(PHASE_ACTIVE);
+    expect(phaseCode(span, 20)).toBe(PHASE_DONE);
+    expect(phaseCode(span, 21)).toBe(PHASE_DONE);
+    expect(phaseCode({ start: 10, end: Infinity }, 1e9)).toBe(PHASE_ACTIVE);
+    expect(phaseCode({ start: 10, end: null }, 1e9)).toBe(PHASE_ACTIVE);
+  });
+
+  it("draws every agent of the demo golden in the phase the app's inspector shows", () => {
+    const scene = buildScene(DEMO_GOLDEN);
+    const frame = createFrameState(scene);
+    const code = { waiting: PHASE_QUEUED, running: PHASE_ACTIVE, finished: PHASE_DONE };
+    for (const agent of DEMO_GOLDEN.agents) {
+      for (const t of [agent.start - 0.001, agent.start, agent.end! - 0.001, agent.end!]) {
+        if (t < 0) continue;
+        computeFrameState(scene, t, timing(), frame);
+        const i = scene.byId.get(agent.id)!;
+        expect([agent.id, t, frame.phase[i]]).toEqual([agent.id, t, code[agentPhase(agent, t)]]);
+      }
+    }
+    // The last frame of playback shows the main agent finished, as the inspector says.
+    computeFrameState(scene, scene.duration, timing(), frame);
+    expect(frame.phase[0]).toBe(PHASE_DONE);
   });
 
   it("gives short calls a minimum visible window", () => {
@@ -82,14 +105,17 @@ describe("computeFrameState", () => {
       PHASE_QUEUED,
     ]);
     expect(frame.activeSubagents).toBe(1);
+    // t = 100 is the main agent's end: finished at that instant (#108), as the inspector says.
     computeFrameState(scene, 100, timing(), frame);
     expect([...frame.phase]).toEqual([
-      PHASE_ACTIVE,
+      PHASE_DONE,
       PHASE_DONE,
       PHASE_DONE,
       PHASE_ACTIVE,
       PHASE_DONE,
     ]);
+    computeFrameState(scene, 99.999, timing(), frame);
+    expect(frame.phase[0]).toBe(PHASE_ACTIVE);
   });
 
   it("counts started, finished and failed calls", () => {
