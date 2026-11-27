@@ -41,7 +41,7 @@ The floor comes from the `engines` fields of the build tools (checked on 27 Nov 
 | `vitest` | 4.1.12 | `^20.0.0 \|\| ^22.0.0 \|\| >=24.0.0` |
 | `typescript-eslint` | 8.74.0 | `^18.18.0 \|\| ^20.9.0 \|\| >=21.1.0` |
 
-The root range is where all five overlap. Two exceptions: `npm run bench:browser` in `packages/renderer` needs Node 22 or later, and `@vitest/eslint-plugin` 1.6.28 (a lint plugin) declares `>=22`, so npm may print an engine warning for it on Node 20. CI runs the lint step on Node 20 as well as 22. The `orbitrace` command in `packages/cli` keeps its own `engines` field (`>=20`), which is about running the built command, not building it.
+The root range is where all five overlap. Two exceptions: `npm run bench:browser` in `packages/renderer` needs Node 22 or later (`npm run bench:node`, the Node benchmarks next to it, does not), and `@vitest/eslint-plugin` 1.6.28 (a lint plugin) declares `>=22`, so npm may print an engine warning for it on Node 20. CI runs the lint step on Node 20 as well as 22. The `orbitrace` command in `packages/cli` keeps its own `engines` field (`>=20`), which is about running the built command, not building it.
 
 The repository uses npm workspaces with these packages:
 
@@ -81,6 +81,19 @@ npm run privacy     # fail if forbidden strings appear
 - Extra private-name patterns (one regular expression per line, case-insensitive, `#` for comments) come from the git-ignored `.privacy-denylist.local` at the repository root and from the environment variable `ORBITRACE_PRIVACY_DENYLIST`; both apply. A bad pattern is reported by its line number only, never printed. In CI the variable is filled from a repository secret of the same name on pushes to `dev` only, so pull requests (including those from forks, which get no secrets) use the built-in patterns. The secret is optional; the owner may add it under the repository's Actions secrets.
 - Passing `npm run privacy` does not prove a change is clean: it only catches known patterns. Also work through the privacy checklist in the pull request template.
 - Paste the real result of each command into the pull request. If a command fails, say so. Do not leave it out.
+
+## Other checks
+
+These are not part of `npm test`. Run them when your change touches what they cover.
+
+- **VS Code integration test.** `npm run test:integration -w orbitrace-vscode`, after `npm run build`, with Node 22 or later. It downloads VS Code into `packages/vscode/node_modules/.cache/vscode-test/` and runs the built extension in a real window against synthetic sessions only. CI runs it in a separate job that does not block a merge yet. What it checks and its settings are in [packages/vscode/README.md](packages/vscode/README.md#integration-test).
+- **Benchmarks.** In `packages/renderer`, after `npm run build` at the root: `npm run bench:node` (draw path and parse/build in Node) and `npm run bench:browser` (draw benchmark in headless Chrome, Node 22 or later). `bench:browser` reads `BENCH_DPR` (default 2), `BENCH_CPU_THROTTLE` (default 1) and `BENCH_AGENTS` (default `15,100,500`), and `CHROME_PATH`. The targets and the last measured results are in [docs/performance.md](docs/performance.md); the commands are also in [packages/renderer/README.md](packages/renderer/README.md#commands).
+- **Accessibility.** The WCAG 2.1 AA audit of the app shell, its fixes, what still needs a person with a screen reader, and how to run the checks are in [packages/app/ACCESSIBILITY.md](packages/app/ACCESSIBILITY.md#running-the-checks).
+- **Export privacy.** The field-by-field audit of what can reach a shared replay, with its findings and the tests that guard them, is [docs/security/export-audit.md](docs/security/export-audit.md). A change to what a replay contains updates [docs/privacy.md](docs/privacy.md) in the same pull request.
+
+## Releases and the changelog
+
+Nothing is released yet. How a release is cut, what it publishes, and a local dry run of the packaging (`node scripts/release/pack-release.mjs`, with the pinned `@vscode/vsce` and `ovsx` in `scripts/release/tools/`) are in [docs/releasing.md](docs/releasing.md). Changes are recorded in [CHANGELOG.md](CHANGELOG.md); docs/releasing.md says how to add an entry.
 
 ## Keep changes inside one package
 

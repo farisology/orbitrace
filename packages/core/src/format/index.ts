@@ -1,6 +1,7 @@
 /**
- * Display formatters for token counts, lengths and clock readings (#86). Pure and browser-safe,
- * so the renderer's canvas labels and the app's panels show one value one way.
+ * Display formatters for token counts, lengths, clock readings and how long ago something
+ * happened (#86, #129). Pure and browser-safe, so the renderer's canvas labels, the app's panels
+ * and the hosts' session lists show one value one way.
  *
  * Rules:
  * - Token counts: whole numbers below 1,000; then `k`, `M` and `B`, with one decimal for `k` and
@@ -11,6 +12,9 @@
  *   non-finite values count as 0.
  * - `formatDurationShort` is the same length as `formatDuration`, in a compact form for canvas
  *   labels where space is short (`3m05s` is `3 min 5 s`).
+ * - `formatAgo` is the last-activity text of a session list, the same in the app's session
+ *   picker and the editor's Sessions view (#129): whole units, rounded down, the same in every
+ *   locale. A time in the future, or a non-finite input, reads `just now`.
  */
 
 const TOKEN_UNITS = [
@@ -70,4 +74,23 @@ export function formatDurationShort(seconds: number): string {
   if (m >= 60) return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
   if (m > 0) return `${m}m${String(s).padStart(2, "0")}s`;
   return `${s}s`;
+}
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * How long ago something happened, in words and the same in every locale: `just now`,
+ * `12 min ago`, `3 h ago`, `1 day ago`, `2 days ago`. `at` and `now` are Unix epoch milliseconds.
+ * Units are whole and rounded down. Less than a minute ago, a time in the future, and a
+ * non-finite `at` or `now` read `just now`.
+ */
+export function formatAgo(at: number, now: number): string {
+  const elapsed = now - at;
+  if (!Number.isFinite(elapsed) || elapsed < MINUTE_MS) return "just now";
+  if (elapsed < HOUR_MS) return `${Math.floor(elapsed / MINUTE_MS)} min ago`;
+  if (elapsed < DAY_MS) return `${Math.floor(elapsed / HOUR_MS)} h ago`;
+  const days = Math.floor(elapsed / DAY_MS);
+  return days === 1 ? "1 day ago" : `${days} days ago`;
 }

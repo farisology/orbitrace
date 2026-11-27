@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { EDITOR_HOST_META_VALUE, HOST_META_NAME, SESSION_META_NAME } from "@orbitrace/core";
 import {
   buildWebviewHtml,
   contentSecurityPolicy,
@@ -8,6 +9,12 @@ import {
   escapeAttribute,
   headElements,
 } from "../src/webview-html.js";
+
+// The host tags as core's host protocol defines them (#96, #107), so a renamed tag in core
+// changes the expectation here too.
+const HOST_TAG = `<meta name="${HOST_META_NAME}" content="${EDITOR_HOST_META_VALUE}">`;
+const sessionTag = (content: string): string =>
+  `<meta name="${SESSION_META_NAME}" content="${content}">`;
 
 // The value VS Code returns for `webview.cspSource` for a local extension.
 const CSP_SOURCE = "'self' https://*.vscode-cdn.net";
@@ -98,8 +105,8 @@ describe("headElements", () => {
     });
     expect(elements[0]).toMatch(/^<meta http-equiv="Content-Security-Policy"/);
     expect(elements[1]).toBe(`<base href="${BASE}/">`);
-    expect(elements).toContain(`<meta name="orbitrace-host" content="editor">`);
-    expect(elements).toContain(`<meta name="orbitrace-session" content="claude-code:k">`);
+    expect(elements).toContain(HOST_TAG);
+    expect(elements).toContain(sessionTag("claude-code:k"));
   });
 
   it("adds no host tags in demo mode and no session tag without a key", () => {
@@ -109,10 +116,11 @@ describe("headElements", () => {
       mode: "demo",
       sessionKey: "x",
     });
-    expect(demo.join("")).not.toContain("orbitrace-");
+    expect(demo.join("")).not.toContain(HOST_META_NAME);
+    expect(demo.join("")).not.toContain(SESSION_META_NAME);
     expect(demo[1]).toBe(`<base href="${BASE}/">`);
     const editor = headElements({ cspSource: CSP_SOURCE, baseUri: BASE, mode: "editor" });
-    expect(editor.join("")).not.toContain("orbitrace-session");
+    expect(editor.join("")).not.toContain(SESSION_META_NAME);
   });
 });
 
@@ -127,9 +135,7 @@ describe("buildWebviewHtml", () => {
     const head = html.slice(html.indexOf("<head>"), html.indexOf("</head>"));
     expect(head.indexOf("Content-Security-Policy")).toBeLessThan(head.indexOf("<script"));
     expect(head.indexOf("<base ")).toBeLessThan(head.indexOf("<script"));
-    expect(html).toContain(
-      `<meta name="orbitrace-session" content="claude-code:&quot;&gt;&lt;script&gt;">`,
-    );
+    expect(html).toContain(sessionTag("claude-code:&quot;&gt;&lt;script&gt;"));
     expect(html.match(/<script/g)).toHaveLength(1);
     expect(html).toContain(`src="./assets/index-0000.js"`);
   });
@@ -137,12 +143,13 @@ describe("buildWebviewHtml", () => {
   it("replaces any policy, base or host tags already in the page", () => {
     const page = INDEX.replace(
       "<title>",
-      `<meta http-equiv="content-security-policy" content="default-src *"><base href="https://elsewhere.example/"><meta name="orbitrace-host" content="browser"><title>`,
+      `<meta http-equiv="content-security-policy" content="default-src *"><base href="https://elsewhere.example/"><meta name="${HOST_META_NAME}" content="browser"><META NAME='${SESSION_META_NAME.toUpperCase()}' content="claude-code:stale"><title>`,
     );
     const html = buildWebviewHtml(page, { cspSource: CSP_SOURCE, baseUri: BASE, mode: "demo" });
     expect(html).not.toContain("default-src *");
     expect(html).not.toContain("elsewhere.example");
     expect(html).not.toContain(`content="browser"`);
+    expect(html).not.toContain("claude-code:stale");
     expect(html.match(/Content-Security-Policy/gi)).toHaveLength(1);
   });
 
@@ -169,7 +176,23 @@ describe("buildWebviewHtml", () => {
       baseUri: BASE,
       mode: "editor",
     });
-    expect(html).toContain(`<meta name="orbitrace-host" content="editor">`);
+    expect(html).toContain(HOST_TAG);
     expect(html).toMatch(/<script type="module"[^>]*src="\.\/assets\/[^"]+\.js"/);
+  });
+});
+
+describe("host tags from core's protocol constants (#107)", () => {
+  it("keeps one host tag and one session tag when the page repeats them", () => {
+    const page = INDEX.replace("<title>", `${HOST_TAG}${sessionTag("claude-code:old")}<title>`);
+    const html = buildWebviewHtml(page, {
+      cspSource: CSP_SOURCE,
+      baseUri: BASE,
+      mode: "editor",
+      sessionKey: "claude-code:new",
+    });
+    expect(html.split(HOST_TAG)).toHaveLength(2);
+    expect(html.split(`name="${SESSION_META_NAME}"`)).toHaveLength(2);
+    expect(html).toContain(sessionTag("claude-code:new"));
+    expect(html).not.toContain("claude-code:old");
   });
 });

@@ -124,6 +124,12 @@ request.
 
 Times are seconds from the session start, not wall-clock times.
 
+A name that is not already an identifier (spaces, slashes, `@`, line breaks, non-ASCII, more
+than 64 characters) is replaced whole by a fixed label: `subagent` for an agent type, `unknown`
+for a tool name, `mcp:unknown` for an MCP server. No part of it is kept. The rules are in
+`packages/core/src/replay/names.ts`; why a name is replaced and not shortened is finding F1 of
+the [export audit](security/export-audit.md).
+
 **Never contains:**
 
 - Message text: prompts, replies or thinking.
@@ -140,7 +146,9 @@ Times are seconds from the session start, not wall-clock times.
 ### What export guarantees
 
 A replay file is written by `exportReplay` (issue #18, `packages/core/src/export/export-replay.ts`).
-`orbitrace export` uses it. For every file it writes:
+`orbitrace export` uses it. The whole path from a transcript line to a shared file, field by
+field, was audited in [security/export-audit.md](security/export-audit.md) (#23), with its
+findings and the tests that guard them. For every file it writes:
 
 - The data is built from an allow-list of the replay fields. Any other property of the input, at
   any depth, is dropped, never copied.

@@ -49,6 +49,19 @@ npm run typecheck
 npm run privacy
 ```
 
+Checks that are not part of `npm test`, each described where it is linked:
+
+- The VS Code integration test, with Node 22 or later:
+  `npm run test:integration -w orbitrace-vscode`. It downloads VS Code and runs the built
+  extension in a real window against synthetic sessions. See
+  [packages/vscode/README.md](../packages/vscode/README.md#integration-test).
+- The renderer benchmarks, in `packages/renderer`: `npm run bench:node` and
+  `npm run bench:browser` (Node 22 or later; settings `BENCH_DPR`, `BENCH_CPU_THROTTLE` and
+  `BENCH_AGENTS`). See [performance.md](performance.md).
+- The privacy check's flags (`--range`, `--strict-authors`) and its extra patterns
+  (`ORBITRACE_PRIVACY_DENYLIST`). See
+  [CONTRIBUTING.md](../CONTRIBUTING.md#before-you-open-a-pull-request).
+
 ## Run the web app with the demo
 
 ```sh
@@ -58,8 +71,9 @@ npm run dev -w @orbitrace/app
 Vite prints a local address on `127.0.0.1`; open it in a browser. With no host (no editor and no
 `orbitrace open` server) the app shows its bundled demo: a synthetic session with fourteen
 subagents. Press Space to play and pause, the arrow keys to scrub, and click an agent to inspect
-it. `npm run preview -w @orbitrace/app` serves the production build from `packages/app/dist`
-instead.
+it. The keyboard paths and the accessibility audit of the app are in
+[packages/app/ACCESSIBILITY.md](../packages/app/ACCESSIBILITY.md).
+`npm run preview -w @orbitrace/app` serves the production build from `packages/app/dist` instead.
 
 You can drop a file anywhere on the page, or use Open file. A `.replay.json` file is checked
 against the replay format. A `.jsonl` transcript is parsed in the page; one transcript file holds
@@ -138,17 +152,20 @@ share a file. See [privacy.md](privacy.md#what-a-shared-replay-contains).
 ## Build and install the extension by hand
 
 After `npm run build` at the repository root, `packages/vscode/dist` holds the bundled extension
-and its copy of the web app. Package it with `vsce`, which `npx` downloads from npm (it is not a
-dependency of this repository), and install the `.vsix` file:
+and its copy of the web app. Package it with the release script, which uses the copy of
+`@vscode/vsce` pinned in `scripts/release/tools/` (Node.js 22 or later), and install the `.vsix`
+file. From the repository root:
 
 ```sh
-cd packages/vscode
-npx @vscode/vsce package --no-dependencies --out <folder outside the repository>
-code --install-extension <folder outside the repository>/orbitrace-vscode-0.0.0.vsix
+(cd scripts/release/tools && npm ci --ignore-scripts)
+out="$(mktemp -d)/artefacts"
+node scripts/release/pack-release.mjs --out "$out"
+code --install-extension "$out"/orbitrace-vscode-0.0.0.vsix
 ```
 
-`--no-dependencies` is needed because everything the extension runs is already bundled into
-`dist/extension.js`. Write the `.vsix` outside the repository so it is not committed.
+`--out` must be an empty folder outside the repository, so nothing it writes is committed. The
+script also packs and checks the npm tarballs; what it writes is in
+[releasing.md](releasing.md#a-local-dry-run).
 
 Then click the Orbitrace icon in the activity bar. The Sessions view lists the Claude Code
 sessions on the machine the workspace is on, the open workspace folder's sessions first. Press
@@ -167,4 +184,9 @@ To remove it, uninstall Orbitrace from the Extensions view.
 - [replay-format.md](replay-format.md): what a replay file holds.
 - [privacy.md](privacy.md): what Orbitrace reads, stores and puts in a shared replay.
 - [cli.md](cli.md): the command line in full.
+- [performance.md](performance.md): performance targets, benchmarks and results.
+- [security/export-audit.md](security/export-audit.md): the audit of what can reach a shared
+  replay.
+- [releasing.md](releasing.md) and [CHANGELOG.md](../CHANGELOG.md): how a release is cut, and
+  what changed.
 - [CONTRIBUTING.md](../CONTRIBUTING.md): how to contribute.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { formatAgo } from "@orbitrace/core";
 import {
   describeSession,
   liveText,
@@ -19,6 +20,10 @@ describe("relativeTime", () => {
     expect(relativeTime(NOW - 86_400_000, NOW)).toBe("1 day ago");
     expect(relativeTime(NOW - 4 * 86_400_000, NOW)).toBe("4 days ago");
     expect(relativeTime(Number.NaN, NOW)).toBe("just now");
+  });
+
+  it("is core's formatter, so this view matches the app's session picker (#129)", () => {
+    expect(relativeTime).toBe(formatAgo);
   });
 });
 

@@ -4,7 +4,7 @@
  * screenshot should not carry. No vscode dependency, so it is unit tested.
  */
 
-import type { SessionSummary } from "@orbitrace/core";
+import { formatAgo, type SessionSummary } from "@orbitrace/core";
 
 export interface SessionText {
   /** The project name. */
@@ -15,19 +15,12 @@ export interface SessionText {
   readonly tooltip: string;
 }
 
-const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
-
-/** `just now`, `5 min ago`, `3 h ago`, `2 days ago`. A time in the future reads `just now`. */
-export function relativeTime(then: number, now: number): string {
-  const elapsed = now - then;
-  if (!Number.isFinite(elapsed) || elapsed < MINUTE) return "just now";
-  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} min ago`;
-  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)} h ago`;
-  const days = Math.floor(elapsed / DAY);
-  return days === 1 ? "1 day ago" : `${days} days ago`;
-}
+/**
+ * `just now`, `5 min ago`, `3 h ago`, `2 days ago`. A time in the future reads `just now`.
+ * Core's `formatAgo` (#129), so this view and the app's session picker word last activity the
+ * same way. Kept under this name so existing imports keep working.
+ */
+export const relativeTime: (then: number, now: number) => string = formatAgo;
 
 /** `live` for a session whose process is running, `ended`, or null when unknown. */
 export function liveText(live: SessionSummary["live"]): string | null {

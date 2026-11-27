@@ -1,11 +1,36 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// main() loads @vscode/test-electron lazily. The stand-in records whether the cache folder
+// existed when the download was asked for, then stops the run: no editor is downloaded or
+// started by the unit tests.
+const download = vi.hoisted(() => ({ cachePath: "", existedAtCall: false }));
+vi.mock("@vscode/test-electron", async () => {
+  const fs = await import("node:fs");
+  return {
+    downloadAndUnzipVSCode: (options: { cachePath: string }) => {
+      download.cachePath = options.cachePath;
+      download.existedAtCall = fs.existsSync(options.cachePath);
+      return Promise.reject(new Error("stand-in: no download in unit tests"));
+    },
+  };
+});
 import {
   DEFAULT_TIMEOUT_MS,
   downloadCacheDir,
+  ensureDownloadCacheDir,
+  main,
   EXTRA_ARGS_ENV,
   KEEP_ENV,
   MIN_NODE_MAJOR,
@@ -55,6 +80,50 @@ describe("packageDirFrom, suiteBundlePath and downloadCacheDir", () => {
   it("keep the downloaded editor below node_modules, which every tool ignores", () => {
     const pkg = join(tmpdir(), "pkg");
     expect(downloadCacheDir(pkg)).toBe(join(pkg, "node_modules", ".cache", "vscode-test"));
+  });
+});
+
+describe("ensureDownloadCacheDir (#125)", () => {
+  it("creates the cache folder and its missing parents, as on a fresh clone", () => {
+    const pkg = tempDir();
+    // A fresh clone after `npm ci`: node_modules exists, node_modules/.cache does not.
+    mkdirSync(join(pkg, "node_modules"));
+    expect(existsSync(join(pkg, "node_modules", ".cache"))).toBe(false);
+    const dir = ensureDownloadCacheDir(pkg);
+    expect(dir).toBe(downloadCacheDir(pkg));
+    expect(statSync(dir).isDirectory()).toBe(true);
+  });
+
+  it("creates node_modules too when it is missing", () => {
+    const pkg = tempDir();
+    expect(statSync(ensureDownloadCacheDir(pkg)).isDirectory()).toBe(true);
+  });
+
+  it.skipIf(nodeTooOld(process.version))(
+    "runs in main() before the download is asked for",
+    async () => {
+      const pkg = tempDir();
+      for (const file of [
+        ["dist", "extension.js"],
+        ["dist", "app", "index.html"],
+        ["test-integration", "dist", "suite.cjs"],
+      ]) {
+        mkdirSync(join(pkg, ...file.slice(0, -1)), { recursive: true });
+        writeFileSync(join(pkg, ...file), "");
+      }
+      await expect(main(pkg)).rejects.toThrow(/stand-in/);
+      expect(download.cachePath).toBe(downloadCacheDir(pkg));
+      expect(download.existedAtCall).toBe(true);
+    },
+  );
+
+  it("keeps an existing folder and what is in it", () => {
+    const pkg = tempDir();
+    const dir = downloadCacheDir(pkg);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "kept.txt"), "synthetic");
+    expect(ensureDownloadCacheDir(pkg)).toBe(dir);
+    expect(existsSync(join(dir, "kept.txt"))).toBe(true);
   });
 });
 

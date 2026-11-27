@@ -10,8 +10,12 @@
  *   app folder.
  * - The host meta tags from the wire layout on #12: `orbitrace-host` = `editor` makes the app
  *   use the webview transport; `orbitrace-session` preselects a session by key. A page built
- *   for the demo carries neither tag, so the app shows its bundled demo.
+ *   for the demo carries neither tag, so the app shows its bundled demo. The names and the value
+ *   come from core's host protocol (`HOST_META_NAME`, `EDITOR_HOST_META_VALUE`,
+ *   `SESSION_META_NAME`, #96, #107), the same constants the app reads them with.
  */
+
+import { EDITOR_HOST_META_VALUE, HOST_META_NAME, SESSION_META_NAME } from "@orbitrace/core";
 
 export interface WebviewPageOptions {
   /** `webview.cspSource` of the panel. */
@@ -92,15 +96,28 @@ export function headElements(options: WebviewPageOptions): string[] {
     `<base href="${escapeAttribute(base)}">`,
   ];
   if (options.mode === "editor") {
-    elements.push(`<meta name="orbitrace-host" content="editor">`);
+    elements.push(
+      `<meta name="${escapeAttribute(HOST_META_NAME)}" content="${escapeAttribute(EDITOR_HOST_META_VALUE)}">`,
+    );
     if (options.sessionKey !== undefined && options.sessionKey !== "") {
       elements.push(
-        `<meta name="orbitrace-session" content="${escapeAttribute(options.sessionKey)}">`,
+        `<meta name="${escapeAttribute(SESSION_META_NAME)}" content="${escapeAttribute(options.sessionKey)}">`,
       );
     }
   }
   return elements;
 }
+
+/** `value` with every regular-expression special character escaped. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** A `<meta>` tag naming either host meta tag, in any case and quoting, with trailing space. */
+const HOST_META_TAG = new RegExp(
+  `<meta\\b[^>]*name\\s*=\\s*["']?(?:${escapeRegExp(HOST_META_NAME)}|${escapeRegExp(SESSION_META_NAME)})["']?[^>]*>\\s*`,
+  "gi",
+);
 
 /**
  * The page for an editor tab. Throws when `indexHtml` has an inline script (a `<script>`
@@ -115,7 +132,7 @@ export function buildWebviewHtml(indexHtml: string, options: WebviewPageOptions)
   // Remove any policy or host tags the page already has, so only the ones set here apply.
   const cleaned = indexHtml
     .replace(/<meta\b[^>]*http-equiv\s*=\s*["']?content-security-policy["']?[^>]*>\s*/gi, "")
-    .replace(/<meta\b[^>]*name\s*=\s*["']?orbitrace-(?:host|session)["']?[^>]*>\s*/gi, "")
+    .replace(HOST_META_TAG, "")
     .replace(/<base\b[^>]*>\s*/gi, "");
   const head = /<head\b[^>]*>/i.exec(cleaned);
   if (head === null) throw new Error("The app page has no <head> element.");
