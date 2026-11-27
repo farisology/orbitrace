@@ -2,7 +2,7 @@
 // so `process`, `Buffer` or a node: import in these files fails the typecheck (#72).
 // composite makes importing a ./node file from here an error too (TS6307): that file is not
 // in this project, and its `/// <reference types="node" />` would bring Node's types back.
-// The excluded paths are the ./node entry; tsconfig.node.build.json includes the same two.
+// The excluded paths are the ./node entry; tsconfig.node.build.json includes the same three.
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {

@@ -6,20 +6,21 @@ independent project and is not affiliated with Anthropic.
 
 This page describes the package boundaries, the data flow, where each piece lives and which
 ticket built it. Ticket #2 wrote the contract; the parser, source resolution, the replay
-builder, export, the renderer, the app, the editor extension and the command line with its
-loopback server are built on `dev`. What is not built is listed in [Not built yet](#not-built-yet).
+builder, export, the ledger, the history store (in core only), the renderer, the app, the editor
+extension and the command line with its loopback server and `doctor` are built on `dev`. What is
+not built is listed in [Not built yet](#not-built-yet).
 Nothing is published to npm or a marketplace; see [getting-started.md](getting-started.md).
 
 ## Packages
 
-| Package               | Folder              | Role                                                                                                                                                                                                                                                                       | Depends on at run time                                                                                                                                         |
-| --------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@orbitrace/core`     | `packages/core`     | Raw, parsed and replay types; the replay v1 schema; the parser, source resolution, the replay builder and feed, export and validation. The Node-only parts (the Claude Code adapter, its file watcher and the session replayer) are on the `@orbitrace/core/node` subpath. | nothing (Ajv is a dev dependency)                                                                                                                              |
-| `@orbitrace/renderer` | `packages/renderer` | Framework-free Canvas 2D engine that draws one replay model: `createOrrery`, and `createOrreryWithEnvironment` for an injected frame scheduler, pixel ratio and sprite surfaces.                                                                                           | core (`toRealSeconds`, `KNOWN_MODEL_FAMILIES`, types)                                                                                                          |
-| `@orbitrace/app`      | `packages/app`      | React and Vite shell: orrery, inspector, timeline, controls, event feed and session picker. Talks to its host only through `HostTransport`. Private.                                                                                                                       | core (`parseSession`, `buildReplay`, `validateReplay`, `describeReplayProblems`, `replayFeed`, `toRealSeconds`); renderer (`createOrrery`)                     |
-| `@orbitrace/fixtures` | `packages/fixtures` | Seeded generator of synthetic transcripts, the paths of the files in `fixtures/`, and the golden replay files. Used by tests and for the demo. Private.                                                                                                                    | core                                                                                                                                                           |
-| `orbitrace-vscode`    | `packages/vscode`   | Editor extension: a Sessions view, four commands and one editor tab per session, answered by the editor side of `HostTransport`. Private.                                                                                                                                  | core, bundled into `dist/extension.js`; the built app, copied into `dist/app` (both are devDependencies, see [below](#how-the-extension-ships-the-web-app-87)) |
-| `orbitrace`           | `packages/cli`      | Command line: `list`, `export` and `open`; `open` serves the app over a loopback server. Private.                                                                                                                                                                          | core, bundled into `dist/index.js` (#120); the built app, copied into `dist/app` (both are devDependencies, see [below](#how-the-cli-ships-the-web-app-76))    |
+| Package               | Folder              | Role                                                                                                                                                                                                                                                                                                      | Depends on at run time                                                                                                                                                      |
+| --------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@orbitrace/core`     | `packages/core`     | Raw, parsed and replay types; the replay v1 schema; the parser, source resolution, the replay builder and feed, export and validation, the ledger. The Node-only parts (the Claude Code adapter, its file watcher, the session replayer and the history store) are on the `@orbitrace/core/node` subpath. | nothing (Ajv is a dev dependency)                                                                                                                                           |
+| `@orbitrace/renderer` | `packages/renderer` | Framework-free Canvas 2D engine that draws one replay model: `createOrrery`, and `createOrreryWithEnvironment` for an injected frame scheduler, pixel ratio and sprite surfaces.                                                                                                                          | core (`toRealSeconds`, `KNOWN_MODEL_FAMILIES`, types)                                                                                                                       |
+| `@orbitrace/app`      | `packages/app`      | React and Vite shell: orrery, inspector, timeline, controls, event feed and session picker. Talks to its host only through `HostTransport`. Private.                                                                                                                                                      | core (`parseSession`, `buildReplay`, `validateReplay`, `describeReplayProblems`, `replayFeed`, `toRealSeconds`, `exportReplay`, `sessionLedger`); renderer (`createOrrery`) |
+| `@orbitrace/fixtures` | `packages/fixtures` | Seeded generator of synthetic transcripts, the paths of the files in `fixtures/`, and the golden replay files. Used by tests and for the demo. Private.                                                                                                                                                   | core                                                                                                                                                                        |
+| `orbitrace-vscode`    | `packages/vscode`   | Editor extension: a Sessions view, four commands and one editor tab per session, answered by the editor side of `HostTransport`. Private.                                                                                                                                                                 | core, bundled into `dist/extension.js`; the built app, copied into `dist/app` (both are devDependencies, see [below](#how-the-extension-ships-the-web-app-87))              |
+| `orbitrace`           | `packages/cli`      | Command line: `list`, `export`, `open` and `doctor`; `open` serves the app over a loopback server. Private.                                                                                                                                                                                               | core, bundled into `dist/index.js` (#120); the built app, copied into `dist/app` (both are devDependencies, see [below](#how-the-cli-ships-the-web-app-76))                 |
 
 Rules:
 
@@ -29,9 +30,9 @@ Rules:
 - `renderer` has no framework dependency. It reads nothing but the replay model it is given.
 - `app` never reads files from disk. It talks to its host only through `HostTransport`. A file
   the user drops or picks is read inside the page.
-- Only a `ReplayModel`, `SessionSummary` values and path-free `{ code, message }` errors cross
-  from a host to the app. Raw lines, parsed sessions, paths and locators stay on the host side,
-  inside the session replayer from `@orbitrace/core/node` (#75).
+- Only a `ReplayModel`, `SessionSummary` values, `saveReplay` outcomes and path-free
+  `{ code, message }` errors cross from a host to the app. Raw lines, parsed sessions, paths and
+  locators stay on the host side, inside the session replayer from `@orbitrace/core/node` (#75).
 
 ## Data flow
 
@@ -51,7 +52,7 @@ ParsedSession           merged replies, paired calls,       core/src/model/parse
         v
 ReplayModel v1          structure only, schema-checked      core/src/model/replay.ts
         |                                                   core/schema/replay-v1.schema.json
-        +--> exportReplay -> orbitrace.replay.json                      (#18)
+        +--> exportReplay -> orbitrace.replay.json          (#18; from the app, #168)
         |
         +--> HostTransport: editor messages (#12) or loopback HTTP (#17)
                  |
@@ -75,8 +76,9 @@ can be linked, but no text, inputs, outputs, paths, branch, title or subagent de
 - `@orbitrace/core/node` maps through the `exports` field of `packages/core/package.json`
   (`./node`) to `dist/sources/node.js`. It holds the Claude Code adapter (#7), the session file
   watcher behind `watchSession` (#74), the session replayer (`createSessionReplayer`,
-  `createNodeSessionReplayer`, #75) and `nodeResolveContext`. Hosts (the CLI, the editor
-  extension) import these from here and everything else from `@orbitrace/core`. The replayer's
+  `createNodeSessionReplayer`, #75), `nodeResolveContext` and the history store
+  (`openHistoryStore`, `ingestHistory` and the rest, #25; see [History store](#history-store-25)).
+  Hosts (the CLI, the editor extension) import these from here and everything else from `@orbitrace/core`. The replayer's
   update types (`SessionReplayUpdate`, `SessionReplayListener`) are also exported from the main
   entry, as types only (#84).
 - The main entry must stay free of Node imports. Two tests guard this:
@@ -84,12 +86,15 @@ can be linked, but no text, inputs, outputs, paths, branch, title or subagent de
   checks which entry exports what, and `packages/fixtures/test/generator.test.ts` checks that the
   generator and the core files it reaches have no Node import. The type check enforces it too
   (#72): `packages/core/tsconfig.browser.json` checks `src` without Node's types and leaves out
-  the `./node` entry (`src/sources/node.ts` and `src/sources/claude-code/`), so a Node global, a
-  `node:` import or an import of a `./node` file there fails `npm run typecheck`.
+  the `./node` entry (`src/sources/node.ts`, `src/sources/claude-code/` and `src/history/`), so a
+  Node global, a `node:` import or an import of a `./node` file there fails `npm run typecheck`.
   `packages/core/tsconfig.json` checks `src` and `test` with Node's types. The build
   (`tsconfig.build.json`) emits the two entries as two projects,
   `tsconfig.browser.build.json` and `tsconfig.node.build.json`. What a contributor sees and how
   to add a Node-only file is in [AGENTS.md](../AGENTS.md#5-keep-changes-inside-one-package).
+- The ledger (#26) is in `src/ledger/` and is browser-safe: `sessionLedger` totals one session's
+  tokens in four classes and estimates their cost, by model and by agent, and the app's inspector
+  shows it. See [ledger.md](ledger.md).
 
 ## Where each piece lives
 
@@ -122,6 +127,10 @@ re-exports the wire layout.
 | #85    | The wire layout shared by the app and both hosts                                                               | exported as `@orbitrace/app`                                              |
 | #87    | How the extension ships the web app                                                                            | `packages/vscode/scripts/`                                                |
 | #96    | One host protocol and one set of display formatters, shared from core                                          | `core/src/model/transport.ts`, `core/src/protocol/`, `core/src/format/`   |
+| #25    | The history store (`@orbitrace/core/node`); no host uses it yet                                                | `core/src/history/`                                                       |
+| #26    | The ledger: `sessionLedger`, the price table and `formatCostEstimate`                                          | `core/src/ledger/`                                                        |
+| #31    | `orbitrace doctor`                                                                                             | `packages/cli/src/doctor/`                                                |
+| #168   | Export from the app; the `saveReplay` request                                                                  | `packages/app/src/export-replay.ts`, `core/src/protocol/save-replay.ts`   |
 
 `CoreApi` in `core/src/api.ts` lists the function signatures of the core surface.
 
@@ -274,8 +283,9 @@ until the user turns it on.
 
 `exportReplay` builds a new value from an allow-list of the replay fields, checks it against the
 replay v1 schema and writes JSON with keys in a fixed order. The file name is always
-`orbitrace.replay.json`. What export guarantees and what it does not is in
-[privacy.md](privacy.md#what-a-shared-replay-contains).
+`orbitrace.replay.json`. `orbitrace export` and the app's Export button (#168) both write through
+it, so with no option chosen they write the same bytes for the same session. What export
+guarantees and what it does not is in [privacy.md](privacy.md#what-a-shared-replay-contains).
 
 Export and validation use a validator precompiled from the schema,
 `packages/core/src/export/replay-v1-validator.generated.ts`, made with Ajv's standalone code and
@@ -287,6 +297,25 @@ matches the schema. To regenerate, from `packages/core`:
 ```sh
 npx vitest run -u test/export/validator-source.test.ts
 ```
+
+### Saving a replay from an editor tab (#168)
+
+A webview cannot download a file, so the app in an editor tab sends the exported text to the
+extension with one more request, `saveReplay` (`core/src/protocol/save-replay.ts`). It is
+additive: it sits beside the `TransportRequest` union, which does not change, and only the editor
+host takes it. The loopback server does not; in a browser the app downloads the file itself.
+
+- The request is `{ id, method: "saveReplay", params: { data } }`. `data` is the text
+  `exportReplay` returned. It carries no path and no file name.
+- The host checks it with `checkSaveReplayRequest` (at most 50 MiB of UTF-8), parses it, checks
+  it with `validateReplay` and writes it again through `exportReplay`, so nothing beyond the
+  allow-listed fields can reach the file. Then the editor's save dialog asks the user where to
+  save it, suggesting `orbitrace.replay.json`.
+- The reply is a `result` of `{ outcome: "saved" }` or `{ outcome: "cancelled" }` (the user
+  closed the dialog), or an `error` with a fixed `{ code, message }` that names no path:
+  `bad-request` (malformed or too large), `invalid` (not a valid replay), `internal` (the file
+  could not be written) or `unsupported` (a tab that cannot save).
+- The extension's demo tab has no host, so the app shows no Export button there.
 
 ## Renderer commands (#10)
 
@@ -514,13 +543,12 @@ Nothing in the replay model, the renderer, the app or the transport refers to a 
 - **Publishing.** No package is on npm, and the extension is not on the VS Code Marketplace or
   Open VSX. `@orbitrace/app`, `@orbitrace/fixtures`, `orbitrace` and `orbitrace-vscode` are
   marked private.
-- **A history record** that outlives Claude Code's cleanup. There is no database and nothing is
-  stored (issues #24 and #25).
+- **A history record in use.** The store exists in core (see [History store](#history-store-25)),
+  but no host calls it, so nothing is stored.
 - **Hooks.** Core resolves roots from hook-reported transcript paths, but no host passes any.
 - **Host settings.** The extension has no settings: it reads `CLAUDE_CONFIG_DIR` or the default
   config folder only, with no extra roots and no polling mode. The command line takes
   `--config-dir` and `--extra-roots`.
 - **Opening a session in the browser from the editor.** The editor host answers `openInBrowser`
   with `unsupported`.
-- **Export from the app or the extension.** Only `orbitrace export` writes a replay file.
 - **A Claude Code plugin package.**

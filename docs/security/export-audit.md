@@ -252,8 +252,9 @@ writing, so a bad value would be refused, not written. No leak path found.
 - Ids are never copied; agent ids are assigned by the builder.
 - Free text never reaches any field, from any position, in any form.
 - `effort` and `kind` are closed sets; `family` is derived from an already accepted model id.
-- The suggested file name is always `orbitrace.replay.json`. The command line shows only the
-  path the user typed, and `orbitrace export -o` prints only that path, the byte count and the
+- The suggested file name is always `orbitrace.replay.json`, also for the app's Export button
+  and the editor's save dialog (#168; checked on `dev` at e78bb38). The command line shows only
+  the path the user typed, and `orbitrace export -o` prints only that path, the byte count and the
   share note.
 - Error messages of export, validation, the session replayer and the command line are fixed
   text or a JSON pointer plus a rule; none quotes a value.

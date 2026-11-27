@@ -202,6 +202,37 @@ The automated checks above cover these states; no screen reader was used for the
 axe-core runs on the open dialog with an error shown (`test/a11y.test.tsx`); no screen reader
 was used.
 
+## Inspector ledger (issue 26)
+
+The inspector shows tokens and a cost estimate (`components/LedgerTables.tsx`): for the session
+when no agent is selected (session tokens, then by model and by agent), and for the selected
+agent. What was decided, and why:
+
+- **Tables** (1.3.1 Info and Relationships). Each ledger table has a caption ("Session tokens",
+  "Tokens", "Estimated cost (USD) by model", "Estimated cost (USD) by agent"), column headers
+  (`th scope="col"`) and row headers (`th scope="row"`: the token class, model or callsign).
+  `test/ledger-panel.test.tsx` finds each table by its caption and reads its column and row
+  headers.
+- **Every cost is called an estimate** (1.3.1, 2.4.6 Headings and Labels). Every cost column
+  header is "Estimated cost (USD)", and a note under the tables says the costs are estimates in
+  US dollars at list prices, with the date the prices were read and what is left out.
+- **Partial and unpriced in words** (1.4.1 Use of Color). A total that leaves out unpriced replies
+  reads "(partial)" after the amount. A cost that cannot be priced reads "not priced", never a
+  guessed amount. A note names each unpriced model with its token count ("Not priced: ..."), or
+  says why the selected agent is not priced. None of this relies on colour.
+- **Contrast** (1.4.3 Contrast). Costs are drawn in `--ledger`, "not priced" in `--dim` and the
+  notes in `--faint`; `test/contrast.test.ts` checks all three at 4.5:1 or more on `void`,
+  `deck`, `panel` and `rim`.
+- **Reflow** (1.4.10 Reflow, 1.4.12 Text Spacing). The amount and "(partial)" each stay on one
+  line, and the cell may break between them; row headers may break inside a long model id or
+  callsign. So the tables do not grow wider than the inspector. `test/ledger-panel.test.tsx` checks
+  these rules in `ledger.css` and that nothing there hides overflow. The Chrome check at 320 and
+  1280 px is described in [docs/ledger.md](../../docs/ledger.md#what-an-estimate-means).
+
+axe-core runs on the inspector with the ledger in three states: the session with an unpriced
+model, an unpriced agent selected, and the demo session (`test/ledger-panel.test.tsx`). No screen
+reader was used.
+
 ## Result per criterion (WCAG 2.1 A and AA)
 
 "Pass" means no failure was found by the methods above. It is not a screen reader sign-off.
@@ -294,6 +325,9 @@ VoiceOver with Safari on macOS, and once inside the VS Code extension:
     downloaded as ...", "Replay saved as ...", "Export cancelled ...") is read once, and read
     again when the next export ends the same way. In a VS Code
     editor tab, the editor's save dialog opens and the result is read after it closes.
+15. Ledger: each table is read with its caption, and moving through a row reads the class, model
+    or callsign before each cell; "(partial)" and "not priced" are read in place; the note under
+    the tables can be reached by reading on from the last table.
 
 ## Not covered
 

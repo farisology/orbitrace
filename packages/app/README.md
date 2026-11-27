@@ -45,8 +45,15 @@ The page URL takes `?t=<seconds>` (compressed timeline), `?select=<agent id>`,
   scroll inside the timeline and the orrery keeps its size; while following, the newest lane is
   scrolled into view unless you scrolled the lanes yourself or it would hide the selected lane.
 - **Select an agent** on the canvas or with its timeline lane label. The inspector shows its
-  callsign, model family and shape, effort, wave, start and end in real time, token classes and
-  tool calls by kind with failures.
+  callsign, model family and shape, effort, wave, start and end in real time, token classes with
+  a cost estimate and tool calls by kind with failures. With no agent selected it shows the
+  session's tokens and estimate, by model and by agent (the ledger, from core's `sessionLedger`;
+  see [docs/ledger.md](../../docs/ledger.md)).
+- **Export** (header button): saves the replay on screen as a file made by core's
+  `exportReplay`, with three privacy options that are off each time the dialog opens (opaque
+  names, rounded times, bucketed tokens). A browser page downloads the file; an editor tab sends
+  it to the extension, which asks where to save it. The extension's demo tab and the public
+  replay player have no Export button. A running session is exported as it is at that moment.
 - **Drop a file** anywhere on the page, or use Open file. A `.replay.json` is checked with
   `validateReplay`; a `.jsonl` transcript is parsed with `parseSession` and `buildReplay`. The
   file is read in the page and is not sent anywhere. A single transcript holds the main agent

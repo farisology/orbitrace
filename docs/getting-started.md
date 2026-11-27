@@ -12,7 +12,8 @@ no extension on the VS Code Marketplace or Open VSX. Everything below runs from 
 - **Web app:** plays a bundled demo session (invented data). You can drop a `.replay.json` file
   or a `.jsonl` transcript onto it.
 - **`orbitrace` command:** `list` lists the sessions on your machine, `export` writes a
-  structure-only replay file, and `open` shows a session in your browser.
+  structure-only replay file, `open` shows a session in your browser, and `doctor` checks the
+  set-up and says how to fix what is wrong.
 - **VS Code extension:** a Sessions view in the activity bar, and one editor tab per session.
 
 ## Prerequisites
@@ -95,6 +96,7 @@ node packages/cli/dist/index.js --version
 | `list`   | Lists sessions, newest first: key, last activity, status, subagents, project. |
 | `export` | Writes the structure-only replay of one session.                              |
 | `open`   | Opens a session in your browser through a local server. Ctrl+C stops it.      |
+| `doctor` | Checks the set-up and says what is wrong and how to fix it. Changes nothing.  |
 
 Run each one as `node packages/cli/dist/index.js <command>`.
 
@@ -218,6 +220,8 @@ To remove it, uninstall Orbitrace from the Extensions view.
 - [replay-format.md](replay-format.md): what a replay file holds.
 - [privacy.md](privacy.md): what Orbitrace reads, stores and puts in a shared replay.
 - [cli.md](cli.md): the command line in full.
+- [ledger.md](ledger.md): the token totals and cost estimate in the inspector.
+- [player.md](player.md): the public replay player.
 - [performance.md](performance.md): performance targets, benchmarks and results.
 - [security/export-audit.md](security/export-audit.md): the audit of what can reach a shared
   replay.

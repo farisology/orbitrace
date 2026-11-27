@@ -78,20 +78,20 @@ Jobs:
 ## Artefacts
 
 `pack-release.mjs` writes these files. Sizes are from a local run of
-`node scripts/release/pack-release.mjs` (with the `.vsix`) on 27 Nov 2026 on `dev` after the
-wave F merges (#158, #143, #144, #122, #149), version `0.0.0`, taken from its
-`release-manifest.json` (the manifest has no unpacked size for the `.vsix`, so that cell is the
-sum of its file sizes); KiB is 1024 bytes. The CLI tarball and the `.vsix` include the web app's
-`THIRD-PARTY-NOTICES.txt` and `third-party-modules.json` (#143).
+`node scripts/release/pack-release.mjs` (with the `.vsix`) on 27 Nov 2026 on `dev` at `e78bb38`
+(after #25, #26, #31, #168 and #22) with the docs changes of #183 to #187, version `0.0.0`, taken
+from its `release-manifest.json` (the manifest has no unpacked size for the `.vsix`, so that cell
+is the sum of its file sizes); KiB is 1024 bytes. The CLI tarball and the `.vsix` include the web
+app's `THIRD-PARTY-NOTICES.txt` and `third-party-modules.json` (#143).
 
-| File                         | Packed    | Unpacked  | Files | Contents                                                                                                                          |
-| ---------------------------- | --------- | --------- | ----- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `orbitrace-core-<v>.tgz`     | 108.9 KiB | 462.2 KiB | 84    | `dist/**/*.js`, `dist/**/*.d.ts`, `schema/replay-v1.schema.json`, `README.md`, `LICENSE`, `package.json`                          |
-| `orbitrace-renderer-<v>.tgz` | 57.6 KiB  | 191.5 KiB | 41    | `dist/**/*.js`, `dist/**/*.d.ts`, `README.md`, `LICENSE`, `package.json`                                                          |
-| `orbitrace-<v>.tgz` (CLI)    | 169.2 KiB | 674.1 KiB | 12    | `dist/index.js` (core bundled in), the web app, its notices and module list in `dist/app`, `README.md`, `LICENSE`, `package.json` |
-| `orbitrace-vscode-<v>.vsix`  | 164.8 KiB | 645.4 KiB | 15    | `extension/dist/extension.js` (core bundled in), `extension/dist/app` with notices and module list, the icon, readme, licence     |
-| `SHA256SUMS`                 |           |           |       | One `<sha256>  <file>` line per artefact. `sha256sum -c SHA256SUMS` (or `shasum -a 256 -c`) checks them.                          |
-| `release-manifest.json`      |           |           |       | The version, the commit, and each artefact's size, SHA-256, file list, warnings and errors.                                       |
+| File                         | Packed    | Unpacked  | Files | Contents                                                                                                                                                                                                        |
+| ---------------------------- | --------- | --------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orbitrace-core-<v>.tgz`     | 155.8 KiB | 617.6 KiB | 116   | `dist/**/*.js`, `dist/**/*.d.ts`, `schema/replay-v1.schema.json`, `README.md`, `LICENSE`, `package.json`                                                                                                        |
+| `orbitrace-renderer-<v>.tgz` | 57.6 KiB  | 191.5 KiB | 41    | `dist/**/*.js`, `dist/**/*.d.ts`, `README.md`, `LICENSE`, `package.json`                                                                                                                                        |
+| `orbitrace-<v>.tgz` (CLI)    | 188.9 KiB | 747.8 KiB | 12    | `dist/index.js` (core bundled in), the web app, its notices and module list in `dist/app`, `README.md`, `LICENSE`, `package.json`                                                                               |
+| `orbitrace-vscode-<v>.vsix`  | 192.9 KiB | 713.8 KiB | 16    | `extension/dist/extension.js` (core bundled in), `extension/dist/app` with notices and module list, the activity-bar icon, the listing icon `extension/media/icon.png` (256x256 PNG, 11.9 KiB), readme, licence |
+| `SHA256SUMS`                 |           |           |       | One `<sha256>  <file>` line per artefact. `sha256sum -c SHA256SUMS` (or `shasum -a 256 -c`) checks them.                                                                                                        |
+| `release-manifest.json`      |           |           |       | The version, the commit, and each artefact's size, SHA-256, file list, warnings and errors.                                                                                                                     |
 
 Each tarball is checked for:
 
@@ -279,7 +279,9 @@ None of these can be done from the repository. Each is a one-time step.
    - Open VSX: sign in at open-vsx.org, accept the Eclipse Foundation publisher agreement, and
      create the namespace with the same id as the Marketplace publisher
      (`npx ovsx create-namespace <publisher> -p <token>`, or the pinned `ovsx` in
-     `scripts/release/tools`).
+     `scripts/release/tools`). What the listing is built from, and what Open VSX needs beyond the
+     Marketplace, is in
+     [Listing metadata](../packages/vscode/README.md#listing-metadata).
 2. **Set the publisher (#98)** in `packages/vscode/package.json`. Until then the `.vsix` installs
    as `undefined_publisher.orbitrace-vscode`, and changing it later breaks updates for anyone who
    installed the first one.

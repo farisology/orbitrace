@@ -34,7 +34,8 @@ merged so far.
   #90), and an integration test that runs it in a real VS Code window (#102, #105).
 - Synthetic transcript fixtures with a seeded generator (#9, #55), and golden replays made by the
   same pipeline as an export (#73, #79).
-- CI on Node 20 and 22 with a privacy check of the files and of every new commit (#3, #48).
+- CI on Node 20 and 22 (now also 24 and 26, see #174 under Changed) with a privacy check of the
+  files and of every new commit (#3, #48).
 - The npm workspaces monorepo (#1, #45), design tokens and identity assets (#5, #46),
   contributor and agent documentation (#4, #44), trademark and licence notes (#40, #43), a
   storage spike for the history index (#24, #47), and documentation for everything merged so
@@ -106,6 +107,9 @@ merged so far.
 - CI builds and tests on Node 24 and 26 as well as 20 and 22; docs catch-up for the allocation
   test, opaque-name replays, third-party notices and the release gaps (#174, #165, #166, #169,
   #170, #173).
+- Docs catch-up for `orbitrace doctor`, the history store, the ledger, export from the app and the
+  `saveReplay` request, the CI Node matrix and the release artefact sizes (#183, #185, #186,
+  #187).
 
 ### Fixed
 
