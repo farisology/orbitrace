@@ -9,6 +9,7 @@
  */
 
 import { agentPhase, type AgentSpan } from "@orbitrace/core";
+import { scheduleFlashes } from "./flash.js";
 import type { Scene } from "./scene.js";
 
 /** Lengths of short effects, in real seconds at the current playback speed. */
@@ -61,7 +62,10 @@ export interface FrameState {
   readonly dispatch: Float32Array;
   /** Handback comet progress from 0 to 1, or -1 when not shown. */
   readonly handback: Float32Array;
-  /** Spawn flash progress from 0 to 1, or -1 when not shown. */
+  /**
+   * Spawn flash progress from 0 to 1, or -1 when not shown. Flashes follow the schedule in
+   * flash.ts, so at most three start in any one second (#118).
+   */
   readonly spawn: Float32Array;
   /** Number of valid entries in the flight arrays. */
   flightCount: number;
@@ -184,6 +188,9 @@ export function computeFrameState(
   const comet = EFFECT_SECONDS.comet * speed;
   const spawn = EFFECT_SECONDS.spawn * speed;
   const maxOutput = scene.maxOutput;
+  const flashes = reduced
+    ? scene.flashes
+    : scheduleFlashes(scene.flashes, speed, EFFECT_SECONDS.warp);
 
   out.t = t;
   out.speed = speed;
@@ -248,7 +255,8 @@ export function computeFrameState(
     } else {
       out.dispatch[i] = effectProgress(t, a.start - comet, comet);
       out.handback[i] = a.end === Infinity ? -1 : effectProgress(t, a.end, comet);
-      out.spawn[i] = effectProgress(t, a.start, spawn);
+      const flashAt = flashes.spawnAt[i]!;
+      out.spawn[i] = flashAt >= a.start ? effectProgress(t, flashAt, spawn) : -1;
     }
   }
 
@@ -259,6 +267,8 @@ export function computeFrameState(
   if (!reduced) {
     const length = EFFECT_SECONDS.warp * speed;
     for (let w = 0; w < scene.warpAt.length; w++) {
+      // Shown warps never overlap (flash.ts), so at most one is in progress.
+      if (flashes.warpShown[w] !== 1) continue;
       const p = effectProgress(t, scene.warpAt[w]!, length);
       if (p >= 0) {
         out.warpIndex = w;

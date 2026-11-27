@@ -3,15 +3,23 @@
  * `DrawContext`, so tests pass a recording mock. The hot path allocates nothing: every
  * array is preallocated, every label is cached, every gradient and sprite is reused.
  *
- * Order: backdrop (with the wave labels), tethers, agents, comets, then every agent label in
- * one pass on top, at the spots label-layout.ts chose so that none overlap. The level of
- * detail (lod.ts) decides what is left out above 100 agents.
+ * Order: backdrop, tethers, agents, comets, the vignette, then every label in one pass on top
+ * (wave labels, then agent labels), at the spots label-layout.ts chose so that none overlap and
+ * no wave label sits under a node, arc or beam (#128), then the warp label. Every label has a
+ * backing box whose opacity keeps its text at 4.5:1 over anything behind it (contrast.ts,
+ * #117). The level of detail (lod.ts) decides what is left out above 100 agents.
  */
 
 import { toRealSeconds } from "@orbitrace/core";
 import type { DrawContext } from "./context.js";
 import { WHITE_CORE } from "./generated/design.js";
-import { placeLabels, type LabelBoard } from "./label-layout.js";
+import {
+  WAVE_BASELINE_DROP,
+  WAVE_HALF_HEIGHT,
+  WAVE_PAD_X,
+  placeLabels,
+  type LabelBoard,
+} from "./label-layout.js";
 import { measureLabel, type Label } from "./labels.js";
 import type { Layout } from "./layout.js";
 import {
@@ -31,7 +39,7 @@ import {
 } from "./resources.js";
 import type { AgentScene, Scene } from "./scene.js";
 import { innerScale, traceShape } from "./shapes.js";
-import { BUCKET_COUNT, BUCKET_FAILURE } from "./theme.js";
+import { BUCKET_COUNT, BUCKET_FAILURE, backingAlpha } from "./theme.js";
 import {
   EFFECT_SECONDS,
   PHASE_ACTIVE,
@@ -118,8 +126,9 @@ export function drawFrame(
     LABEL_BUDGET[scene.lod] ?? 0,
     labelsAvoidNodes(scene.lod),
     board,
+    view.ambient,
   );
-  drawBackdrop(ctx, scene, layout, frame, view, res, board);
+  drawBackdrop(ctx, layout, frame, view, res, board);
   drawTethers(ctx, scene, layout, frame, view, res, board);
   // Subagents first, the main agent last so it sits on top.
   for (let i = 1; i < scene.agents.length; i++) {
@@ -129,20 +138,29 @@ export function drawFrame(
   drawCollapsedAgents(ctx, scene, layout, view, res, board);
   drawAgent(ctx, scene, scene.agents[0]!, layout, frame, view, res);
   drawComets(ctx, scene, layout, frame, res);
-  drawLabels(ctx, scene, frame, view, res, board);
 
+  // The vignette darkens the edges before the labels, so it never dims their text (#117).
   const g = res.gradients;
   if (g.vignette !== null) {
     ctx.fillStyle = g.vignette;
     ctx.fillRect(0, 0, layout.width, layout.height);
   }
+  drawWaveLabels(ctx, scene, layout, res, board);
+  drawLabels(ctx, scene, frame, view, res, board);
   if (frame.warpIndex >= 0 && frame.warpFactor > 0.02) {
     const label = (layout.wide ? scene.warpLabel : scene.warpLabelNarrow)[frame.warpIndex];
     if (label !== undefined) {
       const w = measureLabel(ctx, label);
+      const size = label.font.size;
+      const left = layout.cx - w / 2;
+      const base = layout.cy - layout.base * 0.36;
+      // Its backing, like every label's, fades with it.
+      ctx.globalAlpha = frame.warpFactor * backingAlpha(pal, pal.text);
+      ctx.fillStyle = pal.background;
+      ctx.fillRect(left - 6, base - size, w + 12, size + 6);
       ctx.globalAlpha = frame.warpFactor;
       ctx.fillStyle = pal.text;
-      ctx.fillText(label.text, layout.cx - w / 2, layout.cy - layout.base * 0.36);
+      ctx.fillText(label.text, left, base);
       ctx.globalAlpha = 1;
     }
   }
@@ -150,7 +168,6 @@ export function drawFrame(
 
 function drawBackdrop(
   ctx: DrawContext,
-  scene: Scene,
   layout: Layout,
   frame: FrameState,
   view: ViewState,
@@ -266,15 +283,6 @@ function drawBackdrop(
   }
   ctx.stroke();
   ctx.globalAlpha = 1;
-
-  // Wave labels, at the spots label-layout.ts kept: left of the vertical axis, above each orbit.
-  for (let i = 0; i < layout.ringCount; i++) {
-    if (board.waveShown[i] !== 1) continue;
-    const label = waveLabelFor(scene, layout, res, board, i);
-    ctx.font = label.font.css;
-    ctx.fillStyle = board.waveCollapsed[i] === 1 ? pal.dim : pal.faint;
-    ctx.fillText(label.text, board.waveLeft[i]!, board.waveBase[i]!);
-  }
 
   // The sweep turns with replay time, so it is still in a still frame and omitted when reduced.
   if (!frame.reducedMotion) {
@@ -626,7 +634,7 @@ const detailRow: (Label | null)[] = [null, null, null, null, null, null, null, n
 
 /**
  * Fill the board's inputs for `placeLabels`: label widths and sizes, the detail rows of the
- * selected and hovered agents (wide canvases only), and the wave labels (wide canvases only).
+ * selected and hovered agents (wide canvases only), and the wave labels.
  */
 function prepareLabels(
   ctx: DrawContext,
@@ -651,10 +659,9 @@ function prepareLabels(
     if (slot === 1 && i === view.selected) continue;
     board.detailWidth[i] = fillDetailRow(ctx, scene, frame, res, i, slot * 4);
   }
+  // Wave labels at every canvas size: a ring that is drawn keeps its label (#128).
   for (let w = 0; w < layout.ringCount; w++) {
-    board.waveWidth[w] = layout.wide
-      ? labelWidth(ctx, waveLabelFor(scene, layout, res, board, w))
-      : 0;
+    board.waveWidth[w] = labelWidth(ctx, waveLabelFor(scene, layout, res, board, w));
   }
 }
 
@@ -686,6 +693,77 @@ function fillDetailRow(
     width += labelWidth(ctx, label) + (k > 0 ? sep : 0);
   }
   return width;
+}
+
+/**
+ * The wave labels where the board put them: centred on their ring, over a backing box that hides
+ * the ring line under the text. While a label fades to a new angle it is drawn at both, the old
+ * one fading out.
+ */
+function drawWaveLabels(
+  ctx: DrawContext,
+  scene: Scene,
+  layout: Layout,
+  res: DrawResources,
+  board: LabelBoard,
+): void {
+  const pal = res.palette;
+  for (let w = 0; w < layout.ringCount; w++) {
+    if (board.waveShown[w] !== 1) continue;
+    const label = waveLabelFor(scene, layout, res, board, w);
+    const color = board.waveCollapsed[w] === 1 ? pal.dim : pal.faint;
+    const backing = backingAlpha(pal, color);
+    if (board.waveGhostShown[w] === 1) {
+      drawWaveLabel(
+        ctx,
+        res,
+        label,
+        board.waveGhostLeft[w]!,
+        board.waveGhostBase[w]!,
+        color,
+        backing,
+        board.waveGhostAlpha[w]!,
+      );
+    }
+    drawWaveLabel(
+      ctx,
+      res,
+      label,
+      board.waveLeft[w]!,
+      board.waveBase[w]!,
+      color,
+      backing,
+      board.waveAlpha[w]!,
+    );
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawWaveLabel(
+  ctx: DrawContext,
+  res: DrawResources,
+  label: Label,
+  left: number,
+  base: number,
+  color: string,
+  backing: number,
+  alpha: number,
+): void {
+  if (!(alpha > 0)) return;
+  const width = labelWidth(ctx, label);
+  const mid = base - WAVE_BASELINE_DROP;
+  ctx.globalAlpha = alpha * backing;
+  ctx.fillStyle = res.palette.background;
+  ctx.fillRect(
+    left - WAVE_PAD_X,
+    mid - WAVE_HALF_HEIGHT,
+    width + 2 * WAVE_PAD_X,
+    2 * WAVE_HALF_HEIGHT,
+  );
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.font = label.font.css;
+  ctx.fillText(label.text, left, base);
 }
 
 /** Every agent label the board kept, with the selected and hovered detail rows. */
@@ -863,7 +941,7 @@ function drawTagAt(
   const w = rowWidth(ctx, res, l0, l1, l2, l3);
   const sepWidth = l1 !== null ? sep.width : 0;
   const size = l0.font.size;
-  ctx.globalAlpha = 0.72;
+  ctx.globalAlpha = backingAlpha(res.palette, color);
   ctx.fillStyle = res.palette.background;
   ctx.fillRect(left - 3, y - size + 1, w + 6, size + 3);
   ctx.globalAlpha = 1;

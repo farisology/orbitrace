@@ -35,6 +35,13 @@ The full contract is
 - Reduced motion draws one still frame per change: no comets, pulses, flashes, fades, warp
   streaks or ambient motion, and no frame loop. The scrubber still works. The default is the
   user's `prefers-reduced-motion` setting, read once when the renderer is created.
+- At normal motion settings the spawn flash and the idle-skip warp start at most three times in
+  any one second of real time, at every playback speed (WCAG 2.3.1, #118): spawns close
+  together share one flash, and a warp that starts during another is not shown. See
+  `src/flash.ts`.
+- Every label on the canvas is drawn over a backing box in the theme's background colour, at
+  an opacity chosen from the theme so its text keeps 4.5:1 against anything behind it (#117).
+  A theme colour that cannot be parsed (a named colour, `hsl()`) gets an opaque backing.
 - `minVisibleCallSeconds` defaults to 0.3 real seconds.
 - A family outside `KNOWN_MODEL_FAMILIES` is drawn as a circle; a call's colour comes from its
   `kind`. A failed call takes the failure colour once its result is in.
@@ -49,6 +56,8 @@ The full contract is
 | `src/layout.ts`           | Orbit and node positions per canvas size                        | yes             |
 | `src/timeline.ts`         | State at time `t`: phases, calls in flight, token arcs, effects | yes             |
 | `src/label-layout.ts`     | Where each label goes so that no two overlap                    | yes             |
+| `src/flash.ts`            | When spawn flashes and warps may start (three per second)       | yes             |
+| `src/contrast.ts`         | WCAG contrast and the label backing opacity per text colour     | yes             |
 | `src/lod.ts`              | Level of detail by agent count; ring summaries of done waves    | yes             |
 | `src/hit.ts`              | Agent under a point                                             | yes             |
 | `src/draw.ts`             | Paints a frame on any `DrawContext`                             | takes a context |
@@ -64,7 +73,9 @@ from `end` on, the same rule the app's inspector uses.
 
 Labels never overlap: the main agent's label, the selected and hovered agents' labels (always
 shown), the wave labels, then running agents' labels, then finished ones, each placed at the
-first free spot around its node or dropped. Above 100 agents the level of detail leaves out
+first free spot around its node or dropped. Each wave label sits on its own ring at the angle
+clearest of nodes, token arcs and tool beams, keeps that angle while it stays clear, and fades
+to a new one when it is covered (#128); it is drawn above every node and beam. Above 100 agents the level of detail leaves out
 moons, caps the labels and collapses finished waves into ring summaries. The thresholds, the
 budget and the measurements are in [docs/performance.md](../../docs/performance.md).
 

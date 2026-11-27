@@ -61,6 +61,15 @@ describe("buildScene", () => {
     expect(scene.agents[1]!.identity.text).toBe("Sonnet · medium");
   });
 
+  it("keeps each agent's longest spoke and a flash schedule (#118, #128)", () => {
+    for (const a of scene.agents) {
+      const lengths = Array.from(a.flareLength).filter((_, j) => a.toolSkip[j] === 0);
+      expect(a.maxFlareLength).toBe(lengths.length > 0 ? Math.max(...lengths) : 0);
+    }
+    expect(Array.from(scene.flashes.starts)).toEqual(scene.agents.map((a) => a.start));
+    expect(Array.from(scene.flashes.warpAt)).toEqual([66]);
+  });
+
   it("makes warp labels", () => {
     expect(scene.warpLabel[0]!.text).toBe("IDLE SKIPPED 10m00s");
     expect([...scene.warpAt]).toEqual([66]);
