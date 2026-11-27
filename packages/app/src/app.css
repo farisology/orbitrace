@@ -182,6 +182,23 @@ kbd {
   flex: none;
 }
 
+/* Export (issue 168): before Open file, at the right end of the header. */
+.export-button {
+  margin-left: auto;
+  flex: none;
+}
+
+.export-button ~ .open-button {
+  margin-left: 0;
+}
+
+.export-status {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--dim);
+}
+
 /* Live marker: a dot before the badge text while the session's process runs. */
 .badge-live {
   display: inline-flex;
@@ -350,19 +367,156 @@ kbd {
   color: var(--text);
 }
 
+/* ---- export dialog (issue 168) ----------------------------------------------------------- */
+
+.export-dialog {
+  width: min(36rem, calc(100% - 2 * var(--space-4)));
+  max-height: calc(100% - 2 * var(--space-4));
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5);
+  color: var(--text);
+  background: var(--deck);
+  border: 1px solid var(--rim-hi);
+  border-radius: var(--radius-none);
+}
+
+.export-dialog::backdrop {
+  background: color-mix(in srgb, var(--void) 80%, transparent);
+}
+
+.export-dialog p {
+  margin: var(--space-2) 0;
+}
+
+.export-title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.export-live {
+  color: var(--ok);
+}
+
+.export-options {
+  margin: var(--space-3) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--rim);
+}
+
+.export-options legend {
+  padding: 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--dim);
+}
+
+/* A checkbox and its label on one row; the sentence and the step below, indented. */
+.export-option {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.export-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 3px;
+  accent-color: var(--ion);
+}
+
+.export-option > label {
+  font-weight: 600;
+}
+
+.export-option > :not(input):not(label) {
+  grid-column: 2;
+}
+
+.export-dialog .export-help {
+  margin: 0 0 var(--space-1);
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.export-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.export-step input {
+  width: 8rem;
+  min-height: 28px;
+  font: inherit;
+  font-family: var(--font-mono);
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--rim-hi);
+  border-radius: var(--radius-none);
+  padding: 0 var(--space-2);
+}
+
+.export-step input:disabled {
+  color: var(--faint);
+}
+
+.export-step input[aria-invalid="true"] {
+  border-color: var(--fault);
+}
+
+.export-dialog .export-error {
+  margin: var(--space-1) 0;
+  color: var(--fault);
+  font-size: 13px;
+}
+
+.export-dialog .export-note {
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.export-confirm {
+  color: var(--ion);
+  border-color: var(--ion);
+}
+
 /* ---- main layout ------------------------------------------------------------------------- */
 
 /*
- * The dock (controls and timeline) has a fixed share of the height, never its content's height,
- * so the orrery above it changes size only when the window does. A followed session that adds an
- * agent adds a timeline lane; the lanes scroll inside the dock instead of shrinking the canvas
- * (issue 144). The narrow layout below gives the stage its own height instead.
+ * The dock (controls and timeline) is never taller than `--dock-height`, a share of the height.
+ *
+ * - A replay that is not live: the dock is as tall as its content up to that cap, so a replay
+ *   with few lanes leaves the orrery more room (lead decision on issue 172).
+ * - A live session (`.app-main-live`): the dock is always the cap, never its content's height, so
+ *   the orrery changes size only when the window does. A followed session that adds an agent
+ *   adds a timeline lane; the lanes scroll inside the dock instead of shrinking the canvas (issue
+ *   144). When a followed session ends, the dock changes size once.
+ *
+ * The narrow layout below gives the stage its own height instead.
  */
 .app-main {
   --dock-height: clamp(196px, 35%, 360px);
+  --dock-row: fit-content(var(--dock-height));
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
-  grid-template-rows: minmax(0, 1fr) var(--dock-height);
+  grid-template-rows: minmax(0, 1fr) var(--dock-row);
   grid-template-areas:
     "stage side"
     "dock side";
@@ -387,6 +541,10 @@ kbd {
 
 .app-main-message > .message {
   margin: auto;
+}
+
+.app-main-live {
+  --dock-row: var(--dock-height);
 }
 
 .stage {
@@ -697,6 +855,11 @@ kbd {
   pointer-events: none;
 }
 
+/*
+ * The line's left edge is placed by `playheadLeft` (components/Timeline.tsx), which takes its
+ * width into account, so at the live edge it ends at the right edge of the tracks and never makes
+ * the lanes scroll sideways (issue 172). Keep the border width equal to `PLAYHEAD_WIDTH_PX`.
+ */
 .playhead {
   position: absolute;
   top: 0;
@@ -1056,6 +1219,10 @@ kbd {
   }
 
   .open-button {
+    margin-left: 0;
+  }
+
+  .export-button {
     margin-left: 0;
   }
 }

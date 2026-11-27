@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEMO_SESSION_KEY } from "../src/demo-session";
+import { DOWNLOAD_SAVER } from "../src/export-replay";
 import {
   STARTUP_MESSAGES,
   chooseHost,
@@ -151,5 +152,44 @@ describe("startupFromPage", () => {
     expect(
       startupFromPage(fakeWindow(fakePage({ meta: { "orbitrace-host": "editor" } }))),
     ).toMatchObject({ kind: "failed" });
+  });
+});
+
+describe("how an exported replay is saved (issue 168)", () => {
+  it("in the editor tab: through the extension, sending only the text", async () => {
+    const webview = fakeWebview();
+    const startup = createStartup(
+      { kind: "editor", sessionKey: null },
+      { acquireWebviewApi: () => webview.api, messageEvents: webview.events },
+    );
+    if (startup.kind !== "host" || startup.saver === undefined) throw new Error("expected a saver");
+    expect(startup.saver.kind).toBe("save");
+    const saving = startup.saver.save({ fileName: "orbitrace.replay.json", data: "{}\n" });
+    expect(webview.saves).toEqual([{ id: 1, method: "saveReplay", params: { data: "{}\n" } }]);
+    webview.reply({ kind: "result", id: 1, result: { outcome: "saved" } });
+    await expect(saving).resolves.toBe("saved");
+  });
+
+  it("in a browser tab and the no-host app: a Blob download", () => {
+    const browser = createStartup(
+      { kind: "browser", token: TOKEN, sessionKey: null },
+      { messageEvents: fakeWebview().events },
+    );
+    expect(browser.kind === "host" && browser.saver).toBe(DOWNLOAD_SAVER);
+    const demo = createStartup({ kind: "demo" }, { messageEvents: fakeWebview().events });
+    expect(demo.kind === "demo" && demo.saver).toBe(DOWNLOAD_SAVER);
+  });
+
+  it("in an editor tab with no host (the demo tab): not at all, so there is no Export", () => {
+    const webview = fakeWebview();
+    const acquire = vi.fn(() => webview.api);
+    const startup = createStartup(
+      { kind: "demo" },
+      { acquireWebviewApi: acquire, messageEvents: webview.events },
+    );
+    expect(startup.kind).toBe("demo");
+    expect(startup.kind === "demo" && startup.saver).toBeUndefined();
+    // The message API is not even acquired: the demo tab never posts.
+    expect(acquire).not.toHaveBeenCalled();
   });
 });

@@ -4,12 +4,21 @@
  * the shared session replayer; closing the tab disposes the host and every subscription it
  * holds. The demo tab has no message host: its page carries no host tags, so the app serves
  * its bundled demo and never posts.
+ *
+ * A session tab's message host can save an exported replay (#168) through the editor's save
+ * dialog (`save-replay.ts`). The demo tab cannot, so the app shows no Export button there.
  */
 
 import * as vscode from "vscode";
 import { APP_BUNDLE_SEGMENTS } from "./app-bundle.js";
 import type { PanelTarget } from "./commands.js";
-import { createMessageHost, type MessageHost, type MessageHostReplayer } from "./message-host.js";
+import {
+  createMessageHost,
+  type MessageHost,
+  type MessageHostOptions,
+  type MessageHostReplayer,
+} from "./message-host.js";
+import { saveReplayWithDialog } from "./save-replay.js";
 import { panelTitle } from "./session-labels.js";
 import { buildWebviewHtml } from "./webview-html.js";
 
@@ -19,6 +28,8 @@ export const PANEL_VIEW_TYPE = "orbitrace.visualizer";
 export interface PanelManagerOptions {
   readonly extensionUri: vscode.Uri;
   readonly replayer: MessageHostReplayer;
+  /** Saves an exported replay (#168). Default: the editor's save dialog (`saveReplayWithDialog`). */
+  readonly saveReplay?: MessageHostOptions["saveReplay"];
   /** The app's index.html. May throw when the app is missing. */
   readIndexHtml(): string;
 }
@@ -82,6 +93,7 @@ export class PanelManager implements vscode.Disposable {
         const created = createMessageHost({
           replayer: this.options.replayer,
           post: (message) => panel.webview.postMessage(message),
+          saveReplay: this.options.saveReplay ?? ((data) => saveReplayWithDialog(data)),
         });
         host = created;
         listener = panel.webview.onDidReceiveMessage((message: unknown) => {

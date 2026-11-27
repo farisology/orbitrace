@@ -17,15 +17,25 @@
  * live region says once that the status can no longer be read; when a later one says the session
  * runs, they come back, but follow is not re-entered by itself (issue 139). The host reports a session as ended when its process exits, even without a file
  * change.
+ *
+ * Export (issue 168): with a `saver`, the header has an Export button that opens the export
+ * dialog (`components/ExportDialog.tsx`). The file is made from the replay on screen with core's
+ * `exportReplay` (`export-replay.ts`); a live session's file is a snapshot of that moment. Saved,
+ * downloaded, cancelled or failed is said in the polite live region. Without a `saver` (the
+ * public player, or an editor tab with no host) there is no Export button.
+ *
+ * Dock height (lead decision on issue 172): fixed while the session is live, so following never
+ * resizes the orrery (issue 144); otherwise the dock is as tall as its lanes up to the same cap.
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import type {
-  LiveStatus,
-  ReplayAgentId,
-  ReplayModel,
-  SessionSummary,
-  Unsubscribe,
+import {
+  ReplayValidationError,
+  type LiveStatus,
+  type ReplayAgentId,
+  type ReplayModel,
+  type SessionSummary,
+  type Unsubscribe,
 } from "@orbitrace/core";
 import {
   FOLLOW_ANNOUNCEMENTS,
@@ -46,10 +56,20 @@ import {
 } from "./follow";
 import { Controls } from "./components/Controls";
 import { EventFeed } from "./components/EventFeed";
+import { ExportDialog } from "./components/ExportDialog";
 import { CLEAR_SELECTION_CLASS, INSPECTOR_HEADING_ID, Inspector } from "./components/Inspector";
 import { OrreryView } from "./components/OrreryView";
 import { isLiveStatus, SessionPicker } from "./components/SessionPicker";
 import { Timeline } from "./components/Timeline";
+import {
+  EXPORT_TEXT,
+  exportAnnouncement,
+  exportFailedAnnouncement,
+  makeReplayFile,
+  type ExportChoices,
+  type ReplaySaver,
+  type SaveOutcome,
+} from "./export-replay";
 import { keyAction, targetHandlesKey } from "./keyboard";
 import { loadFile, type DroppedKind, type FileLoadError } from "./load-file";
 import { isTransportError, transportError } from "./no-host-transport";
@@ -88,7 +108,33 @@ export const APP_MESSAGES = {
   transcriptNote: "Main agent only: subagent transcripts are separate files.",
   notAffiliated: "Orbitrace is an independent project and is not affiliated with Anthropic.",
   skipToControls: "Skip to playback controls",
+  /** Why an export failed when neither core nor the host gave a reason. */
+  exportFailed: "Something went wrong while making the file.",
+  /** An export whose replay did not pass core's format check. */
+  exportInvalid: "The replay did not pass the replay format check.",
 } as const;
+
+/** The short text beside the Export button after an export. The live region says the rest. */
+export const EXPORT_STATUS: Readonly<Record<SaveOutcome | "failed", string>> = {
+  saved: "Saved.",
+  downloaded: "Downloaded.",
+  cancelled: "Not saved.",
+  failed: "Export failed.",
+};
+
+/** The reason to show for a failed export: a host error's message, core's, or a fixed one. */
+export function exportFailureReason(error: unknown): string {
+  if (isTransportError(error)) return error.message;
+  if (error instanceof ReplayValidationError) {
+    // Core's problem lines never quote a value from the replay.
+    const first = error.problems[0];
+    return first === undefined
+      ? APP_MESSAGES.exportInvalid
+      : `${APP_MESSAGES.exportInvalid} ${first}`;
+  }
+  if (error instanceof RangeError) return error.message;
+  return APP_MESSAGES.exportFailed;
+}
 
 /** Header text for where the replay came from. */
 export function sourceLabel(source: ReplaySource): string {
@@ -164,6 +210,11 @@ export interface AppProps {
    * false: it opens replay files only, and refuses a transcript itself (decided on issue 19).
    */
   readonly transcripts?: boolean;
+  /**
+   * How this host saves an exported replay (issue 168). When given, the header has an Export
+   * button. The public player passes none: it has no export.
+   */
+  readonly saver?: ReplaySaver;
 }
 
 /** What the Open file input accepts, and its label, with and without transcripts. */
@@ -184,6 +235,7 @@ export function App({
   startOptions = NO_START_OPTIONS,
   frames = browserFrames,
   transcripts = true,
+  saver,
 }: AppProps) {
   const openInput = transcripts ? OPEN_FILE_INPUT.withTranscripts : OPEN_FILE_INPUT.replayOnly;
   const [clock] = useState<Clock>(() => createClock());
@@ -213,6 +265,11 @@ export function App({
   const playButtonId = useId();
   /** The model shown last, so the next snapshot can carry the playhead through real time. */
   const modelRef = useRef<ReplayModel | null>(null);
+  const exportButtonRef = useRef<HTMLButtonElement>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  /** The short result beside the Export button, and a failure's reason. */
+  const [exportStatus, setExportStatus] = useState<SaveOutcome | "failed" | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const openSummary =
     sessionKey === undefined ? undefined : sessions?.find((entry) => entry.key === sessionKey);
@@ -457,6 +514,46 @@ export function App({
     [replaceModel],
   );
 
+  // Focus goes back to Export once the dialog is gone. Not inside `closeExport`: while the modal
+  // dialog is still open, everything outside it is inert, so `focus()` there does nothing.
+  const exportWasOpenRef = useRef(false);
+  useEffect(() => {
+    if (exportWasOpenRef.current && !exportOpen) exportButtonRef.current?.focus();
+    exportWasOpenRef.current = exportOpen;
+  }, [exportOpen]);
+
+  const closeExport = useCallback(() => {
+    setExportOpen(false);
+  }, []);
+
+  /** Make the file from the replay on screen now (a snapshot when live) and hand it to the host. */
+  const runExport = useCallback(
+    (choices: ExportChoices) => {
+      closeExport();
+      const model = modelRef.current;
+      if (saver === undefined || model === null) return;
+      const failed = (error: unknown): void => {
+        const reason = exportFailureReason(error);
+        setExportStatus("failed");
+        setExportError(reason);
+        setAnnouncement(exportFailedAnnouncement(reason));
+      };
+      let file: ReturnType<typeof makeReplayFile>;
+      try {
+        file = makeReplayFile(model, choices);
+      } catch (error) {
+        failed(error);
+        return;
+      }
+      saver.save(file).then((outcome) => {
+        setExportStatus(outcome);
+        setExportError(null);
+        setAnnouncement(exportAnnouncement(outcome, file.fileName));
+      }, failed);
+    },
+    [saver, closeExport],
+  );
+
   // Keyboard: space plays and pauses, arrows scrub.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -566,6 +663,29 @@ export function App({
               onSelect={pickSession}
             />
           ) : null}
+          {saver !== undefined && view !== null && stage === "ready" ? (
+            <>
+              <button
+                ref={exportButtonRef}
+                type="button"
+                className="export-button"
+                aria-haspopup="dialog"
+                onClick={() => {
+                  setExportStatus(null);
+                  setExportError(null);
+                  // Empty the polite region, so the result is always a change and is announced
+                  // even when it is the same text as last time (cancelled twice, the same failure).
+                  setAnnouncement("");
+                  setExportOpen(true);
+                }}
+              >
+                {EXPORT_TEXT.button}
+              </button>
+              {exportStatus !== null ? (
+                <span className="export-status">{EXPORT_STATUS[exportStatus]}</span>
+              ) : null}
+            </>
+          ) : null}
           <button
             ref={openButtonRef}
             type="button"
@@ -629,8 +749,24 @@ export function App({
           </div>
         ) : null}
 
+        {exportError !== null ? (
+          // No role: the polite live region has already said it.
+          <div className="alert">
+            <p className="alert-title">{exportFailedAnnouncement(exportError)}</p>
+            <button
+              type="button"
+              onClick={() => {
+                exportButtonRef.current?.focus();
+                setExportError(null);
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
         {view !== null && stage === "ready" ? (
-          <main className="app-main">
+          <main className={live ? "app-main app-main-live" : "app-main"}>
             <div className="stage">
               <OrreryView
                 model={view.model}
@@ -688,6 +824,15 @@ export function App({
           </span>
           <span>{APP_MESSAGES.notAffiliated}</span>
         </footer>
+
+        {exportOpen && saver !== undefined && view !== null && stage === "ready" ? (
+          <ExportDialog
+            live={live}
+            saverKind={saver.kind}
+            onCancel={closeExport}
+            onExport={runExport}
+          />
+        ) : null}
 
         <div className="visually-hidden" aria-live="polite" aria-atomic="true">
           {announcement}

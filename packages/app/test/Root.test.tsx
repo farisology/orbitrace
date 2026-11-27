@@ -211,3 +211,34 @@ describe("live session through Root", () => {
     expect(screen.getByText("Live: working")).toBeDefined();
   });
 });
+
+describe("export (issue 168)", () => {
+  const SAVER = { kind: "download" as const, save: vi.fn(async () => "downloaded" as const) };
+  const exportButton = () => screen.queryByRole("button", { name: "Export" });
+  const withSaver = (transport: HostTransport): Startup => ({
+    kind: "host",
+    host: "browser",
+    transport,
+    sessionKey: null,
+    saver: SAVER,
+  });
+
+  it("gives the app the start-up's saver, on a host and on the demo it falls back to", async () => {
+    renderRoot(withSaver(scriptedHost([ENDED])));
+    await screen.findByRole("list", { name: "Agents" });
+    expect(exportButton()).not.toBeNull();
+  });
+
+  it("on the demo fallback of a host that lists no sessions as well", async () => {
+    renderRoot(withSaver(scriptedHost([])));
+    await screen.findByText(ROOT_MESSAGES.emptyHost);
+    await screen.findByRole("list", { name: "Agents" });
+    expect(exportButton()).not.toBeNull();
+  });
+
+  it("shows no Export when the start-up has no saver", async () => {
+    renderRoot({ kind: "demo", transport: createDemoTransport() });
+    await screen.findByRole("list", { name: "Agents" });
+    expect(exportButton()).toBeNull();
+  });
+});

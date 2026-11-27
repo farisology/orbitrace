@@ -18,7 +18,13 @@ import {
   callBand,
   callClass,
 } from "../src/components/CallMark";
-import { Timeline, percentAt, timeAtPointer } from "../src/components/Timeline";
+import {
+  PLAYHEAD_WIDTH_PX,
+  Timeline,
+  percentAt,
+  playheadLeft,
+  timeAtPointer,
+} from "../src/components/Timeline";
 import { prefersReducedMotion, usePrefersReducedMotion } from "../src/reduced-motion";
 import { ClockContext, useClock, useClockDriver, useClockValue } from "../src/use-clock";
 import { DEMO, fakeOrrery, makeModel, manualFrames, type FakeOrrery } from "./helpers";
@@ -251,7 +257,28 @@ describe("Timeline", () => {
       },
     );
     act(() => clock.seek(15));
-    expect((container.querySelector(".playhead") as HTMLElement).style.left).toBe("25%");
+    // A quarter of the track, less a quarter of the line's width (issue 172).
+    expect((container.querySelector(".playhead") as HTMLElement).style.left).toBe(
+      "calc(25% - 0.5px)",
+    );
+    act(() => clock.seek(0));
+    expect((container.querySelector(".playhead") as HTMLElement).style.left).toBe("0%");
+  });
+});
+
+describe("playheadLeft (issue 172)", () => {
+  it("starts the line at the left edge and ends it at the right edge, never past it", () => {
+    expect(PLAYHEAD_WIDTH_PX).toBe(2);
+    expect(playheadLeft(0)).toBe("0%");
+    expect(playheadLeft(0.5)).toBe("calc(50% - 1px)");
+    expect(playheadLeft(1)).toBe("calc(100% - 2px)");
+  });
+
+  it("clamps to the track and treats a value that is not a number as the start", () => {
+    expect(playheadLeft(-0.5)).toBe("0%");
+    expect(playheadLeft(1.5)).toBe("calc(100% - 2px)");
+    expect(playheadLeft(Number.NaN)).toBe("0%");
+    expect(playheadLeft(Number.POSITIVE_INFINITY)).toBe("0%");
   });
 });
 

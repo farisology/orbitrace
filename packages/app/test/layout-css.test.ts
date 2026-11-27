@@ -84,13 +84,22 @@ describe("the Playback row never runs under the side panel", () => {
 });
 
 describe("the orrery keeps its size while lanes are added (#144)", () => {
-  it("wide layout: the dock row is a fixed share of the height, never its content's height", () => {
+  it("wide layout, live: the dock row is a fixed share of the height, never its content's height", () => {
     const main = rule(".app-main");
-    expect(declaration(main, "grid-template-rows")).toBe("minmax(0, 1fr) var(--dock-height)");
+    expect(declaration(main, "grid-template-rows")).toBe("minmax(0, 1fr) var(--dock-row)");
     const dock = declaration(main, "--dock-height");
     expect(dock).toBe("clamp(196px, 35%, 360px)");
     // Only lengths and a percentage of main: nothing that grows with the lanes.
     expect(dock).not.toMatch(/auto|content|fit/);
+    // While live, the row is exactly that height (App.tsx adds the class only then).
+    expect(declaration(rule(".app-main-live"), "--dock-row")).toBe("var(--dock-height)");
+  });
+
+  it("wide layout, not live: the dock is as tall as its lanes up to the same cap (lead decision on #172)", () => {
+    const main = rule(".app-main");
+    expect(declaration(main, "--dock-row")).toBe("fit-content(var(--dock-height))");
+    // The live rule sets only the row variable, so the narrow layout's rows still win there.
+    expect(rule(".app-main-live").trim()).toBe("--dock-row: var(--dock-height);");
   });
 
   it("the dock is a column whose lane list takes the rest and scrolls", () => {
@@ -118,6 +127,38 @@ describe("the orrery keeps its size while lanes are added (#144)", () => {
     expect(declaration(rule(".stage", narrow), "height")).toBe("min(100vw, 62vh)");
     expect(declaration(rule(".dock", narrow), "overflow-y")).toBe("visible");
     expect(declaration(rule(".timeline-body", narrow), "max-height")).toBe("252px");
+  });
+});
+
+describe("the playhead stays inside the tracks (#172)", () => {
+  it("is a line as wide as playheadLeft assumes, inside a body that scrolls only up and down", () => {
+    const playhead = rule(".playhead");
+    expect(declaration(playhead, "width")).toBe("0");
+    expect(declaration(playhead, "border-left")).toBe("2px solid var(--ion)");
+    expect(declaration(playhead, "position")).toBe("absolute");
+    // The tracks overlay spans the track column exactly; playheadLeft keeps the line inside it.
+    const overlay = rule(".tracks-overlay");
+    expect(declaration(overlay, "left")).toBe("var(--lane-label)");
+    expect(declaration(overlay, "right")).toBe("0");
+  });
+});
+
+describe("the export dialog (#168)", () => {
+  it("sits at the right end of the header, before Open file", () => {
+    expect(declaration(rule(".export-button"), "margin-left")).toBe("auto");
+    expect(declaration(rule(".export-button ~ .open-button"), "margin-left")).toBe("0");
+    expect(declaration(rule(".export-button", mediaBlock(NARROW)), "margin-left")).toBe("0");
+    expect(declaration(rule(".open-button", mediaBlock(NARROW)), "margin-left")).toBe("0");
+  });
+
+  it("fits the window and scrolls when its content does not", () => {
+    const dialog = rule(".export-dialog");
+    expect(declaration(dialog, "width")).toMatch(/^min\(/);
+    expect(declaration(dialog, "max-height")).toBe("calc(100% - 2 * var(--space-4))");
+    expect(declaration(dialog, "overflow-y")).toBe("auto");
+    // Wrapping rows, so large text spacing never pushes a button or the step out of view.
+    expect(declaration(rule(".export-actions"), "flex-wrap")).toBe("wrap");
+    expect(declaration(rule(".export-step"), "flex-wrap")).toBe("wrap");
   });
 });
 

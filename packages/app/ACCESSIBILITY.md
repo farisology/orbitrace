@@ -153,6 +153,55 @@ Follow mode added one control and two states. What was decided for each, and why
 
 The automated checks above cover these states; no screen reader was used for them either.
 
+## Export and the dock (issues 168 and 172)
+
+- **Export button and dialog** (2.1.1 Keyboard, 2.4.3 Focus Order, 4.1.2 Name, Role, Value).
+  Export sits in the header before Open file, with `aria-haspopup="dialog"`. It opens a modal
+  `<dialog>` named by its heading "Export replay" and described by the line saying what a replay
+  holds. The browser moves focus into it (the first option) and keeps Tab inside it; Escape and
+  Cancel close it without saving. The dialog is closed while it is still in the document (a
+  layout effect), so the browser itself puts focus back on Export, and the app focuses Export
+  again once the dialog is gone (the case without `showModal`). Measured in headless Chrome 158
+  at 1280 x 800 on the built CLI with real key and mouse events: after Escape, Cancel, Download
+  by click and Download by Enter, focus was on Export each time and the next Tab went to Open
+  file. An earlier build left focus on `<body>`: it focused Export while the page was still
+  inert and closed the dialog after React had removed it. `test/export-dialog.test.tsx` checks
+  that `close()` runs on a connected dialog and that focus comes back even when the page refuses
+  focus while the dialog is open, which happy-dom does not do on its own. Keys pressed inside it
+  do not reach the playback keys (Space, arrows, Escape). There is no `<form>`: the editor tab's
+  webview blocks form submission, so both buttons act on click.
+- **Options** (1.3.1 Info and Relationships, 3.3.2 Labels or Instructions). The three options are
+  checkboxes in a fieldset whose legend says they are all off by default; each checkbox has a
+  visible label and its sentence ("hides ..., does not hide ...") as its description
+  (`aria-describedby`). The rounding step is a labelled number field, disabled until Round times
+  is checked.
+- **Errors** (3.3.1 Error Identification, 3.3.3 Error Suggestion). A step core does not take keeps
+  the dialog open, marks the field `aria-invalid`, says the allowed range in text tied to the field
+  and moves focus to it.
+- **Result** (4.1.3 Status Messages). Saved, downloaded, cancelled (the editor's save dialog
+  closed) or failed is said once in the existing polite live region, with the file name when a
+  file was written. Pressing Export empties the region, so a result with the same text as the
+  last one (two downloads of `orbitrace.replay.json`, the save dialog cancelled twice, a retry
+  that fails for the same reason) is still a change and is said again. Measured in the same
+  Chrome run: the region was empty while the dialog was open and held "Replay downloaded as
+  orbitrace.replay.json." after each of two downloads in a row. Beside Export a short word repeats it for sighted users ("Downloaded."), and a
+  failure's reason is also shown in an alert box without a second live role, until dismissed.
+- **Playhead at the live edge** (1.4.10 Reflow). While following, the playhead's 2 px line used to
+  reach past the lanes, so a horizontal scrollbar came and went and the lane area moved by 15 px.
+  The line is now placed inside the tracks at every time. Measured in headless Chrome at 1280 x 800
+  on a synthetic followed session through the built CLI: `.timeline-body` scroll width equalled its
+  client width (888 px) in every sample at the live edge, client height steady at 151 px.
+  `test/timeline-dock.test.tsx` checks this with a stubbed layout.
+- **Dock height** (lead decision on issue 172). The fixed dock of issue 144 now applies only while
+  the session is live. A replay that is not live gives the dock the height of its lanes up to the
+  same cap, so a one-lane replay gets its larger canvas back: measured the same way, 920 x 593 px
+  for a one-lane replay, and 920 x 474 px for a live session with six lanes. When a followed
+  session ends, the dock changes size once. `test/layout-css.test.ts` and
+  `test/timeline-dock.test.tsx` guard both states.
+
+axe-core runs on the open dialog with an error shown (`test/a11y.test.tsx`); no screen reader
+was used.
+
 ## Result per criterion (WCAG 2.1 A and AA)
 
 "Pass" means no failure was found by the methods above. It is not a screen reader sign-off.
@@ -196,7 +245,7 @@ The automated checks above cover these states; no screen reader was used for the
 | 3.2.1 On Focus, 3.2.2 On Input                               | Pass. Changing speed changes a setting, not the context.                                                                                                                                                                                                                                                       |
 | 3.2.3 Consistent Navigation, 3.2.4 Consistent Identification | Pass.                                                                                                                                                                                                                                                                                                          |
 | 3.3.1 Error Identification                                   | Pass. File and host errors are described in text in a `role="alert"` element with the problems listed.                                                                                                                                                                                                         |
-| 3.3.2 Labels or Instructions                                 | Pass. The file input, speed select and scrubber have labels.                                                                                                                                                                                                                                                   |
+| 3.3.2 Labels or Instructions                                 | Pass. The file input, speed select and scrubber have labels, and so do the export dialog's options and step field.                                                                                                                                                                                             |
 | 3.3.3 Error Suggestion                                       | Pass. File errors say which formats are accepted.                                                                                                                                                                                                                                                              |
 | 3.3.4 Error Prevention                                       | Not applicable: nothing is submitted.                                                                                                                                                                                                                                                                          |
 | 4.1.1 Parsing                                                | Obsolete in WCAG 2.2; React output is well formed.                                                                                                                                                                                                                                                             |
@@ -240,6 +289,11 @@ VoiceOver with Safari on macOS, and once inside the VS Code extension:
     behind; "Following the live session." and "Stopped following ..." are each read once; a run
     of snapshots while following says nothing new; focus stays where it was while snapshots
     arrive, and moves to Play when the session ends with focus on Go live.
+14. Export: the dialog is read as a dialog with its name and description; each option reads its
+    label, state and sentence; Escape closes it and focus returns to Export; the result ("Replay
+    downloaded as ...", "Replay saved as ...", "Export cancelled ...") is read once, and read
+    again when the next export ends the same way. In a VS Code
+    editor tab, the editor's save dialog opens and the result is read after it closes.
 
 ## Not covered
 
@@ -283,3 +337,11 @@ Chrome run is not part of the suite: it needs a local Chrome. To repeat it:
 7. Inspector: at 1280 by 560 px compare its `scrollHeight` with its `clientHeight`, focus the
    last lane label, press Tab and read `getComputedStyle(document.activeElement).outline` and
    `outlineOffset`, then press Down and Page Down and read the inspector's `scrollTop`.
+8. Export dialog, in the session of step 6 with downloads allowed
+   (`Browser.setDownloadBehavior`): focus Export and press Enter with `Input.dispatchKeyEvent`
+   (with `text: "\r"`), then close the dialog each way in turn: Escape as a key event, Cancel as
+   a mouse click (`Input.dispatchMouseEvent` at its centre), Download replay as a mouse click,
+   and Download replay focused and Enter. After each, wait until no `<dialog>` is left, read
+   `document.activeElement` (it must be the Export button, not `<body>`), press Tab and read it
+   again (it must be Open file, not the skip link), and read the polite region's text: empty
+   while the dialog is open, the result after each download.

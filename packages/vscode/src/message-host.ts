@@ -6,11 +6,23 @@
  * Only session summaries, replay models and `{ code, message }` errors are sent. The replayer
  * keeps paths and locators on the host. No vscode dependency: the panel glue passes in a
  * `post` function, so this module is unit tested with fakes.
+ *
+ * Saving an exported replay (#168): the app sends core's additive `saveReplay` request with the
+ * replay text only, never a path. This host checks its shape and size (`checkSaveReplayRequest`),
+ * parses it, checks it with `validateReplay`, writes it out again through `exportReplay` (so only
+ * allow-listed fields can reach the file) and hands that text to `saveReplay`, which asks the
+ * user where to save it. Every refusal and failure is answered with a fixed message.
  */
 
 import {
+  MAX_SAVED_REPLAY_BYTES,
+  checkSaveReplayRequest,
   checkTransportRequest,
+  exportReplay,
   toTransportError,
+  validateReplay,
+  type SaveReplayOutcome,
+  type SaveReplayRequestCheck,
   type TransportErrorInfo,
   type TransportMessage,
   type TransportRequest,
@@ -23,6 +35,10 @@ export const MESSAGE_HOST_ERRORS = {
   badParams: "The request was malformed.",
   duplicateSubscription: "A subscription with this id is already open.",
   openInBrowser: "Opening a session in the browser is not available from the editor yet.",
+  saveUnsupported: "Saving a replay is not available in this tab.",
+  saveTooLarge: `The replay is larger than ${MAX_SAVED_REPLAY_BYTES / (1024 * 1024)} MB and was not saved.`,
+  saveInvalid: "The replay did not pass the replay format check and was not saved.",
+  saveFailed: "The replay file could not be written.",
 } as const;
 
 /** What the host needs from the replayer. `createNodeSessionReplayer()` provides it. */
@@ -35,6 +51,12 @@ export interface MessageHostOptions {
    * or thrown send is ignored, because the panel may close at any moment.
    */
   readonly post: (message: TransportMessage) => unknown;
+  /**
+   * Asks the user where to save a checked replay text and writes it there (#168): resolves
+   * `saved`, or `cancelled` when the user closed the dialog. Rejects when the file could not be
+   * written; the reason is not passed on. Without it, a save request is answered `unsupported`.
+   */
+  readonly saveReplay?: (data: string) => Promise<SaveReplayOutcome>;
 }
 
 export interface MessageHost {
@@ -93,6 +115,46 @@ export function createMessageHost(options: MessageHostOptions): MessageHost {
     if (finished) follow.stop();
   };
 
+  /** Check, re-export and save one replay text, then answer with the outcome or a fixed error. */
+  const save = async (checked: SaveReplayRequestCheck): Promise<void> => {
+    if (!checked.ok) {
+      if (checked.id === null) return;
+      fail(checked.id, {
+        code: "bad-request",
+        message:
+          checked.problem === "too-large"
+            ? MESSAGE_HOST_ERRORS.saveTooLarge
+            : MESSAGE_HOST_ERRORS.badParams,
+      });
+      return;
+    }
+    const { id, params } = checked.request;
+    if (options.saveReplay === undefined) {
+      fail(id, { code: "unsupported", message: MESSAGE_HOST_ERRORS.saveUnsupported });
+      return;
+    }
+    let data: string;
+    try {
+      const value: unknown = JSON.parse(params.data);
+      if (!validateReplay(value)) throw new Error("not a replay");
+      // Written again from the allow-list: the same bytes for a file the app made with
+      // `exportReplay`, and nothing beyond the allow-listed fields for anything else.
+      data = exportReplay(value).data;
+    } catch {
+      fail(id, { code: "invalid", message: MESSAGE_HOST_ERRORS.saveInvalid });
+      return;
+    }
+    let outcome: SaveReplayOutcome;
+    try {
+      outcome = await options.saveReplay(data);
+    } catch {
+      // A file system error names the path it failed on: never passed on.
+      fail(id, { code: "internal", message: MESSAGE_HOST_ERRORS.saveFailed });
+      return;
+    }
+    reply(id, { outcome });
+  };
+
   const run = async (request: TransportRequest): Promise<void> => {
     switch (request.method) {
       case "listSessions":
@@ -120,6 +182,11 @@ export function createMessageHost(options: MessageHostOptions): MessageHost {
   return {
     async handle(message: unknown): Promise<void> {
       if (disposed) return;
+      const saving = checkSaveReplayRequest(message);
+      if (saving !== null) {
+        await save(saving);
+        return;
+      }
       const parsed = checkTransportRequest(message);
       if (!parsed.ok) {
         if (parsed.id === null) return;

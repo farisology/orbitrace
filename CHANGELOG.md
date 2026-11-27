@@ -73,6 +73,11 @@ merged so far.
   (#19, #148).
 - `orbitrace doctor`: a read-only check of the set-up (Node version, config folder, session folders, parser health, running-sessions folder, web app, loopback port, `node:sqlite`) with a stable code, a status and an exact fix per check, `--json` and exit code 12 when a check fails; see `docs/cli.md` (#31).
 - Ledger: `sessionLedger` in `@orbitrace/core` totals one session's tokens in four classes and estimates their cost at Anthropic's list prices (read 27 Nov 2026), per model and per agent, with unpriced models marked and never guessed; the inspector shows it, every cost labelled an estimate. See `docs/ledger.md` (#26).
+- Web app: an Export button and dialog that write the replay on screen with core's
+  `exportReplay`, with the opt-in opaque names, rounded times and bucketed tokens, all off; a
+  browser downloads the file and an editor tab saves it through the editor's save dialog. The
+  playhead no longer adds a horizontal scrollbar at the live edge, and a replay that is not live
+  gives its dock the height of its lanes (#168, #172).
 
 ### Changed
 
