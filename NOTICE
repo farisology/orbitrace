@@ -67,4 +67,13 @@ with the licence files when the fonts are bundled.
 
 3. npm dependencies
 
-None listed yet. Each dependency's licence is recorded here when it is added.
+The web app bundle contains code from third-party npm packages. Each build of
+the app writes THIRD-PARTY-NOTICES.txt beside the bundle (next to index.html):
+every bundled package's name, version, licence identifier and full licence
+text. packages/app/scripts/third-party-notices.mjs generates it from the
+modules the bundler put into the output. The CLI and the VS Code extension
+copy it with the app, and the public player build writes its own.
+
+The replay validator in @orbitrace/core is code generated ahead of time by Ajv
+(MIT licence) in its standalone mode. It imports no Ajv module, so no Ajv code
+is in the bundle.

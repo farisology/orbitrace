@@ -1,6 +1,7 @@
 # CI: every pull request into dev or main, and every push to dev, is built, linted,
-# type-checked, tested on Node 20 and 22, and scanned by the privacy check. A separate job
-# runs the VS Code integration test in a real editor.
+# type-checked, tested on Node 20, 22, 24 and 26, and scanned by the privacy check. A separate
+# job runs the VS Code integration test in a real editor on Node 22. A failure in any job or
+# step, the formatting check and the integration test included, fails the workflow.
 #
 # Each step calls an npm script from the root package.json, so the commands here are the
 # same ones a contributor runs locally:
@@ -97,7 +98,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
+        # Node 20 stays while engines in the root package.json lists it (#174). 24 and 26 are
+        # the later lines that engines (>=24) allows and that contributors use locally.
+        node: [20, 22, 24, 26]
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
