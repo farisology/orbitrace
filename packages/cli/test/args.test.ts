@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   COMMAND_NAMES,
   COMMANDS,
+  DOCTOR_DEFAULT_PARSE_LIMIT,
   defaultOpenCommand,
   isCommandName,
   parseCommandLine,
@@ -182,6 +183,62 @@ describe("parseLimit", () => {
       expect(() => parseLimit(value)).toThrow(CliError);
     }
   });
+
+  it("names the flag it was given in the message", () => {
+    expect(() => parseLimit("0", "doctor", "--parse-limit")).toThrow(
+      "--parse-limit needs a whole number of at least 1.",
+    );
+    expect(() => parseLimit("x")).toThrow("--limit needs a whole number of at least 1.");
+  });
+});
+
+describe("parseCommandLine: doctor", () => {
+  it("parses doctor with its defaults", () => {
+    expect(parseCommandLine(["doctor"])).toEqual({
+      kind: "doctor",
+      json: false,
+      sources: { configDirs: [], extraRoots: false },
+      parseLimit: DOCTOR_DEFAULT_PARSE_LIMIT,
+    });
+    expect(DOCTOR_DEFAULT_PARSE_LIMIT).toBe(20);
+  });
+
+  it("parses the source flags, --parse-limit and --json, before or after the command", () => {
+    expect(
+      parseCommandLine([
+        "--json",
+        "doctor",
+        "--config-dir",
+        "./example-config",
+        "--extra-roots",
+        "--parse-limit",
+        "5",
+      ]),
+    ).toEqual({
+      kind: "doctor",
+      json: true,
+      sources: { configDirs: ["./example-config"], extraRoots: true },
+      parseLimit: 5,
+    });
+    expect(parseCommandLine(["doctor", "--json"])).toMatchObject({ kind: "doctor", json: true });
+  });
+
+  it("rejects arguments, a bad --parse-limit and unknown options", () => {
+    expect(usageMessage(["doctor", "extra"])).toBe("doctor takes no arguments, got 'extra'.");
+    expect(usageMessage(["doctor", "--parse-limit", "0"])).toBe(
+      "--parse-limit needs a whole number of at least 1.",
+    );
+    expect(usageMessage(["doctor", "--fix"])).toMatch(/--fix/);
+    expect(usageMessage(["doctor", "--config-dir", " "])).toBe("--config-dir needs a folder path.");
+  });
+
+  it("shows the help for doctor", () => {
+    expect(parseCommandLine(["doctor", "--help"])).toEqual({
+      kind: "help",
+      json: false,
+      command: "doctor",
+    });
+  });
 });
 
 describe("parseRoundTimes", () => {
@@ -233,7 +290,7 @@ describe("wantsJson", () => {
 
 describe("isCommandName and COMMANDS", () => {
   it("knows exactly the commands it has specs for", () => {
-    expect(COMMAND_NAMES).toEqual(["open", "list", "export", "help"]);
+    expect(COMMAND_NAMES).toEqual(["open", "list", "export", "doctor", "help"]);
     for (const name of COMMAND_NAMES) {
       expect(isCommandName(name)).toBe(true);
       expect(COMMANDS[name].name).toBe(name);

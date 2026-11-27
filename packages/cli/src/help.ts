@@ -82,7 +82,17 @@ export function commandHelpText(name: CommandName): string {
       "Without --json the link is the only line on stdout.",
     );
   }
-  if (name === "list" || name === "export" || name === "open") {
+  if (name === "doctor") {
+    lines.push(
+      "",
+      "Reads only: no file is written, no folder created, no database opened. Each check reports",
+      "ok, warn, fail or skipped with a stable code, a one-line message and, for warn and fail, a",
+      "fix to run. Exits with 0 when no check failed and with 12 (doctor-failed) when one did; the",
+      "report goes to stdout either way. Folder paths show your home folder as ~. The codes and",
+      "the --json shape are listed in docs/cli.md.",
+    );
+  }
+  if (name === "list" || name === "export" || name === "open" || name === "doctor") {
     lines.push(
       "",
       "Folders are searched in this order: --config-dir, CLAUDE_CONFIG_DIR, the default",

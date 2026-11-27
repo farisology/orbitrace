@@ -5,12 +5,21 @@ import { CORE_STATUS } from "@orbitrace/core";
 
 // `src/version.ts` and the bundle `dist/index.js` are both one level below the package folder.
 const requireFromHere = createRequire(import.meta.url);
-const manifest = requireFromHere("../package.json") as { version: string };
+const manifest = requireFromHere("../package.json") as {
+  version: string;
+  engines?: { node?: unknown };
+};
 
 export const CLI_NAME = "orbitrace";
 
 export function cliVersion(): string {
   return manifest.version;
+}
+
+/** The `engines.node` range of this package, or `null` when it has none. */
+export function cliNodeRange(): string | null {
+  const range = manifest.engines?.node;
+  return typeof range === "string" && range.trim() !== "" ? range : null;
 }
 
 export function versionLine(): string {

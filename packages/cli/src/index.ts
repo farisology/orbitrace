@@ -11,8 +11,29 @@ import { CLI_EXIT_CODES } from "./errors.js";
 import type { HostContext } from "./sessions.js";
 
 export { CLI_NAME, cliVersion, statusLine, versionJson, versionLine } from "./version.js";
-export { run, type CliIo } from "./cli.js";
-export { appBundleDir, APP_BUNDLE_FOLDER, APP_INDEX_FILE } from "./app-bundle.js";
+export { run, type CliIo, type CliRuntime } from "./cli.js";
+export {
+  appBundleDir,
+  appBundleFolder,
+  checkAppBundle,
+  APP_BUNDLE_FOLDER,
+  APP_INDEX_FILE,
+  type AppBundleState,
+} from "./app-bundle.js";
+export { runDoctor, doctorExitCode, type DoctorOptions, type DoctorRuntime } from "./doctor/run.js";
+export {
+  ALL_DOCTOR_CODES,
+  DOCTOR_CHECK_IDS,
+  DOCTOR_CODES,
+  DOCTOR_FORMAT_VERSION,
+  DOCTOR_STATUSES,
+  formatDoctorText,
+  type DoctorCheckId,
+  type DoctorCheckResult,
+  type DoctorCode,
+  type DoctorReport,
+  type DoctorStatus,
+} from "./doctor/report.js";
 export { CLI_ERROR_CODES, CLI_EXIT_CODES, CliError, type CliErrorCode } from "./errors.js";
 export type { HostContext } from "./sessions.js";
 export type { OpenRuntime } from "./open.js";

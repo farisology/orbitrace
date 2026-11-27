@@ -37,8 +37,11 @@ export interface CommandSpec {
   readonly options: readonly OptionSpec[];
 }
 
-export const COMMAND_NAMES = ["open", "list", "export", "help"] as const;
+export const COMMAND_NAMES = ["open", "list", "export", "doctor", "help"] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
+
+/** Sessions the `doctor` parser check reads, newest first, without `--parse-limit`. */
+export const DOCTOR_DEFAULT_PARSE_LIMIT = 20;
 
 const JSON_OPTION: OptionSpec = {
   name: "json",
@@ -190,6 +193,23 @@ export const COMMANDS: Readonly<Record<CommandName, CommandSpec>> = {
       HELP_OPTION,
     ],
   },
+  doctor: {
+    name: "doctor",
+    summary: "Check the set-up: say what is wrong and how to fix it. Changes nothing.",
+    usage: "orbitrace doctor [--config-dir <path>]... [--extra-roots] [--parse-limit <n>] [--json]",
+    arguments: [],
+    options: [
+      ...SOURCE_OPTIONS,
+      {
+        name: "parse-limit",
+        type: "string",
+        value: "n",
+        description: `Parse at most n of the newest sessions for the parser check. Default: ${DOCTOR_DEFAULT_PARSE_LIMIT}.`,
+      },
+      JSON_OPTION,
+      HELP_OPTION,
+    ],
+  },
   help: {
     name: "help",
     summary: "Show help for orbitrace or for one command.",
@@ -246,6 +266,13 @@ export type ParsedCommand =
       /** False with --no-browser. */
       readonly browser: boolean;
       readonly port?: number;
+    }
+  | {
+      readonly kind: "doctor";
+      readonly json: boolean;
+      readonly sources: SourceFlags;
+      /** Most sessions the parser check reads, newest first. */
+      readonly parseLimit: number;
     };
 
 /**
@@ -317,15 +344,12 @@ function sourceFlags(values: Values, command: CommandName): SourceFlags {
   return { configDirs, extraRoots: values["extra-roots"] === true };
 }
 
-/** A whole number of at least 1, or a usage error. */
-export function parseLimit(value: string, command: CommandName = "list"): number {
-  if (!/^\d+$/.test(value.trim())) {
-    throw usageError("--limit needs a whole number of at least 1.", command);
-  }
+/** A whole number of at least 1, or a usage error that names `flag`. */
+export function parseLimit(value: string, command: CommandName = "list", flag = "--limit"): number {
+  const message = `${flag} needs a whole number of at least 1.`;
+  if (!/^\d+$/.test(value.trim())) throw usageError(message, command);
   const limit = Number(value.trim());
-  if (!Number.isSafeInteger(limit) || limit < 1) {
-    throw usageError("--limit needs a whole number of at least 1.", command);
-  }
+  if (!Number.isSafeInteger(limit) || limit < 1) throw usageError(message, command);
   return limit;
 }
 
@@ -496,6 +520,20 @@ export function parseCommandLine(argv: readonly string[]): ParsedCommand {
         latest,
         browser: values["no-browser"] !== true,
         ...(port === undefined ? {} : { port }),
+      };
+    }
+    case "doctor": {
+      if (positionals.length > 0) {
+        throw usageError(`doctor takes no arguments, got '${positionals[0]}'.`, "doctor");
+      }
+      return {
+        kind: "doctor",
+        json: commandJson,
+        sources: sourceFlags(values, "doctor"),
+        parseLimit:
+          typeof values["parse-limit"] === "string"
+            ? parseLimit(values["parse-limit"], "doctor", "--parse-limit")
+            : DOCTOR_DEFAULT_PARSE_LIMIT,
       };
     }
   }

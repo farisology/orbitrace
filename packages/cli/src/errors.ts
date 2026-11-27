@@ -35,6 +35,11 @@ export const CLI_EXIT_CODES = {
   "port-unavailable": 10,
   /** `open`: this build of the command carries no web app to serve. */
   "app-missing": 11,
+  /**
+   * `doctor`: at least one check failed. Not an error of the command: the report is still
+   * written to stdout, and nothing goes to stderr.
+   */
+  "doctor-failed": 12,
 } as const;
 
 export type CliErrorCode = keyof typeof CLI_EXIT_CODES;
