@@ -20,7 +20,7 @@ Commands (Command Palette):
 | Orbitrace: Open demo                 | Opens the bundled demo replay, made from invented data.                                                                                 |
 | Orbitrace: Refresh sessions          | Lists the sessions again.                                                                                                               |
 
-Each session opens in its own tab. Running the command again for the same session brings its tab to the front. The extension sends live updates to a tab while it is open; whether the picture moves with them depends on the web app's editor transport and on file watching in core, which are separate pieces of work.
+Each session opens in its own tab. Running the command again for the same session brings its tab to the front. The extension sends live updates to a tab while it is open. A running session opens at the live edge and the tab follows it, as in the browser: scrubbing back, Home or Pause stops following, and **Go live** or the End key returns to the edge.
 
 A session belongs to the workspace when Claude Code was started in the workspace folder itself. A session started in a subfolder is listed under "Other projects".
 
@@ -43,21 +43,22 @@ What a replay contains is described in the repository's `docs/privacy.md` and `d
 
 ## Build from source
 
-From the repository root, with Node.js 20 or later:
+From the repository root, with Node.js 22 or later (the pinned `@vscode/vsce` needs it):
 
 ```sh
 npm ci
 npm run build
-cd packages/vscode
-npx @vscode/vsce package --no-dependencies --out <folder outside the repository>
-code --install-extension <folder outside the repository>/orbitrace-vscode-0.0.0.vsix
+(cd scripts/release/tools && npm ci --ignore-scripts)
+out="$(mktemp -d)/artefacts"
+node scripts/release/pack-release.mjs --out "$out"
+code --install-extension "$out"/orbitrace-vscode-0.0.0.vsix
 ```
 
-`npm run build` bundles the extension and `@orbitrace/core` into one file (`dist/extension.js`) with esbuild and copies the built web app into `dist/app`. The `.vsix` holds only those, the icon, this readme and the licence.
+`npm run build` bundles the extension and `@orbitrace/core` into one file (`dist/extension.js`) with esbuild and copies the built web app into `dist/app`. `pack-release.mjs` packages the `.vsix` with the copy of `@vscode/vsce` pinned in `scripts/release/tools/`, and also packs and checks the npm tarballs. `--out` must be an empty folder outside the repository. The `.vsix` holds only the bundle, the app, the icon, this readme and the licence. The repository's `docs/releasing.md` describes the packaging in full.
 
 ## Integration test
 
-`npm test` runs unit tests with a fake `vscode` module. The integration test runs the built extension in a real VS Code window instead. It is not part of `npm test` and not run in CI, because it downloads VS Code and needs a display.
+`npm test` runs unit tests with a fake `vscode` module. The integration test runs the built extension in a real VS Code window instead. It is not part of `npm test`, because it downloads VS Code and needs a display. CI runs it in a separate job (see below).
 
 From the repository root, with Node.js 22 or later:
 
@@ -86,7 +87,9 @@ Settings (environment variables, all optional):
 | `ORBITRACE_IT_KEEP_SANDBOX=1` | Keep the throwaway folder after a failed run. The editor's logs are under `ud/logs` there. |
 | `ORBITRACE_IT_EDITOR_ARGS`    | Extra editor arguments, separated by spaces, for debugging.                                |
 
-On Linux without a desktop, run it under a virtual display, for example `xvfb-run -a npm run test:integration -w orbitrace-vscode`. A CI job would need Node.js 22, `xvfb` and the libraries VS Code needs on the runner, the build step first, and network access for the download (or a cache of `packages/vscode/node_modules/.cache/vscode-test`).
+On Linux without a desktop, run it under a virtual display, for example `xvfb-run -a npm run test:integration -w orbitrace-vscode`.
+
+In CI the job "VS Code integration test (Node 22, not blocking yet)" in the repository's `.github/workflows/ci.yml` runs it on every pull request into `dev` or `main` and every push to `dev`. It looks up the current stable VS Code version, passes it as `ORBITRACE_VSCODE_VERSION`, caches `packages/vscode/node_modules/.cache/vscode-test` under that version, runs `npm run build`, and then runs the test under `xvfb-run -a`. The job has `continue-on-error: true`, so a failure does not fail the workflow or block a merge yet. Check its result on your pull request yourself.
 
 ## Licence
 

@@ -144,6 +144,20 @@ characters after `claude-code:`, can replace `--latest`.
 command can see while it runs, so do not share it. Use `--no-browser` to print the link without
 opening a browser.
 
+### Follow a running session
+
+A session that is still running opens at the live edge, the newest moment, and keeps up on its
+own as Claude Code writes to it. Scrubbing back with the arrow keys, Home or Pause stops
+following and leaves the view where you put it. The **Go live** button or the End key returns to
+the live edge. The Live badge in the header says `Live: working, following`, or how far behind
+the view is, for example `Live: idle, 2 min 5 s behind`. When the session ends, the view becomes
+an ordinary replay.
+
+Whether a session is running comes from Claude Code's session registry, and `list` shows it in
+the LIVE column (`busy`, `idle`, `ended` or `unknown`). The sessions in `fixtures/config` have no
+registry, so they show as `unknown` and open at the start. The details are in
+[packages/app/README.md](../packages/app/README.md).
+
 Without the `HOME` and `CLAUDE_CONFIG_DIR` overrides, the same commands list, export and open
 your own sessions. An exported replay holds no message text, file path, command line or session
 id, but agent type names and MCP server names are kept as they are, so look at them before you

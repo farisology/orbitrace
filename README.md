@@ -4,7 +4,7 @@ Replay and visualise Claude Code agent sessions.
 
 Orbitrace reads the session transcripts that Claude Code already writes on your machine and plays them back as an orrery: the main agent in the centre, subagents in orbit, every tool call a flare. The name is orbit plus trace.
 
-> **Status: not released.** From a clone of the `dev` branch you can build and run the web app with a bundled demo, the `orbitrace` command (`list`, `export` and `open`), and an editor extension that you package and install by hand. Nothing is on npm, the VS Code Marketplace or Open VSX yet. See [docs/getting-started.md](docs/getting-started.md).
+> **Status: not released.** From a clone of the `dev` branch you can build and run the web app with a bundled demo, the `orbitrace` command (`list`, `export` and `open`), and an editor extension that you package and install by hand. Nothing is on npm, the VS Code Marketplace or Open VSX yet. See [docs/getting-started.md](docs/getting-started.md). What has changed so far is in [CHANGELOG.md](CHANGELOG.md), and how a release is cut is in [docs/releasing.md](docs/releasing.md).
 
 ## What it is for
 
@@ -12,6 +12,10 @@ Orbitrace reads the session transcripts that Claude Code already writes on your 
 - **Share a run without sharing your code.** A replay file holds structure only: agents, tool names, timing and token counts. No prompts, no file contents, no command output.
 - **Keep the history.** Claude Code removes old transcripts on a timer. Orbitrace will keep its own record so a session can still be replayed later.
 - **See your setup.** A map of your installed agents, skills, hooks and MCP servers, lit by what you actually use.
+
+## Follow a running session
+
+Open a session that is still running, with `orbitrace open` or in the editor, and the view starts at the live edge, the newest moment, and keeps up as the session grows. Scrubbing back with the arrow keys, Home or Pause stops following; the **Go live** button or the End key returns to it. The Live badge says `Live: working, following`, or how far behind the view is, for example `Live: idle, 2 min 5 s behind`. Whether a session is running comes from Claude Code's session registry; `orbitrace list` shows it in the LIVE column. Details are in [packages/app/README.md](packages/app/README.md).
 
 ## How it will ship
 
