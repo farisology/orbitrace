@@ -613,16 +613,8 @@ function markDisc(
   markObstacle(layout, board, x - radius, y - radius, x + radius, y + radius, hit, soft);
 }
 
-/** Point `p` of the tether curve from (x0, y0) to (x1, y1), as draw.ts bends it. */
+/** Bend of the tether curve, as draw.ts bends it (`curvePoint`). */
 const BEND = 0.16;
-const tether = new Float64Array(2);
-function tetherPoint(p: number, x0: number, y0: number, x1: number, y1: number): void {
-  const px = (x0 + x1) / 2 - (y1 - y0) * BEND;
-  const py = (y0 + y1) / 2 + (x1 - x0) * BEND;
-  const u = 1 - p;
-  tether[0] = u * u * x0 + 2 * u * p * px + p * p * x1;
-  tether[1] = u * u * y0 + 2 * u * p * py + p * p * y1;
-}
 
 /**
  * Score every wave angle against what this frame draws (see the rules at the top). The
@@ -681,12 +673,20 @@ function scoreWaveAngles(
       // Tethers, drawn from just before an agent is dispatched (a soft cost): where the curve
       // crosses each ring being scored. It runs nearly straight out from the centre, so the
       // point at the ring's share of the agent's distance is close to the crossing.
+      // The curve's control point; the point at `p` is worked out here rather than in a helper,
+      // which only searching frames would call and V8 would optimise late, on a frame well into
+      // playback where the compile allocates (#158).
       const dist = Math.sqrt((x - mx) * (x - mx) + (y - my) * (y - my));
+      const px = (mx + x) / 2 - (y - my) * BEND;
+      const py = (my + y) / 2 + (x - mx) * BEND;
       for (let k = 0; k < board.waveListCount; k++) {
         const R = layout.ringRadius[board.waveList[k]!]!;
         if (R >= dist - ro) continue;
-        tetherPoint(R / dist, mx, my, x, y);
-        markDisc(layout, board, tether[0]!, tether[1]!, 2.5, 0, SOFT_TETHER);
+        const p = R / dist;
+        const u = 1 - p;
+        const tx = u * u * mx + 2 * u * p * px + p * p * x;
+        const ty = u * u * my + 2 * u * p * py + p * p * y;
+        markDisc(layout, board, tx, ty, 2.5, 0, SOFT_TETHER);
       }
     }
     // A waiting agent's slot is a soft cost only: no node is drawn there yet.

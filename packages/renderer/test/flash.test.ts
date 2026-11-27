@@ -249,4 +249,28 @@ describe("flash rate at every playback speed (#118)", () => {
       expect(frame.spawn.every((v) => v === -1)).toBe(true);
     }
   });
+
+  it("is scheduled by computeFrameState for each new speed, and left alone at a steady one", () => {
+    const scene = buildScene(models.get("stress")!);
+    const frame = createFrameState(scene);
+    const at = (t: number, speed: number, reducedMotion = false) =>
+      computeFrameState(scene, t, { speed, minVisibleCallSeconds: 0.3, reducedMotion }, frame);
+    // Reduced motion never schedules.
+    at(10, 4, true);
+    expect(Number.isNaN(scene.flashes.speed)).toBe(true);
+    at(10, 4);
+    expect(scene.flashes.speed).toBe(4);
+    expect(scene.flashes.warpSeconds).toBe(EFFECT_SECONDS.warp);
+    const scheduled = scene.flashes.onsetCount;
+    // At a steady speed the schedule is not recomputed: a marker left in it survives.
+    scene.flashes.onsetCount = 9999;
+    at(11, 4);
+    at(12, 4);
+    expect(scene.flashes.onsetCount).toBe(9999);
+    // A new speed recomputes it, and so does going back to the old one.
+    at(13, 64);
+    expect(scene.flashes.speed).toBe(64);
+    at(14, 4);
+    expect(scene.flashes.onsetCount).toBe(scheduled);
+  });
 });

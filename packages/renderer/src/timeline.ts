@@ -188,9 +188,14 @@ export function computeFrameState(
   const comet = EFFECT_SECONDS.comet * speed;
   const spawn = EFFECT_SECONDS.spawn * speed;
   const maxOutput = scene.maxOutput;
-  const flashes = reduced
-    ? scene.flashes
-    : scheduleFlashes(scene.flashes, speed, EFFECT_SECONDS.warp);
+  // The flash schedule changes only with the speed. The check stays here and the call is made
+  // only on a change: a helper called once per frame that returns at once reaches V8's
+  // optimising threshold only tens of thousands of frames in, and that compile allocates on
+  // the frame it lands on (#158).
+  const flashes = scene.flashes;
+  if (!reduced && (flashes.speed !== speed || flashes.warpSeconds !== EFFECT_SECONDS.warp)) {
+    scheduleFlashes(flashes, speed, EFFECT_SECONDS.warp);
+  }
 
   out.t = t;
   out.speed = speed;
