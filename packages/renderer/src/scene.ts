@@ -4,6 +4,7 @@
  */
 
 import type { ReplayAgent, ReplayAgentId, ReplayModel } from "@orbitrace/core";
+import { createFlashSchedule, type FlashSchedule } from "./flash.js";
 import { formatDuration, formatTokens } from "./format.js";
 import { FONTS, Label } from "./labels.js";
 import { lodFor } from "./lod.js";
@@ -58,6 +59,8 @@ export interface AgentScene {
   /** Main agent: absolute spoke angle. Subagent: offset from the outward direction. */
   readonly flareAngle: Float32Array;
   readonly flareLength: Float32Array;
+  /** Longest `flareLength` of any call, 0 with none: how far a spoke can reach. */
+  readonly maxFlareLength: number;
   /** Label per call (the tool name), shared between calls with the same name. */
   readonly toolLabel: readonly Label[];
 
@@ -86,6 +89,8 @@ export interface Scene {
   readonly lod: number;
   /** Ring summary label of each wave once it collapses, for example `WAVE 3 · 25 done`. */
   readonly waveSummary: readonly Label[];
+  /** When spawn flashes and warps may start at the current speed (flash.ts, #118). */
+  readonly flashes: FlashSchedule;
 }
 
 /** A 31-bit string hash. Deterministic, so a replay looks the same on every machine. */
@@ -155,6 +160,7 @@ export function buildScene(model: ReplayModel): Scene {
     const flareAngle = new Float32Array(n);
     const flareLength = new Float32Array(n);
     const toolLabel: Label[] = [];
+    let maxFlareLength = 0;
     agent.tools.forEach((tool, j) => {
       toolStart[j] = tool.start;
       toolOpen[j] = tool.end === null ? 1 : 0;
@@ -170,6 +176,7 @@ export function buildScene(model: ReplayModel): Scene {
       const h = mix(hashString(tool.name), j);
       flareAngle[j] = isMain ? (h % 628) / 100 : ((h % 200) / 100 - 1) * 1.15;
       flareLength[j] = (isMain ? 30 : 24) + (h % 14);
+      if (toolSkip[j] === 0) maxFlareLength = Math.max(maxFlareLength, flareLength[j]!);
       toolLabel.push(labelFor(tool.name));
     });
 
@@ -215,6 +222,7 @@ export function buildScene(model: ReplayModel): Scene {
       moonRing,
       flareAngle,
       flareLength,
+      maxFlareLength,
       toolLabel,
       replyCount,
       replyT,
@@ -251,5 +259,9 @@ export function buildScene(model: ReplayModel): Scene {
     warpLabelNarrow,
     lod: lodFor(model.agents.length),
     waveSummary,
+    flashes: createFlashSchedule(
+      agents.map((a) => a.start),
+      warpAt,
+    ),
   };
 }

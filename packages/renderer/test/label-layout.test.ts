@@ -6,15 +6,21 @@ import {
   BOX_AGENT,
   BOX_DETAIL,
   BOX_WAVE,
-  SPOT_OUTWARD,
+  WAVE_BINS,
+  WAVE_FADE_SECONDS,
+  WAVE_HALF_HEIGHT,
+  WAVE_PAD_X,
   boardFits,
   boxesOverlap,
   createLabelBoard,
   placeLabels,
+  angleOf,
+  waveBinAngle,
+  waveBinBlocked,
   wantsLabel,
   type LabelBoard,
 } from "../src/label-layout.js";
-import { computeLayout } from "../src/layout.js";
+import { computeLayout, type Layout } from "../src/layout.js";
 import { LABEL_BUDGET, LOD_FULL, LOD_MINIMAL } from "../src/lod.js";
 import { createResources, ensureBoard, type DrawResources } from "../src/resources.js";
 import { buildScene, type Scene } from "../src/scene.js";
@@ -22,6 +28,7 @@ import { createPalette, DEFAULT_THEME } from "../src/theme.js";
 import {
   PHASE_ACTIVE,
   PHASE_DONE,
+  PHASE_QUEUED,
   computeFrameState,
   createFrameState,
   type FrameState,
@@ -168,18 +175,14 @@ describe("label placement on the demo golden replay", () => {
     }
   });
 
-  it("shows every running agent's label at the app's size, moving it off the wave labels", () => {
-    // 1440x900 window: the orrery canvas is about 1080x530. At t = 200 wave 2 runs and the
-    // first node of the orbit sits just right of the wave labels, so its label moves.
+  it("shows every running agent's label and every wave label at the app's size", () => {
+    // 1440x900 window: the orrery canvas is about 1080x530. At t = 200 wave 2 runs.
     const drawn = draw(DEMO_GOLDEN, 1080, 530, 200);
     const running = drawn.scene.agents.filter((a) => drawn.frame.phase[a.index] === PHASE_ACTIVE);
     expect(running.length).toBeGreaterThan(3);
     for (const a of running) expect([a.id, drawn.board.agentShown[a.index]]).toEqual([a.id, 1]);
     expect(drawn.board.dropped).toBe(0);
-    const moved = running.filter(
-      (a) => !a.isMain && drawn.board.agentSpot[a.index] !== SPOT_OUTWARD,
-    );
-    expect(moved.length).toBeGreaterThan(0);
+    for (let w = 0; w < drawn.scene.waveCount; w++) expect(drawn.board.waveShown[w]).toBe(1);
     const kinds = new Set(Array.from(drawn.board.boxKind.subarray(0, drawn.board.boxCount)));
     expect(kinds.has(BOX_WAVE)).toBe(true);
     expect(kinds.has(BOX_AGENT)).toBe(true);
@@ -194,9 +197,9 @@ describe("label placement on the demo golden replay", () => {
     expect(wave?.args[2]).toBe(drawn.board.waveBase[0]);
   });
 
-  it("draws no wave labels and no detail rows on a narrow canvas", () => {
+  it("keeps the wave labels but draws no detail rows on a narrow canvas", () => {
     const drawn = draw(DEMO_GOLDEN, 600, 420, 200, 6);
-    expect(Array.from(drawn.board.waveShown.subarray(0, 4))).toEqual([0, 0, 0, 0]);
+    expect(Array.from(drawn.board.waveShown.subarray(0, 4))).toEqual([1, 1, 1, 1]);
     expect(drawn.board.detailWidth[6]).toBe(0);
     expect(drawn.board.agentShown[6]).toBe(1);
   });
@@ -310,5 +313,368 @@ describe("label placement above 100 agents", () => {
     expect(shownAgents(minimal).length - 1).toBeLessThanOrEqual(LABEL_BUDGET[LOD_MINIMAL]!);
     expect(shownAgents(full).length).toBeGreaterThan(shownAgents(minimal).length);
     expect(overlaps(full.board)).toEqual([]);
+  });
+});
+
+/** The box placed for wave `w`'s label, as [left, top, right, bottom], and its index. */
+function waveBox(board: LabelBoard, w: number): { box: number[]; index: number } | null {
+  for (let k = 0; k < board.boxCount; k++) {
+    if (board.boxKind[k] === BOX_WAVE && board.boxOwner[k] === w) {
+      return { box: Array.from(board.boxes.subarray(k * 4, k * 4 + 4)), index: k };
+    }
+  }
+  return null;
+}
+
+/**
+ * What wave `w`'s label box covers, computed apart from label-layout.ts from the drawing
+ * geometry in draw.ts: node bodies with their token arc, and spokes with their tip dot.
+ */
+function coveredBy(drawn: Drawn, layout: Layout, w: number): string[] {
+  const found = waveBox(drawn.board, w);
+  if (found === null) return [];
+  const [l, t, r, b] = found.box as [number, number, number, number];
+  const hits: string[] = [];
+  const { scene, frame } = drawn;
+  for (const a of scene.agents) {
+    const i = a.index;
+    if (!a.isMain && frame.phase[i] === PHASE_QUEUED) continue;
+    const x = layout.x[i]!;
+    const y = layout.y[i]!;
+    const ro = layout.ro[i]!;
+    // Token arc: radius ro + 3, 2.4 wide.
+    const reach = ro + 4.2;
+    if (boxesOverlap(l, t, r, b, x - reach, y - reach, x + reach, y + reach, 0)) {
+      hits.push(`node ${a.id}`);
+    }
+    for (let k = frame.flightOffset[i]!; k < frame.flightOffset[i + 1]!; k++) {
+      if (!(frame.flightAlpha[k]! > 0.05)) continue;
+      const j = frame.flightTool[k]!;
+      const angle = a.isMain ? a.flareAngle[j]! : layout.angle[i]! + a.flareAngle[j]!;
+      const r0 = ro + 7;
+      const end = r0 + a.flareLength[j]! * frame.flightGrow[k]!;
+      for (let s = 0; s <= 8; s++) {
+        const d = r0 + ((end - r0) * s) / 8;
+        const px = x + Math.cos(angle) * d;
+        const py = y + Math.sin(angle) * d;
+        const pad = s === 8 ? 3 : 0.7;
+        if (boxesOverlap(l, t, r, b, px - pad, py - pad, px + pad, py + pad, 0)) {
+          hits.push(`beam ${a.id}`);
+          break;
+        }
+      }
+    }
+  }
+  return hits;
+}
+
+/** The app's orrery canvas in a 1440x900 and a 1280x800 window, measured in the screenshots. */
+const APP_SIZES: readonly (readonly [number, number])[] = [
+  [1080, 475],
+  [920, 372],
+];
+
+describe("wave labels on their rings (#128)", () => {
+  const focus = [
+    [-1, -1],
+    [5, -1],
+    [-1, 2],
+    [11, 13],
+  ] as const;
+
+  it("computes angles as atan2 does, to within 2e-5 radians", () => {
+    expect(angleOf(0, 0)).toBe(0);
+    for (let k = 0; k < 720; k++) {
+      const t = (k / 720) * Math.PI * 2 - Math.PI + 1e-3;
+      for (const r of [0.5, 3, 250]) {
+        const y = Math.sin(t) * r;
+        const x = Math.cos(t) * r;
+        expect(Math.abs(angleOf(y, x) - Math.atan2(y, x))).toBeLessThan(2e-5);
+      }
+    }
+  });
+
+  it("gives bin angles from straight up, clockwise", () => {
+    expect(waveBinAngle(0)).toBeCloseTo(-Math.PI / 2);
+    expect(waveBinAngle(WAVE_BINS / 4)).toBeCloseTo(0);
+    expect(waveBinAngle(WAVE_BINS / 2)).toBeCloseTo(Math.PI / 2);
+  });
+
+  it.each([...SIZES, ...APP_SIZES])(
+    "keeps every wave label, centred on its ring, at %ix%i at every time and focus",
+    (w, h) => {
+      for (const t of TIMES) {
+        for (const [selected, hovered] of focus) {
+          const drawn = draw(DEMO_GOLDEN, w, h, t, selected, hovered);
+          const layout = computeLayout(drawn.scene, w, h);
+          for (let wave = 0; wave < drawn.scene.waveCount; wave++) {
+            expect([w, h, t, selected, wave, drawn.board.waveShown[wave]]).toEqual([
+              w,
+              h,
+              t,
+              selected,
+              wave,
+              1,
+            ]);
+            const [l, top, r, b] = waveBox(drawn.board, wave)!.box as number[];
+            const cx = (l! + r!) / 2 - layout.cx;
+            const cy = (top! + b!) / 2 - layout.cy;
+            expect(Math.hypot(cx, cy)).toBeCloseTo(layout.ringRadius[wave]!, 6);
+            expect(b! - top!).toBeCloseTo(2 * WAVE_HALF_HEIGHT, 9);
+          }
+          expect(overlaps(drawn.board)).toEqual([]);
+        }
+      }
+    },
+  );
+
+  it.each([...SIZES.filter(([w]) => w > 600), ...APP_SIZES])(
+    "never puts a wave label over a node, token arc or beam at %ix%i",
+    (w, h) => {
+      for (const t of TIMES) {
+        for (const [selected, hovered] of focus) {
+          const drawn = draw(DEMO_GOLDEN, w, h, t, selected, hovered);
+          const layout = computeLayout(drawn.scene, w, h);
+          for (let wave = 0; wave < drawn.scene.waveCount; wave++) {
+            expect([w, h, t, selected, wave, coveredBy(drawn, layout, wave)]).toEqual([
+              w,
+              h,
+              t,
+              selected,
+              wave,
+              [],
+            ]);
+          }
+        }
+      }
+    },
+  );
+
+  it("covers no node at the narrowest size either, where it may only cover moons", () => {
+    for (const t of TIMES) {
+      const drawn = draw(DEMO_GOLDEN, 600, 420, t, 5);
+      const layout = computeLayout(drawn.scene, 600, 420);
+      for (let wave = 0; wave < drawn.scene.waveCount; wave++) {
+        expect([
+          t,
+          wave,
+          coveredBy(drawn, layout, wave).filter((s) => s.startsWith("node")),
+        ]).toEqual([t, wave, []]);
+      }
+    }
+  });
+
+  it("fixes the reported frames: 1440x900 at t=200, and 1280x800 at t=200 with a5 selected", () => {
+    // Before #128, docs-scribe's arc and beams crossed WAVE 2 and WAVE 3 at 1440x900, and at
+    // 1280x800 with a5 selected WAVE 3 was dropped for the detail row.
+    const a5 = DEMO_GOLDEN.agents.findIndex((a) => a.id === "a5");
+    for (const [[w, h], selected] of [
+      [APP_SIZES[0]!, -1],
+      [APP_SIZES[1]!, a5],
+    ] as const) {
+      const drawn = draw(DEMO_GOLDEN, w, h, 200, selected);
+      const layout = computeLayout(drawn.scene, w, h);
+      expect(drawn.scene.waveCount).toBe(4);
+      for (let wave = 0; wave < 4; wave++) {
+        expect(drawn.board.waveShown[wave]).toBe(1);
+        expect(coveredBy(drawn, layout, wave)).toEqual([]);
+      }
+      expect(selected < 0 || drawn.board.detailWidth[selected]! > 0).toBe(true);
+      expect(overlaps(drawn.board)).toEqual([]);
+    }
+  });
+
+  it("draws wave labels on top of every node, beam and comet, each over a backing", () => {
+    const drawn = draw(DEMO_GOLDEN, 1080, 475, 200);
+    const ops = drawn.ctx.ops;
+    const firstWave = ops.findIndex((o) => o.op === "fillText" && /^WAVE /.test(String(o.args[0])));
+    let lastShape = -1;
+    ops.forEach((o, k) => {
+      if (o.op === "arc" || o.op === "drawImage" || o.op === "stroke") lastShape = k;
+    });
+    expect(firstWave).toBeGreaterThan(lastShape);
+    for (let wave = 0; wave < 4; wave++) {
+      const k = ops.findIndex((o) => o.op === "fillText" && o.args[0] === `WAVE ${wave + 1}`);
+      const backing = ops
+        .slice(0, k)
+        .reverse()
+        .find((o) => o.op === "fillRect")!;
+      const [x, y, bw, bh, color] = backing.args as [number, number, number, number, string];
+      expect(color).toBe(DEFAULT_THEME.background);
+      expect(x).toBeCloseTo(drawn.board.waveLeft[wave]! - WAVE_PAD_X);
+      expect(bw).toBeCloseTo(drawn.res.waveLabels[wave]!.width + 2 * WAVE_PAD_X);
+      expect(y + bh / 2).toBeCloseTo(drawn.board.waveBase[wave]! - 3);
+    }
+  });
+
+  /** A run of frames sharing one set of resources, as the engine draws them while playing. */
+  function play(
+    w: number,
+    h: number,
+    from: number,
+    to: number,
+    stepT: number,
+    stepAmbient: number,
+    onFrame: (board: LabelBoard, layout: Layout, scene: Scene, k: number) => void,
+  ): void {
+    const scene = buildScene(DEMO_GOLDEN);
+    const layout = computeLayout(scene, w, h);
+    const frame = createFrameState(scene);
+    const res = createResources(mockSurfaces(), createPalette(DEFAULT_THEME));
+    const view: ViewState = { selected: -1, hovered: -1, ambient: 0, dpr: 1 };
+    const ctx = new MockContext(false).asDrawContext();
+    const timing = { speed: 8, minVisibleCallSeconds: 0.3, reducedMotion: false };
+    let k = 0;
+    for (let t = from; t <= to; t += stepT) {
+      computeFrameState(scene, t, timing, frame);
+      drawFrame(ctx, scene, layout, frame, view, res);
+      onFrame(res.board, layout, scene, k++);
+      view.ambient += stepAmbient;
+    }
+  }
+
+  /** True when bin `bin` was blocked for wave `w` when it was placed: same boxes before it. */
+  function blockedAtPlacement(board: LabelBoard, layout: Layout, w: number, bin: number): boolean {
+    const count = board.boxCount;
+    board.boxCount = waveBox(board, w)!.index;
+    const blocked = waveBinBlocked(layout, board, w, bin);
+    board.boxCount = count;
+    return blocked;
+  }
+
+  it.each(APP_SIZES)(
+    "keeps each wave label where it is until that spot is hit, at %ix%i over a played run",
+    (w, h) => {
+      const previous: number[] = [];
+      let moves = 0;
+      let frames = 0;
+      let searches = 0;
+      const bad: string[] = [];
+      play(w, h, 0, DEMO_GOLDEN.totals.duration, 1 / 7.5, 1 / 60, (board, layout, scene) => {
+        frames++;
+        searches = board.waveSearches;
+        for (let wave = 0; wave < scene.waveCount; wave++) {
+          const bin = board.waveBin[wave]!;
+          const before = previous[wave];
+          if (before !== undefined && before >= 0 && bin !== before) {
+            moves++;
+            // It moved only because its old spot is hit or blocked now, and from a spot that
+            // is only hit, to one that is hit less.
+            const hitBefore = board.waveHit[wave * WAVE_BINS + before]!;
+            const hitAfter = board.waveHit[wave * WAVE_BINS + bin]!;
+            const blocked = blockedAtPlacement(board, layout, wave, before);
+            if (!blocked && !(hitBefore > 0 && hitAfter < hitBefore)) {
+              bad.push(`frame ${frames} wave ${wave}: ${before} (${hitBefore}) to ${bin}`);
+            }
+          }
+          previous[wave] = bin;
+        }
+      });
+      expect(bad).toEqual([]);
+      // Agents appear and run during the replay, so some label does have to move.
+      expect(moves).toBeGreaterThan(0);
+      // At 8x a frame is 1/7.5 replay second; most frames keep every label still.
+      expect(frames).toBeGreaterThan(3000);
+      expect(moves).toBeLessThan(frames / 20);
+      // And most frames only check the spots the labels hold, without scoring every angle.
+      expect(searches).toBeLessThan(frames / 10);
+    },
+  );
+
+  it("fades across to a new spot while the clock runs, and moves at once when paused", () => {
+    const scene = buildScene(DEMO_GOLDEN);
+    const layout = computeLayout(scene, 1080, 475);
+    const frame = computeFrameState(
+      scene,
+      200,
+      { speed: 8, minVisibleCallSeconds: 0.3, reducedMotion: false },
+      createFrameState(scene),
+    );
+    const res = createResources(mockSurfaces(), createPalette(DEFAULT_THEME));
+    const view: ViewState = { selected: -1, hovered: -1, ambient: 10, dpr: 1 };
+    const ctx = new MockContext();
+    const render = () => {
+      ctx.clear();
+      drawFrame(ctx.asDrawContext(), scene, layout, frame, view, res);
+      return res.board;
+    };
+    let board = render();
+    const wave = 1;
+    const row = wave * WAVE_BINS;
+    const settled = board.waveBin[wave]!;
+    expect(board.waveHit[row + settled]).toBe(0);
+    const occupied = Array.from(board.waveHit.subarray(row, row + WAVE_BINS)).findIndex(
+      (v) => v > 0,
+    );
+    expect(occupied).toBeGreaterThanOrEqual(0);
+
+    // Playing: put the label on a hit spot; it leaves it and fades across.
+    board.waveBin[wave] = occupied;
+    view.ambient += 1 / 60;
+    board = render();
+    expect(board.waveBin[wave]).not.toBe(occupied);
+    expect(board.wavePrevBin[wave]).toBe(occupied);
+    expect(board.waveGhostShown[wave]).toBe(1);
+    expect(board.waveGhostAlpha[wave]).toBe(1);
+    expect(board.waveAlpha[wave]).toBe(0);
+    view.ambient += WAVE_FADE_SECONDS / 2;
+    board = render();
+    expect(board.waveAlpha[wave]).toBeCloseTo(0.5);
+    expect(board.waveGhostAlpha[wave]).toBeCloseTo(0.5);
+    // Both are drawn while it fades: the old spot fading out, the new one fading in.
+    expect(ctx.texts().filter((s) => s === "WAVE 2")).toHaveLength(2);
+    view.ambient += WAVE_FADE_SECONDS;
+    board = render();
+    expect(board.waveAlpha[wave]).toBe(1);
+    expect(board.waveGhostShown[wave]).toBe(0);
+    expect(ctx.texts().filter((s) => s === "WAVE 2")).toHaveLength(1);
+
+    // Paused (the ambient clock stands still): the move is made at once, with no fade.
+    board.waveBin[wave] = occupied;
+    board = render();
+    expect(board.waveBin[wave]).not.toBe(occupied);
+    expect(board.waveGhostShown[wave]).toBe(0);
+    expect(board.waveAlpha[wave]).toBe(1);
+  });
+
+  it("forgets the angles when the wave labels go, and drops one only with no room at all", () => {
+    const { scene, frame } = draw(DEMO_GOLDEN, 1080, 475, 200);
+    const board = createLabelBoard(scene.agents.length, scene.waveCount);
+    board.agentWidth.fill(60);
+    board.agentSize.fill(10.5);
+    board.waveWidth.fill(40);
+    const roomy = computeLayout(scene, 1080, 475);
+    placeLabels(scene, roomy, frame, -1, -1, Infinity, true, board);
+    expect(Array.from(board.waveShown.subarray(0, 4))).toEqual([1, 1, 1, 1]);
+    // A canvas too small for any label: rings a few pixels across.
+    const tiny = computeLayout(scene, 40, 30);
+    placeLabels(scene, tiny, frame, -1, -1, Infinity, true, board);
+    expect(Array.from(board.waveShown.subarray(0, 4))).toEqual([0, 0, 0, 0]);
+    expect(Array.from(board.waveBin.subarray(0, 4))).toEqual([-1, -1, -1, -1]);
+    // No width: no label and no state.
+    board.waveWidth.fill(0);
+    placeLabels(scene, roomy, frame, -1, -1, Infinity, true, board);
+    expect(Array.from(board.waveShown.subarray(0, 4))).toEqual([0, 0, 0, 0]);
+  });
+
+  it("rules out a spot that leaves the canvas or covers a placed label", () => {
+    const { scene } = draw(DEMO_GOLDEN, 1080, 475, 200);
+    const layout = computeLayout(scene, 1080, 475);
+    const board = createLabelBoard(scene.agents.length, scene.waveCount);
+    board.waveWidth.fill(40);
+    board.boxCount = 0;
+    // Ring 0 straight up is inside the canvas and clear of everything.
+    expect(waveBinBlocked(layout, board, 0, 0)).toBe(false);
+    // A label box placed right there blocks it.
+    const R = layout.ringRadius[0]!;
+    board.boxes.set([layout.cx - 5, layout.cy - R - 5, layout.cx + 5, layout.cy - R + 5], 0);
+    board.boxCount = 1;
+    expect(waveBinBlocked(layout, board, 0, 0)).toBe(true);
+    expect(waveBinBlocked(layout, board, 0, WAVE_BINS / 2)).toBe(false);
+    // With the centre just below ring 3's top, its top spot leaves the canvas.
+    const tight: Layout = { ...layout, cy: layout.ringRadius[3]! + 2 };
+    board.boxCount = 0;
+    expect(waveBinBlocked(tight, board, 3, 0)).toBe(true);
+    expect(waveBinBlocked(tight, board, 3, WAVE_BINS / 2)).toBe(false);
   });
 });

@@ -5,6 +5,7 @@
 
 import type { ToolKind } from "@orbitrace/core";
 import type { OrreryTheme } from "./api.js";
+import { backingAlphas } from "./contrast.js";
 import { DESIGN_COLORS } from "./generated/design.js";
 
 /** The tool-call colour mapping from design/identity.md. */
@@ -70,10 +71,54 @@ export interface Palette extends OrreryTheme {
   readonly dim: string;
   readonly faint: string;
   readonly white: string;
+  /**
+   * Opacity of the backing box (in `background`) drawn behind text in each colour, so the
+   * text keeps 4.5:1 over anything drawn behind it (contrast.ts, #117). Keys are the colours
+   * of `canvasTextColors`.
+   */
+  readonly backing: ReadonlyMap<string, number>;
+}
+
+/**
+ * The least opacity of a label's backing box: the look the tags had before the contrast
+ * floor (#117). Colours that need more get more.
+ */
+export const MIN_BACKING_ALPHA = 0.72;
+
+/** A kind of text the renderer draws on the canvas and its colour. */
+export interface CanvasText {
+  readonly kind: string;
+  readonly color: string;
+}
+
+/**
+ * Every kind of text the renderer draws on the canvas, with the palette colour draw.ts uses for
+ * it (#117). `test/contrast.test.ts` checks each against the floor, and checks that every text
+ * a drawn frame contains is in one of these colours.
+ */
+export function canvasTextColors(
+  palette: Omit<Palette, "backing" | "buckets"> & { readonly buckets: readonly string[] },
+): CanvasText[] {
+  return [
+    { kind: "main agent label", color: palette.text },
+    { kind: "agent label", color: palette.text },
+    { kind: "finished agent label", color: palette.faint },
+    { kind: "detail row", color: palette.dim },
+    { kind: "finished agent detail row", color: palette.faint },
+    { kind: "wave label", color: palette.faint },
+    { kind: "wave ring summary", color: palette.dim },
+    { kind: "idle-skip warp label", color: palette.text },
+    { kind: "handback comet tag", color: palette.handback },
+    { kind: "spoke tag, shell", color: palette.buckets[BUCKET_SHELL]! },
+    { kind: "spoke tag, read", color: palette.buckets[BUCKET_READ]! },
+    { kind: "spoke tag, edit", color: palette.buckets[BUCKET_EDIT]! },
+    { kind: "spoke tag, agent", color: palette.buckets[BUCKET_AGENT]! },
+    { kind: "spoke tag, failure", color: palette.buckets[BUCKET_FAILURE]! },
+  ];
 }
 
 export function createPalette(theme: OrreryTheme): Palette {
-  return Object.freeze({
+  const colors = {
     ...theme,
     buckets: Object.freeze([theme.shell, theme.read, theme.edit, theme.agent, theme.failure]),
     main: DESIGN_COLORS.ion,
@@ -85,5 +130,15 @@ export function createPalette(theme: OrreryTheme): Palette {
     dim: DESIGN_COLORS.dim,
     faint: DESIGN_COLORS.faint,
     white: "#FFFFFF",
+  };
+  const texts = canvasTextColors(colors).map((entry) => entry.color);
+  return Object.freeze({
+    ...colors,
+    backing: backingAlphas(theme.background, texts, MIN_BACKING_ALPHA),
   });
+}
+
+/** Backing opacity for text in `color`: from the palette, or opaque for a colour it lacks. */
+export function backingAlpha(palette: Palette, color: string): number {
+  return palette.backing.get(color) ?? 1;
 }

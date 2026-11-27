@@ -84,6 +84,25 @@ calls a frame asks for, a stand-in for raster work.
 At 100 agents label placement (with node avoidance) adds about 0.04 ms per frame. At 500 agents
 the peak number of arcs per frame falls from 6,026 to 1,300 and of text draws from 549 to 31.
 
+### Wave labels on their rings (#128)
+
+Placing the wave labels on their rings clear of nodes, arcs and beams (see Labels below) costs
+a little on top. Measured on the reference machine on 27 Nov 2026, the renderer on `dev` before
+#128 against #128, same benchmark code, in the same session:
+
+| Agents | Node p50 / p95 before | after            | Chrome engine p50 / p95 at 4x CPU before | after        |
+| ------ | --------------------- | ---------------- | ---------------------------------------- | ------------ |
+| 15     | 0.028 / 0.033 ms      | 0.031 / 0.038 ms | 0.6 / 1.1 ms                             | 0.6 / 1.2 ms |
+| 100    | 0.120 / 0.187 ms      | 0.131 / 0.227 ms | 1.8 / 3.1 ms                             | 1.9 / 3.3 ms |
+| 500    | 0.123 / 0.170 ms      | 0.175 / 0.348 ms | 1.0 / 2.0 ms                             | 1.3 / 2.6 ms |
+
+Chrome at 1x and the frame rate are unchanged within a tenth of a millisecond: 60 fps at 100 and
+500 agents, with and without the slowed CPU. The 100-agent p95 at 4x stays inside the 4 ms
+budget. Most frames only check the spot each wave label holds; the p95 is the frames in which a
+label looks for a new spot. Both builds were measured within the same afternoon; the "before" column
+of the tables above is from an earlier session and reads lower on this machine (2.8 ms there
+against 3.1 ms here for the same build). Runs of the same build vary by about 0.3 ms at p95.
+
 ### Parse and build
 
 Command: `npm run bench:node` (file `perf/pipeline.perf.ts`).
@@ -144,8 +163,16 @@ At every level:
 
 1. The main agent's label, then the selected agent's, then the hovered agent's, are always
    placed (with the selected and hovered detail rows).
-2. Wave labels keep their fixed spot left of the vertical axis above each orbit; one that would
-   overlap a label already placed, or another wave label (many thin orbits), is left out.
+2. Wave labels sit on their own ring, centred on it, at one of 72 angles (#128). Each angle is
+   scored against what the frame draws there: nodes with their token arc, orbit dash and
+   reticle, moons, and at full detail tool beams and spoke tags count as hits; agent slots,
+   the reach of running agents' beams and tethers as soft costs. A label keeps its angle while
+   that spot gets no more hits than when it took it, and otherwise moves to the free angle with
+   the fewest hits, fading across in 0.3 s while the clock runs (at once when paused). Angles
+   that cover a label already placed, another wave label or the canvas edge are ruled out. A
+   wave label is shown at every canvas size and only left out when no angle on its ring is free
+   of labels and edges. Wave labels are drawn after every node, beam and comet, over a backing
+   box that hides the ring line under the text.
 3. Running subagents, then finished ones, in id order, each try four spots around their node:
    outward from the centre (the old fixed spot), inward, right, left. At full detail a spot must
    also cover no other node; if none does, any spot that avoids labels is taken. A label with no
@@ -154,7 +181,11 @@ At every level:
 
 `test/label-layout.test.ts` checks, on the demo golden replay at 14 times and 5 canvas sizes
 with several selections, that no two placed boxes overlap and that the main, selected and
-hovered labels are shown; and at 100 and 500 agents that the budget holds.
+hovered labels are shown; and at 100 and 500 agents that the budget holds. For wave labels it
+checks, at 7 canvas sizes including the app's orrery at 1440 by 900 and 1280 by 800, that every
+wave label is shown on its ring, that none covers a node, token arc or beam (measured apart from
+the placement code), and over a played run that a label only moves when its spot is hit or
+blocked.
 
 ## Not measured
 
@@ -169,4 +200,5 @@ hovered labels are shown; and at 100 and 500 agents that the budget holds.
 - Parsing a 50 MB file dropped into the browser; the 50 MB numbers are Node only.
 - Sessions over 500 agents or a single agent with tens of thousands of calls. Moons per agent are
   capped at 400 (`MAX_MOONS_PER_AGENT`) at every level.
-- Spoke tags and comet tags are not part of label placement and can still overlap a label.
+- Spoke tags and comet tags are not part of agent label placement and can still overlap an
+  agent label. Wave labels avoid spoke tags at full detail, using an estimate of the tag's width.
