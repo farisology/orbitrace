@@ -126,6 +126,7 @@ merged so far.
   session is busy or idle, core's `watchSession` reads the live registry again every
   `livenessIntervalMs` (5 s by default) and reports `ended` once the process is gone. The app
   also stops following, and hides Go live, when the status becomes unknown (#139, #147).
+- `@orbitrace/core/node`: `platformForPath` reads a path that starts with one backslash and no drive letter (`\srv\x`, rooted on the current Windows drive) as a Windows path, so the subagent folder of such a locator is found (#210, #204).
 
 ### Security
 

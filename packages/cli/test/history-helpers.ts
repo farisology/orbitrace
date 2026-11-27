@@ -10,16 +10,22 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { historyCapability, withoutSqliteWarning } from "@orbitrace/core/node";
+import {
+  HISTORY_WORKER_EXPORT,
+  historyCapability,
+  withoutSqliteWarning,
+} from "@orbitrace/core/node";
 import { run, type CliIo, type CliRuntime } from "../src/cli.js";
 import type { HistoryRuntime } from "../src/history/context.js";
 import type { HostContext } from "../src/sessions.js";
 import { makeFakeMachine, type FakeMachine } from "./helpers.js";
 
-/** Core's built worker entry. `npm test` at the root builds core first. */
-export const CORE_WORKER = fileURLToPath(
-  new URL("../../core/dist/history/worker.js", import.meta.url),
-);
+/**
+ * Core's built worker entry, resolved through core's package export
+ * (`@orbitrace/core/history-worker`), as the CLI build resolves it, so these tests break when the
+ * export moves (#213). `npm test` at the root builds core first.
+ */
+export const CORE_WORKER = fileURLToPath(import.meta.resolve(HISTORY_WORKER_EXPORT));
 
 const probe = await withoutSqliteWarning(historyCapability);
 /** Whether `node:sqlite` loads in this Node. */

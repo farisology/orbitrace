@@ -2,10 +2,12 @@
  * Helpers for the end-to-end test of the app's HTTP transport against the real loopback server
  * of the `orbitrace` command (#93).
  *
- * The command runs as its built binary (`packages/cli/dist/index.js`), as a child process, so
- * the app takes no dependency on the CLI package: `orbitrace` already lists `@orbitrace/app` as
- * a dev dependency, and the reverse would be a workspace cycle that `scripts/run-workspaces.mjs`
- * refuses. `npm test` at the repository root builds every package before any test runs.
+ * The command runs as its built binary, as a child process, so the app takes no dependency on
+ * the CLI package: `orbitrace` already lists `@orbitrace/app` as a dev dependency, and the
+ * reverse would be a workspace cycle that `scripts/run-workspaces.mjs` refuses. The binary is
+ * found through the `orbitrace` package's name and the bin its manifest names, not through the
+ * CLI's folder layout (#213). `npm test` at the repository root builds every package before any
+ * test runs.
  *
  * Privacy: the child gets a fresh environment that names only a temporary folder. `HOME` (and
  * its Windows and XDG equivalents) is an empty folder there, and `CLAUDE_CONFIG_DIR` is a
@@ -24,13 +26,31 @@ import {
   realpathSync,
   rmSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { CONFIG_FOLDER, writeFixtureTree } from "@orbitrace/fixtures";
 
-/** The built entry of the `orbitrace` command. */
-export const CLI_BIN = fileURLToPath(new URL("../../../cli/dist/index.js", import.meta.url));
+/** The package that ships the `orbitrace` command, and the name of its bin. */
+export const CLI_PACKAGE = "orbitrace";
+
+/**
+ * The file a package's manifest names as its `bin` called `name` (a string `bin` names the
+ * package's only command), resolved from `require`'s location. Throws when the package is not
+ * found or names no such bin. The file itself need not exist yet.
+ */
+export function resolvePackageBin(require: NodeJS.Require, pkg: string, name: string): string {
+  const manifestPath = require.resolve(`${pkg}/package.json`);
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+    bin?: string | Record<string, string>;
+  };
+  const bin = typeof manifest.bin === "string" ? manifest.bin : manifest.bin?.[name];
+  if (bin === undefined) throw new Error(`The ${pkg} package names no "${name}" bin.`);
+  return join(dirname(manifestPath), bin);
+}
+
+/** The built entry of the `orbitrace` command: the `orbitrace` bin of the `orbitrace` package. */
+export const CLI_BIN = resolvePackageBin(createRequire(import.meta.url), CLI_PACKAGE, CLI_PACKAGE);
 
 /** A temporary machine: an empty home folder and a synthetic Claude Code config folder. */
 export interface Sandbox {
@@ -103,7 +123,7 @@ export interface RunningCli {
 export function startCli(sandbox: Sandbox, timeoutMs = 20_000): Promise<RunningCli> {
   if (!existsSync(CLI_BIN)) {
     return Promise.reject(
-      new Error("packages/cli/dist/index.js is missing: run 'npm run build' at the root first."),
+      new Error("The orbitrace command is not built: run 'npm run build' at the root first."),
     );
   }
   const child = spawn(process.execPath, [CLI_BIN, "open", "--no-browser", "--json"], {

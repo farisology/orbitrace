@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { join, posix, win32 } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { SessionRef } from "../../src/index.js";
@@ -35,6 +35,7 @@ import {
   SKIP_NOTE,
   SQLITE_AVAILABLE,
   useSandbox,
+  WINDOWS_NO_MODES,
   type Sandbox,
 } from "./helpers.js";
 
@@ -98,6 +99,19 @@ describe("the subagent file layout (#189)", () => {
     expect(claudeCodeSubagentsDir(locator, SESSION_ID)).toBe(
       join("/srv", "config", "projects", PROJECT, SESSION_ID, CLAUDE_CODE_SUBAGENTS_FOLDER),
     );
+    // The same layout under each OS's rules, whatever this host is. The second Windows root is
+    // what join("/srv", ...) gives on Windows: rooted on the current drive, no drive letter (#210).
+    for (const [p, root] of [
+      [posix, "/srv/config"],
+      [win32, "D:\\Profiles\\example\\.claude"],
+      [win32, "\\srv\\config"],
+      [win32, "\\\\server\\share\\config"],
+    ] as const) {
+      const projectDir = p.join(root, "projects", PROJECT);
+      expect(claudeCodeSubagentsDir(p.join(projectDir, `${SESSION_ID}.jsonl`), SESSION_ID)).toBe(
+        p.join(projectDir, SESSION_ID, CLAUDE_CODE_SUBAGENTS_FOLDER),
+      );
+    }
     expect(CLAUDE_CODE_SUBAGENTS_FOLDER).toBe("subagents");
     expect(claudeCodeSubagentFileName("a1")).toBe("agent-a1.jsonl");
     expect(claudeCodeSubagentMetaName("a1")).toBe("agent-a1.meta.json");
@@ -248,7 +262,7 @@ describe.skipIf(!SQLITE_AVAILABLE)(`ended sessions (#195)${SKIP_NOTE}`, () => {
 });
 
 describe("the location helpers a host needs (#195)", () => {
-  it("are exported from ./node: check a folder, then create it owner-only", async () => {
+  it("are exported from ./node: check a folder, then create it", async () => {
     const box = sandbox();
     const location = resolveHistoryLocation();
     expect(location.dir).toBe(box.data);
@@ -256,9 +270,6 @@ describe("the location helpers a host needs (#195)", () => {
     expect(existsSync(box.data)).toBe(false);
     prepareHistoryDir(location);
     expect(existsSync(box.data)).toBe(true);
-    // Windows has no POSIX modes: Node cannot set them there.
-    const dirMode = process.platform === "win32" ? 0o700 : statSync(box.data).mode & 0o777;
-    expect(dirMode).toBe(0o700);
     const inside = { ...location, dir: join(box.config, "history") };
     expect(() => checkHistoryLocation(inside)).toThrow(
       expect.objectContaining({ code: "unsafe-location" }),
@@ -268,4 +279,13 @@ describe("the location helpers a host needs (#195)", () => {
       checkHistoryLocation({ ...location, dir: join(box.base, "repo", "data") }),
     ).toThrow(expect.objectContaining({ code: "unsafe-location" }));
   });
+
+  it.skipIf(process.platform === "win32")(
+    `create the folder owner-only (0700)${WINDOWS_NO_MODES}`,
+    () => {
+      const box = sandbox();
+      prepareHistoryDir(resolveHistoryLocation());
+      expect(statSync(box.data).mode & 0o777).toBe(0o700);
+    },
+  );
 });
